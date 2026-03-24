@@ -43,6 +43,8 @@ fn run(source: &str) {
     let scanner = Scanner::new(source);
     let tokens = scanner.scan_tokens();
 
+    // TODO(perf): Printing every token dominates runtime; keep this for
+    // debugging only, or switch to buffered/debug-gated output.
     for token in tokens {
         println!("{token}");
     }

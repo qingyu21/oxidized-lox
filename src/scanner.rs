@@ -2,7 +2,10 @@ use crate::token::{Literal, Token, TokenType};
 
 #[allow(dead_code)]
 pub struct Scanner {
+    // TODO(perf): Borrow `&str` here instead of owning a `String` to avoid
+    // copying the entire source text when constructing the scanner.
     source: String,
+    // TODO(perf): Preallocate token capacity once token density is clearer.
     tokens: Vec<Token>,
     // Byte offset of the current lexeme's first byte in `source`.
     start: usize,
@@ -59,6 +62,8 @@ impl Scanner {
     }
 
     fn advance(&mut self) -> char {
+        // TODO(perf): For an ASCII-first scanner, a byte-oriented fast path
+        // would be cheaper than creating a `chars()` iterator each time.
         // `start` and `current` are byte offsets, but we still decode one
         // Unicode scalar value at a time and advance by its UTF-8 width.
         let rest = &self.source[self.current..];
@@ -77,6 +82,8 @@ impl Scanner {
     }
 
     fn add_token_literal(&mut self, type_: TokenType, literal: Option<Literal>) {
+        // TODO(perf): This allocates a new `String` for every token lexeme.
+        // A performance-oriented design could store spans or `&str` slices.
         let text = self.source[self.start..self.current].to_string();
         self.tokens
             .push(Token::new(type_, text, literal, self.line));
