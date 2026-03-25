@@ -29,7 +29,7 @@ impl Scanner {
 
     pub fn scan_tokens(mut self) -> Vec<Token> {
         while !self.is_at_end() {
-            // We are at the beginning of the next lexeme.
+            // Mark the start of the next lexeme before scanning it.
             self.start = self.current;
             self.scan_token();
         }
@@ -72,13 +72,21 @@ impl Scanner {
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
             _ => {
-                lox::error(self.line, "Unexpected character.");
+                if Self::is_digit(c) {
+                    self.number();
+                } else {
+                    lox::error(self.line, "Unexpected character.");
+                }
             }
         }
     }
 
     fn add_token(&mut self, type_: TokenType) {
         self.add_token_literal(type_, None);
+    }
+
+    fn is_digit(c: char) -> bool {
+        c.is_ascii_digit()
     }
 
     fn string(&mut self) {
@@ -101,6 +109,28 @@ impl Scanner {
         // Trim the surrounding quotes.
         let value = self.source[self.start + 1..self.current - 1].to_string();
         self.add_token_literal(TokenType::String, Some(Literal::String(value)));
+    }
+
+    fn number(&mut self) {
+        while Self::is_digit(self.peek()) {
+            self.advance();
+        }
+
+        // Look for a fractional part.
+        if self.peek() == '.' && Self::is_digit(self.peek_next()) {
+            // Consume the ".".
+            self.advance();
+
+            while Self::is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+
+        let value = self.source[self.start..self.current]
+            .parse::<f64>()
+            .expect("scanner produced an invalid number literal");
+
+        self.add_token_literal(TokenType::Number, Some(Literal::Number(value)));
     }
 
     // Scan operators like `!`/`!=` or `=`/`==` where the current character
@@ -127,6 +157,7 @@ impl Scanner {
         self.current >= self.source.len()
     }
 
+    // Return the character at the current byte offset, if any.
     fn current_char(&self) -> Option<char> {
         self.source[self.current..].chars().next()
     }
@@ -164,5 +195,11 @@ impl Scanner {
     // explicitly than using `'\0'` as a sentinel value.
     fn peek(&self) -> char {
         self.current_char().unwrap_or('\0')
+    }
+
+    // TODO(rust-idiom): Returning `Option<char>` would model the absence
+    // of a second lookahead character more explicitly than using `'\0'`.
+    fn peek_next(&self) -> char {
+        self.source[self.current..].chars().nth(1).unwrap_or('\0')
     }
 }
