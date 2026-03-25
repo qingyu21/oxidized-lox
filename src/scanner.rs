@@ -58,6 +58,10 @@ impl Scanner {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
+            '!' => self.add_conditional_token('=', TokenType::BangEqual, TokenType::Bang),
+            '=' => self.add_conditional_token('=', TokenType::EqualEqual, TokenType::Equal),
+            '<' => self.add_conditional_token('=', TokenType::LessEqual, TokenType::Less),
+            '>' => self.add_conditional_token('=', TokenType::GreaterEqual, TokenType::Greater),
             _ => {
                 lox::error(self.line, "Unexpected character.");
             }
@@ -84,11 +88,49 @@ impl Scanner {
         self.add_token_literal(type_, None);
     }
 
+    // Scan operators like `!`/`!=` or `=`/`==` where the current character
+    // may optionally be followed by one more expected character.
+    fn add_conditional_token(
+        &mut self,
+        expected: char,
+        matched: TokenType,
+        unmatched: TokenType,
+    ) {
+        let type_ = if self.match_char(expected) {
+            matched
+        } else {
+            unmatched
+        };
+
+        self.add_token(type_);
+    }
+
     fn add_token_literal(&mut self, type_: TokenType, literal: Option<Literal>) {
         // TODO(perf): This allocates a new `String` for every token lexeme.
         // A performance-oriented design could store spans or `&str` slices.
         let text = self.source[self.start..self.current].to_string();
         self.tokens
             .push(Token::new(type_, text, literal, self.line));
+    }
+
+    // If the next character matches `expected`, consume it and return `true`.
+    // Otherwise leave the scanner position unchanged and return `false`.
+    fn match_char(&mut self, expected: char) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+
+        let rest = &self.source[self.current..];
+        let ch = rest
+            .chars()
+            .next()
+            .expect("match_char() called at the end of source");
+
+        if ch != expected {
+            return false;
+        }
+
+        self.current += ch.len_utf8();
+        true
     }
 }
