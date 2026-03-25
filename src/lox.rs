@@ -50,12 +50,10 @@ fn run(source: &str) {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) fn error(line: u32, message: &str) {
     report(line, "", message);
 }
 
-#[allow(dead_code)]
 fn report(line: u32, where_: &str, message: &str) {
     eprintln!("[line {line}] Error{where_}: {message}");
     HAD_ERROR.store(true, Ordering::Relaxed);

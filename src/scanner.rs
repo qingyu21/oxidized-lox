@@ -1,3 +1,4 @@
+use crate::lox;
 use crate::token::{Literal, Token, TokenType};
 
 #[allow(dead_code)]
@@ -57,7 +58,9 @@ impl Scanner {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
-            _ => {}
+            _ => {
+                lox::error(self.line, "Unexpected character.");
+            }
         }
     }
 
