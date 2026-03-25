@@ -68,6 +68,7 @@ impl Scanner {
                     self.add_token(TokenType::Slash);
                 }
             }
+            '"' => self.string(),
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
             _ => {
@@ -78,6 +79,28 @@ impl Scanner {
 
     fn add_token(&mut self, type_: TokenType) {
         self.add_token_literal(type_, None);
+    }
+
+    fn string(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            lox::error(self.line, "Unterminated string.");
+            return;
+        }
+
+        // The closing quote.
+        self.advance();
+
+        // Trim the surrounding quotes.
+        let value = self.source[self.start + 1..self.current - 1].to_string();
+        self.add_token_literal(TokenType::String, Some(Literal::String(value)));
     }
 
     // Scan operators like `!`/`!=` or `=`/`==` where the current character
