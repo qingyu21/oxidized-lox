@@ -1,5 +1,27 @@
 use crate::lox;
 use crate::token::{Literal, Token, TokenType};
+use std::{collections::HashMap, sync::LazyLock};
+
+static KEYWORDS: LazyLock<HashMap<&'static str, TokenType>> = LazyLock::new(|| {
+    let mut keywords = HashMap::new();
+    keywords.insert("and", TokenType::And);
+    keywords.insert("class", TokenType::Class);
+    keywords.insert("else", TokenType::Else);
+    keywords.insert("false", TokenType::False);
+    keywords.insert("for", TokenType::For);
+    keywords.insert("fun", TokenType::Fun);
+    keywords.insert("if", TokenType::If);
+    keywords.insert("nil", TokenType::Nil);
+    keywords.insert("or", TokenType::Or);
+    keywords.insert("print", TokenType::Print);
+    keywords.insert("return", TokenType::Return);
+    keywords.insert("super", TokenType::Super);
+    keywords.insert("this", TokenType::This);
+    keywords.insert("true", TokenType::True);
+    keywords.insert("var", TokenType::Var);
+    keywords.insert("while", TokenType::While);
+    keywords
+});
 
 #[allow(dead_code)]
 pub struct Scanner {
@@ -74,6 +96,8 @@ impl Scanner {
             _ => {
                 if Self::is_digit(c) {
                     self.number();
+                } else if Self::is_alpha(c) {
+                    self.identifier();
                 } else {
                     lox::error(self.line, "Unexpected character.");
                 }
@@ -87,6 +111,14 @@ impl Scanner {
 
     fn is_digit(c: char) -> bool {
         c.is_ascii_digit()
+    }
+
+    fn is_alpha(c: char) -> bool {
+        c.is_ascii_alphabetic() || c == '_'
+    }
+
+    fn is_alpha_numeric(c: char) -> bool {
+        Self::is_alpha(c) || Self::is_digit(c)
     }
 
     fn string(&mut self) {
@@ -131,6 +163,16 @@ impl Scanner {
             .expect("scanner produced an invalid number literal");
 
         self.add_token_literal(TokenType::Number, Some(Literal::Number(value)));
+    }
+
+    fn identifier(&mut self) {
+        while Self::is_alpha_numeric(self.peek()) {
+            self.advance();
+        }
+
+        let text = &self.source[self.start..self.current];
+        let type_ = KEYWORDS.get(text).copied().unwrap_or(TokenType::Identifier);
+        self.add_token(type_);
     }
 
     // Scan operators like `!`/`!=` or `=`/`==` where the current character
