@@ -62,6 +62,18 @@ impl Scanner {
             '=' => self.add_conditional_token('=', TokenType::EqualEqual, TokenType::Equal),
             '<' => self.add_conditional_token('=', TokenType::LessEqual, TokenType::Less),
             '>' => self.add_conditional_token('=', TokenType::GreaterEqual, TokenType::Greater),
+            '/' => {
+                if self.match_char('/') {
+                    // A comment goes until the end of the line.
+                    while !self.is_at_end() && self.peek() != '\n' {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(TokenType::Slash);
+                }
+            }
+            ' ' | '\r' | '\t' => {}
+            '\n' => self.line += 1,
             _ => {
                 lox::error(self.line, "Unexpected character.");
             }
@@ -90,12 +102,7 @@ impl Scanner {
 
     // Scan operators like `!`/`!=` or `=`/`==` where the current character
     // may optionally be followed by one more expected character.
-    fn add_conditional_token(
-        &mut self,
-        expected: char,
-        matched: TokenType,
-        unmatched: TokenType,
-    ) {
+    fn add_conditional_token(&mut self, expected: char, matched: TokenType, unmatched: TokenType) {
         let type_ = if self.match_char(expected) {
             matched
         } else {
@@ -132,5 +139,18 @@ impl Scanner {
 
         self.current += ch.len_utf8();
         true
+    }
+
+    // TODO(rust-idiom): Returning `Option<char>` would model EOF more
+    // explicitly than using `'\0'` as a sentinel value.
+    fn peek(&self) -> char {
+        if self.is_at_end() {
+            '\0'
+        } else {
+            let rest = &self.source[self.current..];
+            rest.chars()
+                .next()
+                .expect("peek() called at the end of source")
+        }
     }
 }
