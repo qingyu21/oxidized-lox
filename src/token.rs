@@ -52,12 +52,6 @@ pub enum TokenType {
     Eof,
 }
 
-impl Display for TokenType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Literal {
@@ -65,6 +59,21 @@ pub enum Literal {
     Number(f64),
     Bool(bool),
     Nil,
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct Token {
+    pub type_: TokenType,
+    pub lexeme: String,
+    pub literal: Option<Literal>,
+    pub line: u32,
+}
+
+impl Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 
 impl Display for Literal {
@@ -76,15 +85,6 @@ impl Display for Literal {
             Literal::Nil => write!(f, "nil"),
         }
     }
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct Token {
-    pub type_: TokenType,
-    pub lexeme: String,
-    pub literal: Option<Literal>,
-    pub line: u32,
 }
 
 impl Token {

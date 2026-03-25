@@ -40,10 +40,6 @@ impl Scanner {
         self.tokens
     }
 
-    fn is_at_end(&self) -> bool {
-        self.current >= self.source.len()
-    }
-
     fn scan_token(&mut self) {
         let c = self.advance();
 
@@ -80,22 +76,6 @@ impl Scanner {
         }
     }
 
-    fn advance(&mut self) -> char {
-        // TODO(perf): For an ASCII-first scanner, a byte-oriented fast path
-        // would be cheaper than creating a `chars()` iterator each time.
-        // `start` and `current` are byte offsets, but we still decode one
-        // Unicode scalar value at a time and advance by its UTF-8 width.
-        let rest = &self.source[self.current..];
-        let ch = rest
-            .chars()
-            .next()
-            .expect("advance() called at the end of source");
-
-        self.current += ch.len_utf8();
-
-        ch
-    }
-
     fn add_token(&mut self, type_: TokenType) {
         self.add_token_literal(type_, None);
     }
@@ -120,18 +100,34 @@ impl Scanner {
             .push(Token::new(type_, text, literal, self.line));
     }
 
+    fn is_at_end(&self) -> bool {
+        self.current >= self.source.len()
+    }
+
+    fn current_char(&self) -> Option<char> {
+        self.source[self.current..].chars().next()
+    }
+
+    fn advance(&mut self) -> char {
+        // TODO(perf): For an ASCII-first scanner, a byte-oriented fast path
+        // would be cheaper than creating a `chars()` iterator each time.
+        // `start` and `current` are byte offsets, but we still decode one
+        // Unicode scalar value at a time and advance by its UTF-8 width.
+        let ch = self
+            .current_char()
+            .expect("advance() called at the end of source");
+
+        self.current += ch.len_utf8();
+
+        ch
+    }
+
     // If the next character matches `expected`, consume it and return `true`.
     // Otherwise leave the scanner position unchanged and return `false`.
     fn match_char(&mut self, expected: char) -> bool {
-        if self.is_at_end() {
+        let Some(ch) = self.current_char() else {
             return false;
-        }
-
-        let rest = &self.source[self.current..];
-        let ch = rest
-            .chars()
-            .next()
-            .expect("match_char() called at the end of source");
+        };
 
         if ch != expected {
             return false;
@@ -144,13 +140,6 @@ impl Scanner {
     // TODO(rust-idiom): Returning `Option<char>` would model EOF more
     // explicitly than using `'\0'` as a sentinel value.
     fn peek(&self) -> char {
-        if self.is_at_end() {
-            '\0'
-        } else {
-            let rest = &self.source[self.current..];
-            rest.chars()
-                .next()
-                .expect("peek() called at the end of source")
-        }
+        self.current_char().unwrap_or('\0')
     }
 }
