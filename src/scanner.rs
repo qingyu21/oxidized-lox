@@ -85,6 +85,8 @@ impl Scanner {
                     while !self.is_at_end() && self.peek() != '\n' {
                         self.advance();
                     }
+                } else if self.match_char('*') {
+                    self.block_comment();
                 } else {
                     self.add_token(TokenType::Slash);
                 }
@@ -172,6 +174,23 @@ impl Scanner {
         let text = &self.source[self.start..self.current];
         let type_ = KEYWORDS.get(text).copied().unwrap_or(TokenType::Identifier);
         self.add_token(type_);
+    }
+
+    fn block_comment(&mut self) {
+        while !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+                self.advance();
+            } else if self.peek() == '*' && self.peek_next() == '/' {
+                self.advance();
+                self.advance();
+                return;
+            } else {
+                self.advance();
+            }
+        }
+
+        lox::error(self.line, "Unterminated block comment.");
     }
 
     // Scan operators like `!`/`!=` or `=`/`==` where the current character
@@ -298,6 +317,16 @@ mod tests {
     #[test]
     fn skips_comments_and_tracks_line_numbers() {
         let tokens = scan("// comment\nprint");
+
+        assert_eq!(tokens[0].type_, TokenType::Print);
+        assert_eq!(tokens[0].line, 2);
+        assert_eq!(tokens[1].type_, TokenType::Eof);
+        assert_eq!(tokens[1].line, 2);
+    }
+
+    #[test]
+    fn skips_block_comments_and_tracks_line_numbers() {
+        let tokens = scan("/* block\ncomment */print");
 
         assert_eq!(tokens[0].type_, TokenType::Print);
         assert_eq!(tokens[0].line, 2);
