@@ -1,6 +1,5 @@
 use std::fmt::{self, Display};
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens.
@@ -52,21 +51,22 @@ pub enum TokenType {
     Eof,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),
+    #[allow(dead_code)]
     Bool(bool),
+    #[allow(dead_code)]
     Nil,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Token {
     pub type_: TokenType,
     pub lexeme: String,
     pub literal: Option<Literal>,
+    #[allow(dead_code)]
     pub line: u32,
 }
 
@@ -88,7 +88,6 @@ impl Display for Literal {
 }
 
 impl Token {
-    #[allow(dead_code)]
     pub(crate) fn new(
         type_: TokenType,
         lexeme: String,

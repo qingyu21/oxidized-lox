@@ -2,6 +2,7 @@ use crate::scanner::Scanner;
 use std::{
     fs,
     io::{self, Write},
+    process,
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -9,11 +10,12 @@ static HAD_ERROR: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn run_file(path: &str) -> io::Result<()> {
     let source = fs::read_to_string(path)?;
+    clear_error();
     run(&source);
 
-    // if HAD_ERROR.load(Ordering::Relaxed) {
-    //     process::exit(65);
-    // }
+    if had_error() {
+        process::exit(65);
+    }
 
     Ok(())
 }
@@ -33,7 +35,7 @@ pub(crate) fn run_prompt() -> io::Result<()> {
         }
 
         run(line.trim_end());
-        HAD_ERROR.store(false, Ordering::Relaxed);
+        clear_error();
     }
 
     Ok(())
@@ -52,6 +54,14 @@ fn run(source: &str) {
 
 pub(crate) fn error(line: u32, message: &str) {
     report(line, "", message);
+}
+
+fn had_error() -> bool {
+    HAD_ERROR.load(Ordering::Relaxed)
+}
+
+fn clear_error() {
+    HAD_ERROR.store(false, Ordering::Relaxed);
 }
 
 fn report(line: u32, where_: &str, message: &str) {

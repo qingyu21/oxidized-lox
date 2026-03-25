@@ -23,7 +23,6 @@ static KEYWORDS: LazyLock<HashMap<&'static str, TokenType>> = LazyLock::new(|| {
     keywords
 });
 
-#[allow(dead_code)]
 pub struct Scanner {
     // TODO(perf): Borrow `&str` here instead of owning a `String` to avoid
     // copying the entire source text when constructing the scanner.
@@ -243,5 +242,66 @@ impl Scanner {
     // of a second lookahead character more explicitly than using `'\0'`.
     fn peek_next(&self) -> char {
         self.source[self.current..].chars().nth(1).unwrap_or('\0')
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scan(source: &str) -> Vec<Token> {
+        Scanner::new(source).scan_tokens()
+    }
+
+    #[test]
+    fn scans_string_literal() {
+        let tokens = scan("\"hello\"");
+
+        assert_eq!(tokens[0].type_, TokenType::String);
+        assert_eq!(tokens[0].lexeme, "\"hello\"");
+        assert_eq!(
+            tokens[0].literal,
+            Some(Literal::String("hello".to_string()))
+        );
+        assert_eq!(tokens[1].type_, TokenType::Eof);
+    }
+
+    #[test]
+    fn scans_number_literal() {
+        let tokens = scan("123.45");
+
+        assert_eq!(tokens[0].type_, TokenType::Number);
+        assert_eq!(tokens[0].lexeme, "123.45");
+
+        match &tokens[0].literal {
+            Some(Literal::Number(value)) => assert_eq!(*value, 123.45),
+            other => panic!("expected number literal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn distinguishes_keywords_from_identifiers() {
+        let tokens = scan("and breakfast var");
+        let types = tokens.iter().map(|token| token.type_).collect::<Vec<_>>();
+
+        assert_eq!(
+            types,
+            vec![
+                TokenType::And,
+                TokenType::Identifier,
+                TokenType::Var,
+                TokenType::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn skips_comments_and_tracks_line_numbers() {
+        let tokens = scan("// comment\nprint");
+
+        assert_eq!(tokens[0].type_, TokenType::Print);
+        assert_eq!(tokens[0].line, 2);
+        assert_eq!(tokens[1].type_, TokenType::Eof);
+        assert_eq!(tokens[1].line, 2);
     }
 }
