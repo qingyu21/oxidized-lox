@@ -16,7 +16,7 @@ pub enum TokenType {
     Star,
 
     // One or two character tokens.
-    Bang, // !
+    Bang,      // !
     BangEqual, // !=
     Equal,
     EqualEqual,

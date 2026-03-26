@@ -39,12 +39,7 @@ impl Parser {
             // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.comparison();
-
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                operator,
-                right: Box::new(right),
-            };
+            expr = Expr::binary(expr, operator, right);
         }
 
         expr
@@ -65,12 +60,7 @@ impl Parser {
             // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.term();
-
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                operator,
-                right: Box::new(right),
-            };
+            expr = Expr::binary(expr, operator, right);
         }
 
         expr
@@ -86,12 +76,7 @@ impl Parser {
             // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.factor();
-
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                operator,
-                right: Box::new(right),
-            };
+            expr = Expr::binary(expr, operator, right);
         }
 
         expr
@@ -107,12 +92,7 @@ impl Parser {
             // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.unary();
-
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                operator,
-                right: Box::new(right),
-            };
+            expr = Expr::binary(expr, operator, right);
         }
 
         expr
@@ -126,11 +106,7 @@ impl Parser {
             // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.unary();
-
-            return Expr::Unary {
-                operator,
-                right: Box::new(right),
-            };
+            return Expr::unary(operator, right);
         }
 
         self.primary()
@@ -139,21 +115,15 @@ impl Parser {
     // primary -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
     fn primary(&mut self) -> Expr {
         if self.match_token(&[TokenType::False]) {
-            return Expr::Literal {
-                value: Literal::Bool(false),
-            };
+            return Expr::literal(Literal::Bool(false));
         }
 
         if self.match_token(&[TokenType::True]) {
-            return Expr::Literal {
-                value: Literal::Bool(true),
-            };
+            return Expr::literal(Literal::Bool(true));
         }
 
         if self.match_token(&[TokenType::Nil]) {
-            return Expr::Literal {
-                value: Literal::Nil,
-            };
+            return Expr::literal(Literal::Nil);
         }
 
         if self.match_token(&[TokenType::Number, TokenType::String]) {
@@ -166,16 +136,13 @@ impl Parser {
                 .clone()
                 .expect("literal token should carry a literal value");
 
-            return Expr::Literal { value };
+            return Expr::literal(value);
         }
 
         if self.match_token(&[TokenType::LeftParen]) {
             let expr = self.expression();
             self.consume(TokenType::RightParen, "Expect ')' after expression.");
-
-            return Expr::Grouping {
-                expression: Box::new(expr),
-            };
+            return Expr::grouping(expr);
         }
 
         panic!("Expect expression.");
@@ -249,7 +216,10 @@ mod tests {
 
     #[test]
     fn parses_unary_and_grouping() {
-        assert_eq!(parse_to_string("!(false == true)"), "(! (group (== false true)))");
+        assert_eq!(
+            parse_to_string("!(false == true)"),
+            "(! (group (== false true)))"
+        );
     }
 
     #[test]
