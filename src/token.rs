@@ -16,8 +16,8 @@ pub enum TokenType {
     Star,
 
     // One or two character tokens.
-    Bang,
-    BangEqual,
+    Bang, // !
+    BangEqual, // !=
     Equal,
     EqualEqual,
     Greater,
@@ -48,7 +48,7 @@ pub enum TokenType {
     Var,
     While,
 
-    Eof,
+    Eof, // End of input.
 }
 
 #[derive(Debug, Clone, PartialEq)]
