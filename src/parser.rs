@@ -12,6 +12,8 @@ pub struct Parser {
     current: usize,
 }
 
+type ParseRule = fn(&mut Parser) -> Result<Expr, ParseError>;
+
 #[allow(dead_code)]
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
@@ -152,6 +154,10 @@ impl Parser {
 
     // primary -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
     fn primary(&mut self) -> Result<Expr, ParseError> {
+        if let Some(right_operand) = self.missing_left_operand_rule() {
+            return self.missing_left_operand(right_operand);
+        }
+
         if self.match_token(&[TokenType::False]) {
             return Ok(Expr::literal(Literal::Bool(false)));
         }
@@ -184,6 +190,29 @@ impl Parser {
         }
 
         Err(self.error(self.peek(), "Expect expression."))
+    }
+
+    // Return the operand parser for a binary operator missing its left operand.
+    fn missing_left_operand_rule(&self) -> Option<ParseRule> {
+        match self.peek().type_ {
+            TokenType::Comma => Some(Self::conditional),
+            TokenType::BangEqual | TokenType::EqualEqual => Some(Self::comparison),
+            TokenType::Greater
+            | TokenType::GreaterEqual
+            | TokenType::Less
+            | TokenType::LessEqual => Some(Self::term),
+            TokenType::Plus => Some(Self::factor),
+            TokenType::Slash | TokenType::Star => Some(Self::unary),
+            _ => None,
+        }
+    }
+
+    // Report a missing left operand and discard the right operand of the operator.
+    fn missing_left_operand(&mut self, right_operand: ParseRule) -> Result<Expr, ParseError> {
+        let operator = self.advance().clone();
+        let error = self.error(&operator, "Missing left-hand operand.");
+        let _ = right_operand(self);
+        Err(error)
     }
 
     // Consume the expected token or report a parse error.
@@ -318,6 +347,21 @@ mod tests {
         assert_eq!(parse_to_string("(1 + 2) * 3"), "(* (group (+ 1 2)) 3)");
     }
 
+    #[test]
+    fn discards_factor_expression_after_missing_left_operand() {
+        assert_parse_error_consumes_to_end("+ 1 * 2");
+    }
+
+    #[test]
+    fn discards_comparison_expression_after_missing_left_operand() {
+        assert_parse_error_consumes_to_end("== 1 < 2");
+    }
+
+    #[test]
+    fn discards_conditional_expression_after_missing_left_comma() {
+        assert_parse_error_consumes_to_end(", false ? 1 : 2");
+    }
+
     fn parse_to_string(source: &str) -> String {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);
@@ -326,5 +370,13 @@ mod tests {
             .expect("parser should successfully parse the test input");
 
         AstPrinter.print(&expr)
+    }
+
+    fn assert_parse_error_consumes_to_end(source: &str) {
+        let tokens = Scanner::new(source).scan_tokens();
+        let mut parser = Parser::new(tokens);
+
+        assert!(parser.parse().is_none());
+        assert!(parser.is_at_end());
     }
 }
