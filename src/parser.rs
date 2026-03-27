@@ -29,9 +29,25 @@ impl Parser {
         Some(expr)
     }
 
-    // expression -> equality ;
+    // expression -> comma ;
     fn expression(&mut self) -> Result<Expr, ParseError> {
-        self.equality()
+        self.comma()
+    }
+
+    // comma -> equality ( "," equality )* ;
+    fn comma(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.equality()?;
+
+        while self.match_token(&[TokenType::Comma]) {
+            // TODO(perf): Cloning the full operator token copies its owned
+            // lexeme/literal data. A leaner AST could store only the token
+            // kind plus source span information.
+            let operator = self.previous().clone();
+            let right = self.equality()?;
+            expr = Expr::binary(expr, operator, right);
+        }
+
+        Ok(expr)
     }
 
     // equality -> comparison ( ( "!=" | "==" ) comparison )* ;
@@ -247,6 +263,16 @@ mod tests {
     #[test]
     fn parses_binary_precedence() {
         assert_eq!(parse_to_string("1 + 2 * 3"), "(+ 1 (* 2 3))");
+    }
+
+    #[test]
+    fn parses_comma_with_lowest_precedence() {
+        assert_eq!(parse_to_string("1 + 2, 3 * 4"), "(, (+ 1 2) (* 3 4))");
+    }
+
+    #[test]
+    fn parses_comma_as_left_associative() {
+        assert_eq!(parse_to_string("1, 2, 3"), "(, (, 1 2) 3)");
     }
 
     #[test]
