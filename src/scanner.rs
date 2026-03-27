@@ -73,6 +73,8 @@ impl Scanner {
             '.' => self.add_token(TokenType::Dot),
             '-' => self.add_token(TokenType::Minus),
             '+' => self.add_token(TokenType::Plus),
+            ':' => self.add_token(TokenType::Colon),
+            '?' => self.add_token(TokenType::Question),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
             '!' => self.add_conditional_token('=', TokenType::BangEqual, TokenType::Bang),

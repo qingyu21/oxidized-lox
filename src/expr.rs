@@ -20,6 +20,11 @@ pub enum Expr {
     Literal {
         value: Literal,
     },
+    Conditional {
+        condition: Box<Expr>,
+        then_branch: Box<Expr>,
+        else_branch: Box<Expr>,
+    },
     Unary {
         // TODO(perf): Storing the full token is convenient, but it carries
         // owned lexeme/literal data. A leaner AST could store only the token
@@ -39,6 +44,15 @@ impl Expr {
     pub fn grouping(expression: Expr) -> Self {
         Expr::Grouping {
             expression: Box::new(expression),
+        }
+    }
+
+    // Construct a conditional expression with then/else branches.
+    pub fn conditional(condition: Expr, then_branch: Expr, else_branch: Expr) -> Self {
+        Expr::Conditional {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            else_branch: Box::new(else_branch),
         }
     }
 

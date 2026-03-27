@@ -34,17 +34,34 @@ impl Parser {
         self.comma()
     }
 
-    // comma -> equality ( "," equality )* ;
+    // comma -> conditional ( "," conditional )* ;
     fn comma(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.equality()?;
+        let mut expr = self.conditional()?;
 
         while self.match_token(&[TokenType::Comma]) {
             // TODO(perf): Cloning the full operator token copies its owned
             // lexeme/literal data. A leaner AST could store only the token
             // kind plus source span information.
             let operator = self.previous().clone();
-            let right = self.equality()?;
+            let right = self.conditional()?;
             expr = Expr::binary(expr, operator, right);
+        }
+
+        Ok(expr)
+    }
+
+    // conditional -> equality ( "?" expression ":" conditional )? ;
+    fn conditional(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.equality()?;
+
+        if self.match_token(&[TokenType::Question]) {
+            let then_branch = self.expression()?;
+            self.consume(
+                TokenType::Colon,
+                "Expect ':' after then branch of conditional expression.",
+            )?;
+            let else_branch = self.conditional()?;
+            return Ok(Expr::conditional(expr, then_branch, else_branch));
         }
 
         Ok(expr)
@@ -273,6 +290,19 @@ mod tests {
     #[test]
     fn parses_comma_as_left_associative() {
         assert_eq!(parse_to_string("1, 2, 3"), "(, (, 1 2) 3)");
+    }
+
+    #[test]
+    fn parses_conditional_as_right_associative() {
+        assert_eq!(
+            parse_to_string("false ? 1 : true ? 2 : 3"),
+            "(?: false 1 (?: true 2 3))"
+        );
+    }
+
+    #[test]
+    fn parses_full_expression_in_then_branch() {
+        assert_eq!(parse_to_string("true ? 1, 2 : 3"), "(?: true (, 1 2) 3)");
     }
 
     #[test]
