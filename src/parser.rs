@@ -1,5 +1,9 @@
 use crate::expr::Expr;
+use crate::lox;
 use crate::token::{Literal, Token, TokenType};
+
+#[derive(Debug, Clone, Copy)]
+struct ParseError;
 
 #[allow(dead_code)]
 pub struct Parser {
@@ -14,40 +18,41 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Expr {
-        let expr = self.expression();
+    pub fn parse(&mut self) -> Option<Expr> {
+        let expr = self.expression().ok()?;
 
         if !self.is_at_end() {
-            panic!("Expect end of expression.");
+            self.error(self.peek(), "Expect end of expression.");
+            return None;
         }
 
-        expr
+        Some(expr)
     }
 
     // expression -> equality ;
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> Result<Expr, ParseError> {
         self.equality()
     }
 
     // equality -> comparison ( ( "!=" | "==" ) comparison )* ;
-    fn equality(&mut self) -> Expr {
-        let mut expr = self.comparison();
+    fn equality(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.comparison()?;
 
         while self.match_token(&[TokenType::BangEqual, TokenType::EqualEqual]) {
             // TODO(perf): Cloning the full operator token copies its owned
             // lexeme/literal data. A leaner AST could store only the token
             // kind plus source span information.
             let operator = self.previous().clone();
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = Expr::binary(expr, operator, right);
         }
 
-        expr
+        Ok(expr)
     }
 
     // comparison -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-    fn comparison(&mut self) -> Expr {
-        let mut expr = self.term();
+    fn comparison(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.term()?;
 
         while self.match_token(&[
             TokenType::Greater,
@@ -59,71 +64,71 @@ impl Parser {
             // lexeme/literal data. A leaner AST could store only the token
             // kind plus source span information.
             let operator = self.previous().clone();
-            let right = self.term();
+            let right = self.term()?;
             expr = Expr::binary(expr, operator, right);
         }
 
-        expr
+        Ok(expr)
     }
 
     // term -> factor ( ( "-" | "+" ) factor )* ;
-    fn term(&mut self) -> Expr {
-        let mut expr = self.factor();
+    fn term(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.factor()?;
 
         while self.match_token(&[TokenType::Minus, TokenType::Plus]) {
             // TODO(perf): Cloning the full operator token copies its owned
             // lexeme/literal data. A leaner AST could store only the token
             // kind plus source span information.
             let operator = self.previous().clone();
-            let right = self.factor();
+            let right = self.factor()?;
             expr = Expr::binary(expr, operator, right);
         }
 
-        expr
+        Ok(expr)
     }
 
     // factor -> unary ( ( "/" | "*" ) unary )* ;
-    fn factor(&mut self) -> Expr {
-        let mut expr = self.unary();
+    fn factor(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.unary()?;
 
         while self.match_token(&[TokenType::Slash, TokenType::Star]) {
             // TODO(perf): Cloning the full operator token copies its owned
             // lexeme/literal data. A leaner AST could store only the token
             // kind plus source span information.
             let operator = self.previous().clone();
-            let right = self.unary();
+            let right = self.unary()?;
             expr = Expr::binary(expr, operator, right);
         }
 
-        expr
+        Ok(expr)
     }
 
     // unary -> ( "!" | "-" ) unary | primary ;
-    fn unary(&mut self) -> Expr {
+    fn unary(&mut self) -> Result<Expr, ParseError> {
         if self.match_token(&[TokenType::Bang, TokenType::Minus]) {
             // TODO(perf): Cloning the full operator token copies its owned
             // lexeme/literal data. A leaner AST could store only the token
             // kind plus source span information.
             let operator = self.previous().clone();
-            let right = self.unary();
-            return Expr::unary(operator, right);
+            let right = self.unary()?;
+            return Ok(Expr::unary(operator, right));
         }
 
         self.primary()
     }
 
     // primary -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
-    fn primary(&mut self) -> Expr {
+    fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.match_token(&[TokenType::False]) {
-            return Expr::literal(Literal::Bool(false));
+            return Ok(Expr::literal(Literal::Bool(false)));
         }
 
         if self.match_token(&[TokenType::True]) {
-            return Expr::literal(Literal::Bool(true));
+            return Ok(Expr::literal(Literal::Bool(true)));
         }
 
         if self.match_token(&[TokenType::Nil]) {
-            return Expr::literal(Literal::Nil);
+            return Ok(Expr::literal(Literal::Nil));
         }
 
         if self.match_token(&[TokenType::Number, TokenType::String]) {
@@ -136,25 +141,55 @@ impl Parser {
                 .clone()
                 .expect("literal token should carry a literal value");
 
-            return Expr::literal(value);
+            return Ok(Expr::literal(value));
         }
 
         if self.match_token(&[TokenType::LeftParen]) {
-            let expr = self.expression();
-            self.consume(TokenType::RightParen, "Expect ')' after expression.");
-            return Expr::grouping(expr);
+            let expr = self.expression()?;
+            self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
+            return Ok(Expr::grouping(expr));
         }
 
-        panic!("Expect expression.");
+        Err(self.error(self.peek(), "Expect expression."))
     }
 
     // Consume the expected token or report a parse error.
-    fn consume(&mut self, type_: TokenType, message: &str) -> &Token {
+    fn consume(&mut self, type_: TokenType, message: &str) -> Result<&Token, ParseError> {
         if self.check(type_) {
-            return self.advance();
+            return Ok(self.advance());
         }
 
-        panic!("{message}");
+        Err(self.error(self.peek(), message))
+    }
+
+    fn error(&self, token: &Token, message: &str) -> ParseError {
+        lox::token_error(token, message);
+        ParseError
+    }
+
+    // Discard tokens until the parser reaches a likely statement boundary.
+    fn synchronize(&mut self) {
+        self.advance();
+
+        while !self.is_at_end() {
+            if self.previous().type_ == TokenType::Semicolon {
+                return;
+            }
+
+            match self.peek().type_ {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
+                _ => {
+                    self.advance();
+                }
+            }
+        }
     }
 
     // If the current token matches any candidate, consume it.
@@ -230,7 +265,9 @@ mod tests {
     fn parse_to_string(source: &str) -> String {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);
-        let expr = parser.parse();
+        let expr = parser
+            .parse()
+            .expect("parser should successfully parse the test input");
 
         AstPrinter.print(&expr)
     }

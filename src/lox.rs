@@ -1,4 +1,9 @@
-use crate::scanner::Scanner;
+use crate::{
+    ast_printer::AstPrinter,
+    parser::Parser,
+    scanner::Scanner,
+    token::{Token, TokenType},
+};
 use std::{
     fs,
     io::{self, Write},
@@ -44,16 +49,37 @@ pub(crate) fn run_prompt() -> io::Result<()> {
 fn run(source: &str) {
     let scanner = Scanner::new(source);
     let tokens = scanner.scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let expression = parser.parse();
 
-    // TODO(perf): Printing every token dominates runtime; keep this for
-    // debugging only, or switch to buffered/debug-gated output.
-    for token in tokens {
-        println!("{token}");
+    // Stop if there was a syntax error.
+    if had_error() {
+        return;
     }
+
+    let printer = AstPrinter;
+    println!(
+        "{}",
+        printer.print(
+            expression
+                .as_ref()
+                .expect("parser should return an expression when no error occurred")
+        )
+    );
 }
 
 pub(crate) fn error(line: u32, message: &str) {
     report(line, "", message);
+}
+
+pub(crate) fn token_error(token: &Token, message: &str) {
+    let where_ = if token.type_ == TokenType::Eof {
+        " at end".to_string()
+    } else {
+        format!(" at '{}'", token.lexeme)
+    };
+
+    report(token.line, &where_, message);
 }
 
 fn had_error() -> bool {
