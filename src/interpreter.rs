@@ -104,9 +104,7 @@ impl Interpreter {
                 Self::apply_numeric_binary(operator, &left, &right, |left, right| left - right)
             }
             TokenType::Plus => Self::apply_plus(operator, &left, &right),
-            TokenType::Slash => {
-                Self::apply_numeric_binary(operator, &left, &right, |left, right| left / right)
-            }
+            TokenType::Slash => Self::apply_divide(operator, &left, &right),
             TokenType::Star => {
                 Self::apply_numeric_binary(operator, &left, &right, |left, right| left * right)
             }
@@ -134,6 +132,17 @@ impl Interpreter {
                 "Operands must be two numbers or at least one string.",
             )),
         }
+    }
+
+    // Divide two numeric operands and reject division by zero.
+    fn apply_divide(operator: &Token, left: &Value, right: &Value) -> Result<Value, RuntimeError> {
+        let (left, right) = Self::expect_number_operands(operator, left, right)?;
+
+        if right == 0.0 {
+            return Err(RuntimeError::new(operator.clone(), "Division by zero."));
+        }
+
+        Ok(Value::Number(left / right))
     }
 
     // Require numeric operands, then apply a numeric binary operator.
@@ -297,15 +306,23 @@ mod tests {
         assert_eq!(interpret("1, 2 + 3"), Value::Number(5.0));
     }
 
+    #[test]
+    fn reports_runtime_error_for_division_by_zero() {
+        let error = evaluate_result("1 / 0").expect_err("division by zero should fail");
+        assert_eq!(error.message, "Division by zero.");
+    }
+
     fn interpret(source: &str) -> Value {
+        evaluate_result(source).expect("interpreter should successfully evaluate the test input")
+    }
+
+    fn evaluate_result(source: &str) -> Result<Value, super::RuntimeError> {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);
         let expr = parser
             .parse()
             .expect("parser should successfully parse the test input");
 
-        Interpreter
-            .evaluate(&expr)
-            .expect("interpreter should successfully evaluate the test input")
+        Interpreter.evaluate(&expr)
     }
 }
