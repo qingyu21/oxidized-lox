@@ -2,6 +2,7 @@ use std::{env, io, process};
 
 mod ast_printer;
 mod expr;
+mod interpreter;
 mod lox;
 mod parser;
 mod scanner;
