@@ -123,7 +123,7 @@ impl Interpreter {
     fn apply_plus(operator: &Token, left: &Value, right: &Value) -> Result<Value, RuntimeError> {
         match (left, right) {
             (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
-            (Value::String(left), Value::String(right)) => {
+            (Value::String(_), _) | (_, Value::String(_)) => {
                 // TODO(perf): Repeated `+` concatenation allocates and copies
                 // into a new `String` each time. A rope or builder-style
                 // runtime string could reduce churn.
@@ -131,7 +131,7 @@ impl Interpreter {
             }
             _ => Err(RuntimeError::new(
                 operator.clone(),
-                "Operands must be two numbers or two strings.",
+                "Operands must be two numbers or at least one string.",
             )),
         }
     }
@@ -256,6 +256,22 @@ mod tests {
         assert_eq!(
             interpret("\"lox\" + \"!\""),
             Value::String("lox!".to_string())
+        );
+    }
+
+    #[test]
+    fn concatenates_string_and_number_with_plus() {
+        assert_eq!(
+            interpret("\"scone\" + 4"),
+            Value::String("scone4".to_string())
+        );
+    }
+
+    #[test]
+    fn concatenates_number_and_string_with_plus() {
+        assert_eq!(
+            interpret("4 + \"scone\""),
+            Value::String("4scone".to_string())
         );
     }
 
