@@ -420,6 +420,57 @@ mod tests {
         assert_eq!(AstPrinter.print(expr), "2");
     }
 
+    #[test]
+    fn keeps_valid_statements_before_and_after_an_invalid_one() {
+        let tokens = Scanner::new("print 1; print ; print 2;").scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        let printed = statements
+            .iter()
+            .map(|statement| match statement {
+                Stmt::Print { expression } => AstPrinter.print(expression),
+                _ => panic!("expected only print statements"),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(printed, vec!["1".to_string(), "2".to_string()]);
+    }
+
+    #[test]
+    fn synchronizes_to_next_print_after_missing_semicolon() {
+        let tokens = Scanner::new("print 1 print 2;").scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        let printed = statements
+            .iter()
+            .map(|statement| match statement {
+                Stmt::Print { expression } => AstPrinter.print(expression),
+                _ => panic!("expected only print statements"),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(printed, vec!["2".to_string()]);
+    }
+
+    #[test]
+    fn synchronizes_after_missing_right_paren() {
+        let tokens = Scanner::new("print (1 + 2; print 3;").scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        let printed = statements
+            .iter()
+            .map(|statement| match statement {
+                Stmt::Print { expression } => AstPrinter.print(expression),
+                _ => panic!("expected only print statements"),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(printed, vec!["3".to_string()]);
+    }
+
     fn parse_expression_to_string(source: &str) -> String {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);

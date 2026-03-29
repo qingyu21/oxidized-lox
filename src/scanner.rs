@@ -335,4 +335,36 @@ mod tests {
         assert_eq!(tokens[1].type_, TokenType::Eof);
         assert_eq!(tokens[1].line, 2);
     }
+
+    #[test]
+    fn scans_question_colon_and_two_character_operators() {
+        let tokens = scan("?: != == <= >=");
+        let types = tokens.iter().map(|token| token.type_).collect::<Vec<_>>();
+
+        assert_eq!(
+            types,
+            vec![
+                TokenType::Question,
+                TokenType::Colon,
+                TokenType::BangEqual,
+                TokenType::EqualEqual,
+                TokenType::LessEqual,
+                TokenType::GreaterEqual,
+                TokenType::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn keeps_dot_separate_when_fraction_has_no_digits() {
+        let tokens = scan("123.");
+        let types = tokens.iter().map(|token| token.type_).collect::<Vec<_>>();
+
+        assert_eq!(types, vec![TokenType::Number, TokenType::Dot, TokenType::Eof]);
+
+        match &tokens[0].literal {
+            Some(Literal::Number(value)) => assert_eq!(*value, 123.0),
+            other => panic!("expected number literal, got {other:?}"),
+        }
+    }
 }

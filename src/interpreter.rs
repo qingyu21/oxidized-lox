@@ -327,6 +327,29 @@ mod tests {
     }
 
     #[test]
+    fn conditional_skips_unselected_else_branch_errors() {
+        assert_eq!(interpret("true ? 1 : 1 / 0"), Value::Number(1.0));
+    }
+
+    #[test]
+    fn conditional_skips_unselected_then_branch_errors() {
+        assert_eq!(interpret("false ? 1 / 0 : 2"), Value::Number(2.0));
+    }
+
+    #[test]
+    fn comma_still_evaluates_left_operand() {
+        let error = evaluate_result("1 / 0, 2").expect_err("comma should evaluate its left operand");
+        assert_eq!(error.message, "Division by zero.");
+    }
+
+    #[test]
+    fn reports_runtime_error_for_non_numeric_comparison() {
+        let error = evaluate_result("\"a\" < \"b\"")
+            .expect_err("string comparison should currently be rejected");
+        assert_eq!(error.message, "Operands must be numbers.");
+    }
+
+    #[test]
     fn reports_runtime_error_for_division_by_zero() {
         let error = evaluate_result("1 / 0").expect_err("division by zero should fail");
         assert_eq!(error.message, "Division by zero.");
