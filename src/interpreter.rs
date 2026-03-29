@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::expr::Expr;
 use crate::lox;
+use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,12 +22,30 @@ struct RuntimeError {
 pub struct Interpreter;
 
 impl Interpreter {
-    pub fn interpret(&self, expr: &Expr) -> Option<Value> {
-        match self.evaluate(expr) {
-            Ok(value) => Some(value),
-            Err(error) => {
-                lox::runtime_error(&error.token, &error.message);
-                None
+    pub fn interpret(&self, statements: &[Stmt]) {
+        if let Err(error) = self.execute_all(statements) {
+            lox::runtime_error(&error.token, &error.message);
+        }
+    }
+
+    fn execute_all(&self, statements: &[Stmt]) -> Result<(), RuntimeError> {
+        for statement in statements {
+            self.execute(statement)?;
+        }
+
+        Ok(())
+    }
+
+    fn execute(&self, statement: &Stmt) -> Result<(), RuntimeError> {
+        match statement {
+            Stmt::Expression { expression } => {
+                self.evaluate(expression)?;
+                Ok(())
+            }
+            Stmt::Print { expression } => {
+                let value = self.evaluate(expression)?;
+                println!("{value}");
+                Ok(())
             }
         }
     }
@@ -254,6 +273,7 @@ mod tests {
     use super::{Interpreter, Value};
     use crate::parser::Parser;
     use crate::scanner::Scanner;
+    use crate::stmt::Stmt;
 
     #[test]
     fn evaluates_numeric_expression() {
@@ -317,11 +337,14 @@ mod tests {
     }
 
     fn evaluate_result(source: &str) -> Result<Value, super::RuntimeError> {
-        let tokens = Scanner::new(source).scan_tokens();
+        let source = format!("{source};");
+        let tokens = Scanner::new(&source).scan_tokens();
         let mut parser = Parser::new(tokens);
-        let expr = parser
-            .parse()
-            .expect("parser should successfully parse the test input");
+        let statements = parser.parse();
+        let expr = match statements.as_slice() {
+            [Stmt::Expression { expression }] => expression,
+            _ => panic!("expected a single expression statement"),
+        };
 
         Interpreter.evaluate(&expr)
     }

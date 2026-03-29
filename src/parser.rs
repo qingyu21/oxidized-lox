@@ -1,5 +1,6 @@
 use crate::expr::Expr;
 use crate::lox;
+use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
 
 #[derive(Debug, Clone, Copy)]
@@ -20,15 +21,43 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Option<Expr> {
-        let expr = self.expression().ok()?;
+    // program -> statement* EOF ;
+    pub fn parse(&mut self) -> Vec<Stmt> {
+        let mut statements = Vec::new();
 
-        if !self.is_at_end() {
-            self.error(self.peek(), "Expect end of expression.");
-            return None;
+        while !self.is_at_end() {
+            match self.statement() {
+                Ok(statement) => statements.push(statement),
+                Err(_) => {
+                    self.synchronize();
+                }
+            }
         }
 
-        Some(expr)
+        statements
+    }
+
+    // statement -> printStmt | exprStmt ;
+    fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::Print]) {
+            return self.print_statement();
+        }
+
+        self.expression_statement()
+    }
+
+    // printStmt -> "print" expression ";" ;
+    fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        Ok(Stmt::print(value))
+    }
+
+    // exprStmt -> expression ";" ;
+    fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+        Ok(Stmt::expression(expr))
     }
 
     // expression -> comma ;
@@ -305,78 +334,121 @@ mod tests {
     use super::Parser;
     use crate::ast_printer::AstPrinter;
     use crate::scanner::Scanner;
+    use crate::stmt::Stmt;
 
     #[test]
     fn parses_binary_precedence() {
-        assert_eq!(parse_to_string("1 + 2 * 3"), "(+ 1 (* 2 3))");
+        assert_eq!(parse_expression_to_string("1 + 2 * 3;"), "(+ 1 (* 2 3))");
     }
 
     #[test]
     fn parses_comma_with_lowest_precedence() {
-        assert_eq!(parse_to_string("1 + 2, 3 * 4"), "(, (+ 1 2) (* 3 4))");
+        assert_eq!(
+            parse_expression_to_string("1 + 2, 3 * 4;"),
+            "(, (+ 1 2) (* 3 4))"
+        );
     }
 
     #[test]
     fn parses_comma_as_left_associative() {
-        assert_eq!(parse_to_string("1, 2, 3"), "(, (, 1 2) 3)");
+        assert_eq!(parse_expression_to_string("1, 2, 3;"), "(, (, 1 2) 3)");
     }
 
     #[test]
     fn parses_conditional_as_right_associative() {
         assert_eq!(
-            parse_to_string("false ? 1 : true ? 2 : 3"),
+            parse_expression_to_string("false ? 1 : true ? 2 : 3;"),
             "(?: false 1 (?: true 2 3))"
         );
     }
 
     #[test]
     fn parses_full_expression_in_then_branch() {
-        assert_eq!(parse_to_string("true ? 1, 2 : 3"), "(?: true (, 1 2) 3)");
+        assert_eq!(
+            parse_expression_to_string("true ? 1, 2 : 3;"),
+            "(?: true (, 1 2) 3)"
+        );
     }
 
     #[test]
     fn parses_unary_and_grouping() {
         assert_eq!(
-            parse_to_string("!(false == true)"),
+            parse_expression_to_string("!(false == true);"),
             "(! (group (== false true)))"
         );
     }
 
     #[test]
     fn parses_grouped_binary_expression() {
-        assert_eq!(parse_to_string("(1 + 2) * 3"), "(* (group (+ 1 2)) 3)");
+        assert_eq!(
+            parse_expression_to_string("(1 + 2) * 3;"),
+            "(* (group (+ 1 2)) 3)"
+        );
+    }
+
+    #[test]
+    fn parses_print_statement() {
+        assert_eq!(parse_print_to_string("print 1 + 2;"), "(+ 1 2)");
     }
 
     #[test]
     fn discards_factor_expression_after_missing_left_operand() {
-        assert_parse_error_consumes_to_end("+ 1 * 2");
+        assert_parse_error_consumes_to_end("+ 1 * 2;");
     }
 
     #[test]
     fn discards_comparison_expression_after_missing_left_operand() {
-        assert_parse_error_consumes_to_end("== 1 < 2");
+        assert_parse_error_consumes_to_end("== 1 < 2;");
     }
 
     #[test]
     fn discards_conditional_expression_after_missing_left_comma() {
-        assert_parse_error_consumes_to_end(", false ? 1 : 2");
+        assert_parse_error_consumes_to_end(", false ? 1 : 2;");
     }
 
-    fn parse_to_string(source: &str) -> String {
+    #[test]
+    fn synchronizes_to_next_statement_after_error() {
+        let tokens = Scanner::new("print 1 + ; print 2;").scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        let expr = match statements.as_slice() {
+            [Stmt::Print { expression }] => expression,
+            _ => panic!("expected the parser to recover to the next print statement"),
+        };
+
+        assert_eq!(AstPrinter.print(expr), "2");
+    }
+
+    fn parse_expression_to_string(source: &str) -> String {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);
-        let expr = parser
-            .parse()
-            .expect("parser should successfully parse the test input");
+        let statements = parser.parse();
+        let expr = match statements.as_slice() {
+            [Stmt::Expression { expression }] => expression,
+            _ => panic!("expected a single expression statement"),
+        };
 
-        AstPrinter.print(&expr)
+        AstPrinter.print(expr)
+    }
+
+    fn parse_print_to_string(source: &str) -> String {
+        let tokens = Scanner::new(source).scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+        let expr = match statements.as_slice() {
+            [Stmt::Print { expression }] => expression,
+            _ => panic!("expected a single print statement"),
+        };
+
+        AstPrinter.print(expr)
     }
 
     fn assert_parse_error_consumes_to_end(source: &str) {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);
 
-        assert!(parser.parse().is_none());
+        let _ = parser.parse();
         assert!(parser.is_at_end());
     }
 }

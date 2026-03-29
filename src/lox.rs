@@ -60,7 +60,7 @@ fn run(source: &str) {
     let scanner = Scanner::new(source);
     let tokens = scanner.scan_tokens();
     let mut parser = Parser::new(tokens);
-    let expression = parser.parse();
+    let statements = parser.parse();
 
     // Stop if there was a syntax error.
     if had_error() {
@@ -68,14 +68,7 @@ fn run(source: &str) {
     }
 
     let interpreter = Interpreter;
-
-    if let Some(value) = interpreter.interpret(
-        expression
-            .as_ref()
-            .expect("parser should return an expression when no error occurred"),
-    ) {
-        println!("{value}");
-    }
+    interpreter.interpret(&statements);
 }
 
 pub(crate) fn error(line: u32, message: &str) {
