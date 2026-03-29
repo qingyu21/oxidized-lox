@@ -271,9 +271,11 @@ impl fmt::Display for Value {
 #[cfg(test)]
 mod tests {
     use super::{Interpreter, Value};
+    use crate::expr::Expr;
     use crate::parser::Parser;
     use crate::scanner::Scanner;
     use crate::stmt::Stmt;
+    use crate::token::{Literal, Token, TokenType};
 
     #[test]
     fn evaluates_numeric_expression() {
@@ -355,20 +357,52 @@ mod tests {
         assert_eq!(error.message, "Division by zero.");
     }
 
+    #[test]
+    fn executes_multiple_statements_in_order() {
+        let statements = parse_statements("1 + 2;\nprint 3;");
+
+        assert!(Interpreter.execute_all(&statements).is_ok());
+    }
+
+    #[test]
+    fn stops_executing_after_the_first_runtime_error() {
+        let mut statements = parse_statements("1 + 2;\n1 / 0;");
+        statements.push(invalid_statement(3));
+
+        let error = Interpreter
+            .execute_all(&statements)
+            .expect_err("execution should stop at division by zero");
+
+        assert_eq!(error.message, "Division by zero.");
+        assert_eq!(error.token.line, 2);
+    }
+
     fn interpret(source: &str) -> Value {
         evaluate_result(source).expect("interpreter should successfully evaluate the test input")
     }
 
+    fn parse_statements(source: &str) -> Vec<Stmt> {
+        let tokens = Scanner::new(source).scan_tokens();
+        let mut parser = Parser::new(tokens);
+        parser.parse()
+    }
+
     fn evaluate_result(source: &str) -> Result<Value, super::RuntimeError> {
         let source = format!("{source};");
-        let tokens = Scanner::new(&source).scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let statements = parser.parse();
+        let statements = parse_statements(&source);
         let expr = match statements.as_slice() {
             [Stmt::Expression { expression }] => expression,
             _ => panic!("expected a single expression statement"),
         };
 
         Interpreter.evaluate(&expr)
+    }
+
+    fn invalid_statement(line: u32) -> Stmt {
+        Stmt::expression(Expr::Binary {
+            left: Box::new(Expr::literal(Literal::Number(1.0))),
+            operator: Token::new(TokenType::Print, "print".to_string(), None, line),
+            right: Box::new(Expr::literal(Literal::Number(2.0))),
+        })
     }
 }

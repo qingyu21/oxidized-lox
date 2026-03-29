@@ -110,3 +110,64 @@ fn report(line: u32, where_: &str, message: &str) {
     eprintln!("[line {line}] Error{where_}: {message}");
     HAD_ERROR.store(true, Ordering::Relaxed);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    #[test]
+    fn run_marks_syntax_errors_without_runtime_errors() {
+        with_clean_error_state(|| {
+            run("print ;");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_marks_runtime_errors_without_syntax_errors() {
+        with_clean_error_state(|| {
+            run("1 / 0;");
+
+            assert!(!had_error());
+            assert!(had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_stops_before_execution_after_parse_error() {
+        with_clean_error_state(|| {
+            run("print ; 1 / 0;");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn runtime_error_sets_only_runtime_flag() {
+        with_clean_error_state(|| {
+            runtime_error(&token(TokenType::Slash, "/", 7), "Division by zero.");
+
+            assert!(!had_error());
+            assert!(had_runtime_error());
+        });
+    }
+
+    fn with_clean_error_state(test: impl FnOnce()) {
+        let _guard = TEST_LOCK.lock().expect("test lock should not be poisoned");
+        clear_error();
+        clear_runtime_error();
+        test();
+        clear_error();
+        clear_runtime_error();
+    }
+
+    fn token(type_: TokenType, lexeme: &str, line: u32) -> Token {
+        Token::new(type_, lexeme.to_string(), None, line)
+    }
+}

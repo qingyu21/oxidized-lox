@@ -491,6 +491,36 @@ mod tests {
         assert_eq!(AstPrinter.print(expr), "2");
     }
 
+    #[test]
+    fn synchronizes_to_supported_expression_statement_starts() {
+        let cases = [
+            ("false", "false"),
+            ("true", "true"),
+            ("nil", "nil"),
+            ("2", "2"),
+            ("\"lox\"", "lox"),
+            ("(2 + 3)", "(group (+ 2 3))"),
+            ("!false", "(! false)"),
+        ];
+
+        for (next_statement, expected) in cases {
+            let source = format!("print 1 {next_statement};");
+            assert_eq!(
+                recover_to_expression_statement_string(&source),
+                expected,
+                "failed for {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn synchronizes_to_minus_started_expression_statement() {
+        assert_eq!(
+            recover_to_expression_statement_string("print (1 + ) -2;"),
+            "(- 2)"
+        );
+    }
+
     fn parse_expression_to_string(source: &str) -> String {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);
@@ -521,5 +551,16 @@ mod tests {
 
         let _ = parser.parse();
         assert!(parser.is_at_end());
+    }
+
+    fn recover_to_expression_statement_string(source: &str) -> String {
+        let tokens = Scanner::new(source).scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        match statements.as_slice() {
+            [Stmt::Expression { expression }] => AstPrinter.print(expression),
+            _ => panic!("expected recovery to a single expression statement"),
+        }
     }
 }
