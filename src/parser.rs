@@ -260,27 +260,33 @@ impl Parser {
 
     // Discard tokens until the parser reaches a likely statement boundary.
     fn synchronize(&mut self) {
-        self.advance();
-
         while !self.is_at_end() {
-            if self.previous().type_ == TokenType::Semicolon {
+            if self.current > 0 && self.previous().type_ == TokenType::Semicolon {
                 return;
             }
 
-            match self.peek().type_ {
-                TokenType::Class
-                | TokenType::Fun
-                | TokenType::Var
-                | TokenType::For
-                | TokenType::If
-                | TokenType::While
-                | TokenType::Print
-                | TokenType::Return => return,
-                _ => {
-                    self.advance();
-                }
+            if self.can_start_statement() {
+                return;
             }
+
+            self.advance();
         }
+    }
+
+    // Return whether the current token can begin a statement in the current grammar.
+    fn can_start_statement(&self) -> bool {
+        matches!(
+            self.peek().type_,
+            TokenType::Print
+                | TokenType::False
+                | TokenType::True
+                | TokenType::Nil
+                | TokenType::Number
+                | TokenType::String
+                | TokenType::LeftParen
+                | TokenType::Bang
+                | TokenType::Minus
+        )
     }
 
     // If the current token matches any candidate, consume it.
@@ -469,6 +475,20 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(printed, vec!["3".to_string()]);
+    }
+
+    #[test]
+    fn synchronizes_to_next_expression_statement_after_missing_semicolon() {
+        let tokens = Scanner::new("print 1 2;").scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        let expr = match statements.as_slice() {
+            [Stmt::Expression { expression }] => expression,
+            _ => panic!("expected recovery to the next expression statement"),
+        };
+
+        assert_eq!(AstPrinter.print(expr), "2");
     }
 
     fn parse_expression_to_string(source: &str) -> String {
