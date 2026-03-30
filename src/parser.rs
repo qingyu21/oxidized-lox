@@ -93,17 +93,35 @@ impl Parser {
         self.comma()
     }
 
-    // comma -> conditional ( "," conditional )* ;
+    // comma -> assignment ( "," assignment )* ;
     fn comma(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.conditional()?;
+        let mut expr = self.assignment()?;
 
         while self.match_token(&[TokenType::Comma]) {
             // TODO(perf): Cloning the full operator token copies its owned
             // lexeme/literal data. A leaner AST could store only the token
             // kind plus source span information.
             let operator = self.previous().clone();
-            let right = self.conditional()?;
+            let right = self.assignment()?;
             expr = Expr::binary(expr, operator, right);
+        }
+
+        Ok(expr)
+    }
+
+    // assignment -> conditional ( "=" assignment )? ;
+    fn assignment(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.conditional()?;
+
+        if self.match_token(&[TokenType::Equal]) {
+            let equals = self.previous().clone();
+            let value = self.assignment()?;
+
+            if let Expr::Variable { name } = expr {
+                return Ok(Expr::assign(name, value));
+            }
+
+            let _ = self.error(&equals, "Invalid assignment target.");
         }
 
         Ok(expr)
@@ -468,6 +486,19 @@ mod tests {
     }
 
     #[test]
+    fn parses_assignment_expression_statement() {
+        assert_eq!(parse_expression_to_string("beverage = 1;"), "(= beverage 1)");
+    }
+
+    #[test]
+    fn parses_assignment_as_right_associative() {
+        assert_eq!(
+            parse_expression_to_string("a = b = 1;"),
+            "(= a (= b 1))"
+        );
+    }
+
+    #[test]
     fn discards_factor_expression_after_missing_left_operand() {
         assert_parse_error_consumes_to_end("+ 1 * 2;");
     }
@@ -511,6 +542,21 @@ mod tests {
                 assert_eq!(AstPrinter.print(initializer), "tea");
             }
             _ => panic!("expected the parser to recover to the next variable declaration"),
+        }
+    }
+
+    #[test]
+    fn reports_invalid_assignment_target_and_recovers() {
+        let tokens = Scanner::new("a + b = c; print 1;").scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        match statements.as_slice() {
+            [Stmt::Expression { expression }, Stmt::Print { expression: printed }] => {
+                assert_eq!(AstPrinter.print(expression), "(+ a b)");
+                assert_eq!(AstPrinter.print(printed), "1");
+            }
+            _ => panic!("expected the parser to continue after an invalid assignment target"),
         }
     }
 

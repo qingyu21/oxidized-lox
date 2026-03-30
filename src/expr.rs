@@ -3,6 +3,13 @@ use crate::token::{Literal, Token};
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Expr {
+    Assign {
+        // TODO(perf): Storing the full token is convenient, but it carries
+        // owned lexeme/literal data. A leaner AST could store only the token
+        // kind plus source span information.
+        name: Token,
+        value: Box<Expr>,
+    },
     Binary {
         // TODO(perf): Boxing child nodes keeps the recursive enum sized, but
         // it also adds heap allocations per node. An arena/index-based AST
@@ -38,6 +45,14 @@ pub enum Expr {
 }
 
 impl Expr {
+    // Construct an assignment expression that updates an existing binding.
+    pub fn assign(name: Token, value: Expr) -> Self {
+        Expr::Assign {
+            name,
+            value: Box::new(value),
+        }
+    }
+
     // Construct a literal expression from an already-parsed literal value.
     pub fn literal(value: Literal) -> Self {
         Expr::Literal { value }

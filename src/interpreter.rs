@@ -71,6 +71,7 @@ impl Interpreter {
 
     fn evaluate(&self, expr: &Expr) -> Result<Value, RuntimeError> {
         match expr {
+            Expr::Assign { name, value } => self.evaluate_assign(name, value),
             // TODO(perf): Cloning string literals here allocates a fresh
             // runtime string. A shared string representation could avoid
             // copying literal text into `Value`.
@@ -89,6 +90,14 @@ impl Interpreter {
                 right,
             } => self.evaluate_binary(left, operator, right),
         }
+    }
+
+    fn evaluate_assign(&self, name: &Token, value_expr: &Expr) -> Result<Value, RuntimeError> {
+        let value = self.evaluate(value_expr)?;
+        self.environment
+            .borrow_mut()
+            .assign(name, value.clone())?;
+        Ok(value)
     }
 
     fn evaluate_conditional(
@@ -429,6 +438,39 @@ mod tests {
         };
 
         assert_eq!(value, Value::String("after".to_string()));
+    }
+
+    #[test]
+    fn assignment_updates_an_existing_variable_and_returns_the_new_value() {
+        let statements = parse_statements("var beverage = \"before\";\nbeverage = \"after\";\nbeverage;");
+        let interpreter = Interpreter::new();
+
+        assert!(interpreter.execute(&statements[0]).is_ok());
+
+        let assigned = match &statements[1] {
+            Stmt::Expression { expression } => interpreter
+                .evaluate(expression)
+                .expect("assignment should succeed for an existing variable"),
+            _ => panic!("expected an assignment expression statement"),
+        };
+
+        assert_eq!(assigned, Value::String("after".to_string()));
+
+        let value = match &statements[2] {
+            Stmt::Expression { expression } => interpreter
+                .evaluate(expression)
+                .expect("variable lookup should see the assigned value"),
+            _ => panic!("expected a variable expression statement"),
+        };
+
+        assert_eq!(value, Value::String("after".to_string()));
+    }
+
+    #[test]
+    fn reports_runtime_error_for_assignment_to_undefined_variable() {
+        let error = evaluate_result("beverage = \"tea\"")
+            .expect_err("assigning an undefined variable should fail at runtime");
+        assert_eq!(error.message, "Undefined variable 'beverage'.");
     }
 
     #[test]

@@ -7,6 +7,7 @@ pub struct AstPrinter;
 impl AstPrinter {
     pub fn print(&self, expr: &Expr) -> String {
         match expr {
+            Expr::Assign { name, value } => format!("(= {} {})", name.lexeme, self.print(value)),
             Expr::Binary {
                 left,
                 operator,

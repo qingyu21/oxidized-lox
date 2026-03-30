@@ -21,6 +21,19 @@ impl Environment {
         self.values.insert(name, value);
     }
 
+    // Update the value stored for an existing variable.
+    pub fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
+        if let Some(slot) = self.values.get_mut(&name.lexeme) {
+            *slot = value;
+            Ok(())
+        } else {
+            Err(RuntimeError::new(
+                name.clone(),
+                format!("Undefined variable '{}'.", name.lexeme),
+            ))
+        }
+    }
+
     // Look up the current value stored for a variable name.
     pub fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
         self.values
