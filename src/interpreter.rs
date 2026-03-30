@@ -1,5 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, fmt};
+use std::{cell::RefCell, fmt};
 
+use crate::environment::Environment;
 use crate::expr::Expr;
 use crate::lox;
 use crate::stmt::Stmt;
@@ -14,19 +15,20 @@ pub(crate) enum Value {
 }
 
 #[derive(Debug, Clone)]
-struct RuntimeError {
+pub(crate) struct RuntimeError {
     token: Token,
     message: String,
 }
 
-#[derive(Default)]
 pub struct Interpreter {
-    environment: RefCell<HashMap<String, Value>>,
+    environment: RefCell<Environment>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            environment: RefCell::new(Environment::new()),
+        }
     }
 
     pub fn interpret(&self, statements: &[Stmt]) {
@@ -59,7 +61,9 @@ impl Interpreter {
                     Some(initializer) => self.evaluate(initializer)?,
                     None => Value::Nil,
                 };
-                self.define(name, value);
+                self.environment
+                    .borrow_mut()
+                    .define(name.lexeme.clone(), value);
                 Ok(())
             }
         }
@@ -71,7 +75,7 @@ impl Interpreter {
             // runtime string. A shared string representation could avoid
             // copying literal text into `Value`.
             Expr::Literal { value } => Ok(value.clone().into()),
-            Expr::Variable { name } => self.lookup_variable(name),
+            Expr::Variable { name } => self.environment.borrow().get(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Conditional {
                 condition,
@@ -85,33 +89,6 @@ impl Interpreter {
                 right,
             } => self.evaluate_binary(left, operator, right),
         }
-    }
-
-    // Bind a value to a name in the current environment.
-    fn define(&self, name: &Token, value: Value) {
-        // TODO(perf): Environment keys currently clone each variable name into
-        // an owned `String`. String interning or symbol IDs would avoid
-        // repeating that allocation across declarations and lookups.
-        self.environment
-            .borrow_mut()
-            .insert(name.lexeme.clone(), value);
-    }
-
-    // Look up the current value stored for a variable name.
-    fn lookup_variable(&self, name: &Token) -> Result<Value, RuntimeError> {
-        self.environment
-            .borrow()
-            .get(&name.lexeme)
-            // TODO(perf): Returning an owned `Value` clones strings and would
-            // also clone any future heap-backed objects. Shared runtime
-            // handles would make variable reads cheaper.
-            .cloned()
-            .ok_or_else(|| {
-                RuntimeError::new(
-                    name.clone(),
-                    format!("Undefined variable '{}'.", name.lexeme),
-                )
-            })
     }
 
     fn evaluate_conditional(
@@ -281,7 +258,7 @@ impl Interpreter {
 }
 
 impl RuntimeError {
-    fn new(token: Token, message: impl Into<String>) -> Self {
+    pub(crate) fn new(token: Token, message: impl Into<String>) -> Self {
         Self {
             token,
             message: message.into(),
@@ -432,6 +409,26 @@ mod tests {
         };
 
         assert_eq!(value, Value::Nil);
+    }
+
+    #[test]
+    fn redeclaring_a_global_variable_overwrites_the_previous_value() {
+        let statements = parse_statements(
+            "var beverage = \"before\";\nvar beverage = \"after\";\nbeverage;",
+        );
+        let interpreter = Interpreter::new();
+
+        assert!(interpreter.execute(&statements[0]).is_ok());
+        assert!(interpreter.execute(&statements[1]).is_ok());
+
+        let value = match &statements[2] {
+            Stmt::Expression { expression } => interpreter
+                .evaluate(expression)
+                .expect("variable lookup should use the most recent binding"),
+            _ => panic!("expected a variable expression statement"),
+        };
+
+        assert_eq!(value, Value::String("after".to_string()));
     }
 
     #[test]
