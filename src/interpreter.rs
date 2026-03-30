@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{cell::RefCell, collections::HashMap, fmt};
 
 use crate::expr::Expr;
 use crate::lox;
@@ -19,9 +19,16 @@ struct RuntimeError {
     message: String,
 }
 
-pub struct Interpreter;
+#[derive(Default)]
+pub struct Interpreter {
+    environment: RefCell<HashMap<String, Value>>,
+}
 
 impl Interpreter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn interpret(&self, statements: &[Stmt]) {
         if let Err(error) = self.execute_all(statements) {
             lox::runtime_error(&error.token, &error.message);
@@ -29,15 +36,15 @@ impl Interpreter {
     }
 
     fn execute_all(&self, statements: &[Stmt]) -> Result<(), RuntimeError> {
-        for statement in statements {
-            self.execute(statement)?;
+        for stmt in statements {
+            self.execute(stmt)?;
         }
 
         Ok(())
     }
 
-    fn execute(&self, statement: &Stmt) -> Result<(), RuntimeError> {
-        match statement {
+    fn execute(&self, stmt: &Stmt) -> Result<(), RuntimeError> {
+        match stmt {
             Stmt::Expression { expression } => {
                 self.evaluate(expression)?;
                 Ok(())
@@ -45,6 +52,14 @@ impl Interpreter {
             Stmt::Print { expression } => {
                 let value = self.evaluate(expression)?;
                 println!("{value}");
+                Ok(())
+            }
+            Stmt::Var { name, initializer } => {
+                let value = match initializer {
+                    Some(initializer) => self.evaluate(initializer)?,
+                    None => Value::Nil,
+                };
+                self.define(name, value);
                 Ok(())
             }
         }
@@ -56,6 +71,7 @@ impl Interpreter {
             // runtime string. A shared string representation could avoid
             // copying literal text into `Value`.
             Expr::Literal { value } => Ok(value.clone().into()),
+            Expr::Variable { name } => self.lookup_variable(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Conditional {
                 condition,
@@ -69,6 +85,33 @@ impl Interpreter {
                 right,
             } => self.evaluate_binary(left, operator, right),
         }
+    }
+
+    // Bind a value to a name in the current environment.
+    fn define(&self, name: &Token, value: Value) {
+        // TODO(perf): Environment keys currently clone each variable name into
+        // an owned `String`. String interning or symbol IDs would avoid
+        // repeating that allocation across declarations and lookups.
+        self.environment
+            .borrow_mut()
+            .insert(name.lexeme.clone(), value);
+    }
+
+    // Look up the current value stored for a variable name.
+    fn lookup_variable(&self, name: &Token) -> Result<Value, RuntimeError> {
+        self.environment
+            .borrow()
+            .get(&name.lexeme)
+            // TODO(perf): Returning an owned `Value` clones strings and would
+            // also clone any future heap-backed objects. Shared runtime
+            // handles would make variable reads cheaper.
+            .cloned()
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    name.clone(),
+                    format!("Undefined variable '{}'.", name.lexeme),
+                )
+            })
     }
 
     fn evaluate_conditional(
@@ -238,10 +281,10 @@ impl Interpreter {
 }
 
 impl RuntimeError {
-    fn new(token: Token, message: &str) -> Self {
+    fn new(token: Token, message: impl Into<String>) -> Self {
         Self {
             token,
-            message: message.to_string(),
+            message: message.into(),
         }
     }
 }
@@ -358,18 +401,61 @@ mod tests {
     }
 
     #[test]
+    fn executes_var_declaration_and_reads_back_the_value() {
+        let statements = parse_statements("var beverage = \"tea\";\nbeverage;");
+        let interpreter = Interpreter::new();
+
+        assert!(interpreter.execute(&statements[0]).is_ok());
+
+        let value = match &statements[1] {
+            Stmt::Expression { expression } => interpreter
+                .evaluate(expression)
+                .expect("variable lookup should succeed after declaration"),
+            _ => panic!("expected a variable expression statement"),
+        };
+
+        assert_eq!(value, Value::String("tea".to_string()));
+    }
+
+    #[test]
+    fn initializes_variables_to_nil_when_no_initializer_is_present() {
+        let statements = parse_statements("var beverage;\nbeverage;");
+        let interpreter = Interpreter::new();
+
+        assert!(interpreter.execute(&statements[0]).is_ok());
+
+        let value = match &statements[1] {
+            Stmt::Expression { expression } => interpreter
+                .evaluate(expression)
+                .expect("variable lookup should succeed after declaration"),
+            _ => panic!("expected a variable expression statement"),
+        };
+
+        assert_eq!(value, Value::Nil);
+    }
+
+    #[test]
+    fn reports_runtime_error_for_undefined_variable_access() {
+        let error = evaluate_result("beverage")
+            .expect_err("reading an undefined variable should fail at runtime");
+        assert_eq!(error.message, "Undefined variable 'beverage'.");
+    }
+
+    #[test]
     fn executes_multiple_statements_in_order() {
         let statements = parse_statements("1 + 2;\nprint 3;");
+        let interpreter = Interpreter::new();
 
-        assert!(Interpreter.execute_all(&statements).is_ok());
+        assert!(interpreter.execute_all(&statements).is_ok());
     }
 
     #[test]
     fn stops_executing_after_the_first_runtime_error() {
         let mut statements = parse_statements("1 + 2;\n1 / 0;");
         statements.push(invalid_statement(3));
+        let interpreter = Interpreter::new();
 
-        let error = Interpreter
+        let error = interpreter
             .execute_all(&statements)
             .expect_err("execution should stop at division by zero");
 
@@ -390,12 +476,13 @@ mod tests {
     fn evaluate_result(source: &str) -> Result<Value, super::RuntimeError> {
         let source = format!("{source};");
         let statements = parse_statements(&source);
+        let interpreter = Interpreter::new();
         let expr = match statements.as_slice() {
             [Stmt::Expression { expression }] => expression,
             _ => panic!("expected a single expression statement"),
         };
 
-        Interpreter.evaluate(&expr)
+        interpreter.evaluate(expr)
     }
 
     fn invalid_statement(line: u32) -> Stmt {

@@ -26,6 +26,7 @@ impl AstPrinter {
                     else_branch.as_ref(),
                 ],
             ),
+            Expr::Variable { name } => name.lexeme.clone(),
             Expr::Unary { operator, right } => {
                 self.parenthesize(&operator.lexeme, [right.as_ref()])
             }

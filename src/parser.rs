@@ -21,13 +21,13 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    // program -> statement* EOF ;
+    // program -> declaration* EOF ;
     pub fn parse(&mut self) -> Vec<Stmt> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
-            match self.statement() {
-                Ok(statement) => statements.push(statement),
+            match self.declaration() {
+                Ok(stmt) => statements.push(stmt),
                 Err(_) => {
                     self.synchronize();
                 }
@@ -35,6 +35,34 @@ impl Parser {
         }
 
         statements
+    }
+
+    // declaration -> varDecl | statement ;
+    fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::Var]) {
+            return self.var_declaration();
+        }
+
+        self.statement()
+    }
+
+    // varDecl -> "var" IDENTIFIER ( "=" expression )? ";" ;
+    fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self
+            .consume(TokenType::Identifier, "Expect variable name.")?
+            .clone();
+
+        let initializer = if self.match_token(&[TokenType::Equal]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        )?;
+        Ok(Stmt::var(name, initializer))
     }
 
     // statement -> printStmt | exprStmt ;
@@ -181,7 +209,7 @@ impl Parser {
         self.primary()
     }
 
-    // primary -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+    // primary -> "true" | "false" | "nil" | NUMBER | STRING | "(" expression ")" | IDENTIFIER ;
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if let Some(right_operand) = self.missing_left_operand_rule() {
             return self.missing_left_operand(right_operand);
@@ -216,6 +244,10 @@ impl Parser {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::grouping(expr));
+        }
+
+        if self.match_token(&[TokenType::Identifier]) {
+            return Ok(Expr::variable(self.previous().clone()));
         }
 
         Err(self.error(self.peek(), "Expect expression."))
@@ -265,7 +297,7 @@ impl Parser {
                 return;
             }
 
-            if self.can_start_statement() {
+            if self.can_start_declaration() {
                 return;
             }
 
@@ -273,11 +305,13 @@ impl Parser {
         }
     }
 
-    // Return whether the current token can begin a statement in the current grammar.
-    fn can_start_statement(&self) -> bool {
+    // Return whether the current token can begin a declaration in the current grammar.
+    fn can_start_declaration(&self) -> bool {
         matches!(
             self.peek().type_,
-            TokenType::Print
+            TokenType::Var
+                | TokenType::Print
+                | TokenType::Identifier
                 | TokenType::False
                 | TokenType::True
                 | TokenType::Nil
@@ -398,6 +432,42 @@ mod tests {
     }
 
     #[test]
+    fn parses_var_declaration_with_initializer() {
+        let statements = parse_statements("var beverage = 1 + 2;");
+
+        match statements.as_slice() {
+            [Stmt::Var {
+                name,
+                initializer: Some(initializer),
+            }] => {
+                assert_eq!(name.lexeme, "beverage");
+                assert_eq!(AstPrinter.print(initializer), "(+ 1 2)");
+            }
+            _ => panic!("expected a single variable declaration with an initializer"),
+        }
+    }
+
+    #[test]
+    fn parses_var_declaration_without_initializer() {
+        let statements = parse_statements("var beverage;");
+
+        match statements.as_slice() {
+            [Stmt::Var {
+                name,
+                initializer: None,
+            }] => {
+                assert_eq!(name.lexeme, "beverage");
+            }
+            _ => panic!("expected a single variable declaration without an initializer"),
+        }
+    }
+
+    #[test]
+    fn parses_variable_expression_statement() {
+        assert_eq!(parse_expression_to_string("beverage;"), "beverage");
+    }
+
+    #[test]
     fn discards_factor_expression_after_missing_left_operand() {
         assert_parse_error_consumes_to_end("+ 1 * 2;");
     }
@@ -427,6 +497,24 @@ mod tests {
     }
 
     #[test]
+    fn synchronizes_to_var_declaration_after_error() {
+        let tokens = Scanner::new("print 1 + ; var beverage = \"tea\";").scan_tokens();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse();
+
+        match statements.as_slice() {
+            [Stmt::Var {
+                name,
+                initializer: Some(initializer),
+            }] => {
+                assert_eq!(name.lexeme, "beverage");
+                assert_eq!(AstPrinter.print(initializer), "tea");
+            }
+            _ => panic!("expected the parser to recover to the next variable declaration"),
+        }
+    }
+
+    #[test]
     fn keeps_valid_statements_before_and_after_an_invalid_one() {
         let tokens = Scanner::new("print 1; print ; print 2;").scan_tokens();
         let mut parser = Parser::new(tokens);
@@ -434,7 +522,7 @@ mod tests {
 
         let printed = statements
             .iter()
-            .map(|statement| match statement {
+            .map(|stmt| match stmt {
                 Stmt::Print { expression } => AstPrinter.print(expression),
                 _ => panic!("expected only print statements"),
             })
@@ -451,7 +539,7 @@ mod tests {
 
         let printed = statements
             .iter()
-            .map(|statement| match statement {
+            .map(|stmt| match stmt {
                 Stmt::Print { expression } => AstPrinter.print(expression),
                 _ => panic!("expected only print statements"),
             })
@@ -468,7 +556,7 @@ mod tests {
 
         let printed = statements
             .iter()
-            .map(|statement| match statement {
+            .map(|stmt| match stmt {
                 Stmt::Print { expression } => AstPrinter.print(expression),
                 _ => panic!("expected only print statements"),
             })
@@ -522,9 +610,7 @@ mod tests {
     }
 
     fn parse_expression_to_string(source: &str) -> String {
-        let tokens = Scanner::new(source).scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let statements = parser.parse();
+        let statements = parse_statements(source);
         let expr = match statements.as_slice() {
             [Stmt::Expression { expression }] => expression,
             _ => panic!("expected a single expression statement"),
@@ -534,9 +620,7 @@ mod tests {
     }
 
     fn parse_print_to_string(source: &str) -> String {
-        let tokens = Scanner::new(source).scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let statements = parser.parse();
+        let statements = parse_statements(source);
         let expr = match statements.as_slice() {
             [Stmt::Print { expression }] => expression,
             _ => panic!("expected a single print statement"),
@@ -548,19 +632,22 @@ mod tests {
     fn assert_parse_error_consumes_to_end(source: &str) {
         let tokens = Scanner::new(source).scan_tokens();
         let mut parser = Parser::new(tokens);
-
         let _ = parser.parse();
         assert!(parser.is_at_end());
     }
 
     fn recover_to_expression_statement_string(source: &str) -> String {
-        let tokens = Scanner::new(source).scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let statements = parser.parse();
+        let statements = parse_statements(source);
 
         match statements.as_slice() {
             [Stmt::Expression { expression }] => AstPrinter.print(expression),
             _ => panic!("expected recovery to a single expression statement"),
         }
+    }
+
+    fn parse_statements(source: &str) -> Vec<Stmt> {
+        let tokens = Scanner::new(source).scan_tokens();
+        let mut parser = Parser::new(tokens);
+        parser.parse()
     }
 }

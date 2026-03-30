@@ -5,6 +5,7 @@ use crate::{
     token::{Token, TokenType},
 };
 use std::{
+    cell::RefCell,
     fs,
     io::{self, Write},
     process,
@@ -13,6 +14,10 @@ use std::{
 
 static HAD_ERROR: AtomicBool = AtomicBool::new(false);
 static HAD_RUNTIME_ERROR: AtomicBool = AtomicBool::new(false);
+
+thread_local! {
+    static INTERPRETER: RefCell<Interpreter> = RefCell::new(Interpreter::new());
+}
 
 pub(crate) fn run_file(path: &str) -> io::Result<()> {
     let source = fs::read_to_string(path)?;
@@ -67,8 +72,7 @@ fn run(source: &str) {
         return;
     }
 
-    let interpreter = Interpreter;
-    interpreter.interpret(&statements);
+    INTERPRETER.with(|interpreter| interpreter.borrow().interpret(&statements));
 }
 
 pub(crate) fn error(line: u32, message: &str) {
@@ -158,16 +162,38 @@ mod tests {
         });
     }
 
+    #[test]
+    fn repl_style_runs_share_the_same_interpreter_state() {
+        with_clean_error_state(|| {
+            run("var beverage = \"tea\";");
+            clear_error();
+            clear_runtime_error();
+
+            run("beverage;");
+
+            assert!(!had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
     fn with_clean_error_state(test: impl FnOnce()) {
         let _guard = TEST_LOCK.lock().expect("test lock should not be poisoned");
+        reset_interpreter();
         clear_error();
         clear_runtime_error();
         test();
+        reset_interpreter();
         clear_error();
         clear_runtime_error();
     }
 
     fn token(type_: TokenType, lexeme: &str, line: u32) -> Token {
         Token::new(type_, lexeme.to_string(), None, line)
+    }
+
+    fn reset_interpreter() {
+        INTERPRETER.with(|interpreter| {
+            *interpreter.borrow_mut() = Interpreter::new();
+        });
     }
 }

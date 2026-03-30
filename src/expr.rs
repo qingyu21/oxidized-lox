@@ -20,6 +20,9 @@ pub enum Expr {
     Literal {
         value: Literal,
     },
+    Variable {
+        name: Token,
+    },
     Conditional {
         condition: Box<Expr>,
         then_branch: Box<Expr>,
@@ -38,6 +41,11 @@ impl Expr {
     // Construct a literal expression from an already-parsed literal value.
     pub fn literal(value: Literal) -> Self {
         Expr::Literal { value }
+    }
+
+    // Construct a variable expression that refers to a named binding.
+    pub fn variable(name: Token) -> Self {
+        Expr::Variable { name }
     }
 
     // Construct a grouping expression that preserves explicit parentheses.
