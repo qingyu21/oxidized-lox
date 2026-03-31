@@ -37,6 +37,18 @@ impl Parser {
         statements
     }
 
+    // Parse a single expression that must consume the entire input.
+    pub fn parse_expression_input(&mut self) -> Option<Expr> {
+        let expr = self.expression().ok()?;
+
+        if !self.is_at_end() {
+            let _ = self.error(self.peek(), "Expect end of expression.");
+            return None;
+        }
+
+        Some(expr)
+    }
+
     // declaration -> varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
         if self.match_token(&[TokenType::Var]) {

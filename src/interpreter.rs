@@ -37,6 +37,13 @@ impl Interpreter {
         }
     }
 
+    pub fn interpret_expression(&self, expr: &Expr) {
+        match self.evaluate(expr) {
+            Ok(value) => println!("{value}"),
+            Err(error) => lox::runtime_error(&error.token, &error.message),
+        }
+    }
+
     fn execute_all(&self, statements: &[Stmt]) -> Result<(), RuntimeError> {
         for stmt in statements {
             self.execute(stmt)?;

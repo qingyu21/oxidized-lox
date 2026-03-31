@@ -50,7 +50,7 @@ pub(crate) fn run_prompt() -> io::Result<()> {
             break;
         }
 
-        run(line.trim_end());
+        run_repl(line.trim_end());
         clear_error();
         clear_runtime_error();
     }
@@ -62,8 +62,39 @@ fn run(source: &str) {
     // TODO(perf): This pipeline materializes both the full token stream and
     // the full AST before evaluation. A bytecode VM or arena-backed frontend
     // could cut allocation and traversal overhead later on.
-    let scanner = Scanner::new(source);
-    let tokens = scanner.scan_tokens();
+    let tokens = Scanner::new(source).scan_tokens();
+    run_tokens(tokens);
+}
+
+fn run_repl(source: &str) {
+    // TODO(perf): This pipeline materializes both the full token stream and
+    // the full AST before evaluation. A bytecode VM or arena-backed frontend
+    // could cut allocation and traversal overhead later on.
+    let tokens = Scanner::new(source).scan_tokens();
+
+    if is_empty_input(&tokens) {
+        return;
+    }
+
+    if should_eval_repl_expression(&tokens) {
+        let mut parser = Parser::new(tokens);
+        let Some(expr) = parser.parse_expression_input() else {
+            return;
+        };
+
+        // Stop if there was a syntax error.
+        if had_error() {
+            return;
+        }
+
+        INTERPRETER.with(|interpreter| interpreter.borrow().interpret_expression(&expr));
+        return;
+    }
+
+    run_tokens(tokens);
+}
+
+fn run_tokens(tokens: Vec<Token>) {
     let mut parser = Parser::new(tokens);
     let statements = parser.parse();
 
@@ -73,6 +104,42 @@ fn run(source: &str) {
     }
 
     INTERPRETER.with(|interpreter| interpreter.borrow().interpret(&statements));
+}
+
+fn is_empty_input(tokens: &[Token]) -> bool {
+    matches!(tokens, [Token { type_: TokenType::Eof, .. }])
+}
+
+fn should_eval_repl_expression(tokens: &[Token]) -> bool {
+    if starts_with_statement(tokens) {
+        return false;
+    }
+
+    !ends_with_semicolon(tokens)
+}
+
+fn starts_with_statement(tokens: &[Token]) -> bool {
+    matches!(
+        tokens.first().map(|token| token.type_),
+        Some(
+            TokenType::Print
+                | TokenType::Var
+                | TokenType::LeftBrace
+                | TokenType::If
+                | TokenType::While
+                | TokenType::For
+                | TokenType::Fun
+                | TokenType::Class
+                | TokenType::Return
+        )
+    )
+}
+
+fn ends_with_semicolon(tokens: &[Token]) -> bool {
+    matches!(
+        tokens.iter().rev().nth(1).map(|token| token.type_),
+        Some(TokenType::Semicolon)
+    )
 }
 
 pub(crate) fn error(line: u32, message: &str) {
@@ -174,6 +241,52 @@ mod tests {
             assert!(!had_error());
             assert!(!had_runtime_error());
         });
+    }
+
+    #[test]
+    fn repl_evaluates_bare_expressions() {
+        with_clean_error_state(|| {
+            run_repl("1 / 0");
+
+            assert!(!had_error());
+            assert!(had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn repl_still_executes_semicolon_terminated_statements() {
+        with_clean_error_state(|| {
+            run_repl("var beverage = \"tea\";");
+            clear_error();
+            clear_runtime_error();
+
+            run_repl("beverage");
+
+            assert!(!had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn repl_keeps_expression_statements_as_statements() {
+        with_clean_error_state(|| {
+            run_repl("1 / 0;");
+
+            assert!(!had_error());
+            assert!(had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn bare_expressions_are_detected_in_the_repl() {
+        let tokens = Scanner::new("1 + 2").scan_tokens();
+        assert!(should_eval_repl_expression(&tokens));
+    }
+
+    #[test]
+    fn semicolon_terminated_inputs_are_not_treated_as_bare_repl_expressions() {
+        let tokens = Scanner::new("1 + 2;").scan_tokens();
+        assert!(!should_eval_repl_expression(&tokens));
     }
 
     fn with_clean_error_state(test: impl FnOnce()) {
