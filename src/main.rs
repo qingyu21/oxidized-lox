@@ -1,5 +1,6 @@
 use std::{env, io, process};
 
+#[cfg(test)]
 mod ast_printer;
 mod environment;
 mod expr;

@@ -6,7 +6,6 @@ use crate::token::{Literal, Token, TokenType};
 #[derive(Debug, Clone, Copy)]
 struct ParseError;
 
-#[allow(dead_code)]
 pub struct Parser {
     tokens: Vec<Token>,
     // Index of the next token to be parsed.
@@ -15,7 +14,6 @@ pub struct Parser {
 
 type ParseRule = fn(&mut Parser) -> Result<Expr, ParseError>;
 
-#[allow(dead_code)]
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, current: 0 }

@@ -1,9 +1,7 @@
 use crate::expr::Expr;
 
-#[allow(dead_code)]
 pub struct AstPrinter;
 
-#[allow(dead_code)]
 impl AstPrinter {
     pub fn print(&self, expr: &Expr) -> String {
         match expr {

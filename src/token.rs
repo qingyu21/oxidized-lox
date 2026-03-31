@@ -57,9 +57,7 @@ pub enum TokenType {
 pub enum Literal {
     String(String),
     Number(f64),
-    #[allow(dead_code)]
     Bool(bool),
-    #[allow(dead_code)]
     Nil,
 }
 
@@ -68,7 +66,6 @@ pub struct Token {
     pub type_: TokenType,
     pub lexeme: String,
     pub literal: Option<Literal>,
-    #[allow(dead_code)]
     pub line: u32,
 }
 
