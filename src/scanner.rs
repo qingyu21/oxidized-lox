@@ -360,7 +360,10 @@ mod tests {
         let tokens = scan("123.");
         let types = tokens.iter().map(|token| token.type_).collect::<Vec<_>>();
 
-        assert_eq!(types, vec![TokenType::Number, TokenType::Dot, TokenType::Eof]);
+        assert_eq!(
+            types,
+            vec![TokenType::Number, TokenType::Dot, TokenType::Eof]
+        );
 
         match &tokens[0].literal {
             Some(Literal::Number(value)) => assert_eq!(*value, 123.0),

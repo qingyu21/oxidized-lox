@@ -111,7 +111,13 @@ fn run_tokens(tokens: Vec<Token>) {
 }
 
 fn is_empty_input(tokens: &[Token]) -> bool {
-    matches!(tokens, [Token { type_: TokenType::Eof, .. }])
+    matches!(
+        tokens,
+        [Token {
+            type_: TokenType::Eof,
+            ..
+        }]
+    )
 }
 
 // Use a small token-based heuristic so the REPL can accept bare expressions

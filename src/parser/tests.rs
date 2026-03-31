@@ -47,7 +47,10 @@ fn parses_logical_or_and_and_with_expected_precedence() {
 
 #[test]
 fn parses_logical_or_as_left_associative() {
-    assert_eq!(parse_expression_to_string("a or b or c;"), "(or (or a b) c)");
+    assert_eq!(
+        parse_expression_to_string("a or b or c;"),
+        "(or (or a b) c)"
+    );
 }
 
 #[test]
