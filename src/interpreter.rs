@@ -55,14 +55,18 @@ impl Interpreter {
     fn execute(&self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Block { statements } => {
-                let block_environment =
-                    Environment::new_enclosed_ref(self.current_environment());
+                let block_environment = Environment::new_enclosed_ref(self.current_environment());
                 self.execute_block(statements, block_environment)
             }
             Stmt::Expression { expression } => {
                 self.evaluate(expression)?;
                 Ok(())
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => self.execute_if(condition, then_branch, else_branch.as_deref()),
             Stmt::Print { expression } => {
                 let value = self.evaluate(expression)?;
                 println!("{value}");
@@ -92,6 +96,21 @@ impl Interpreter {
         let result = self.execute_all(statements);
         self.environment.replace(previous);
         result
+    }
+
+    fn execute_if(
+        &self,
+        condition: &Expr,
+        then_branch: &Stmt,
+        else_branch: Option<&Stmt>,
+    ) -> Result<(), RuntimeError> {
+        if Self::is_truthy(&self.evaluate(condition)?) {
+            self.execute(then_branch)
+        } else if let Some(else_branch) = else_branch {
+            self.execute(else_branch)
+        } else {
+            Ok(())
+        }
     }
 
     fn current_environment(&self) -> EnvironmentRef {

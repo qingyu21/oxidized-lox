@@ -59,13 +59,101 @@ fn parses_print_statement() {
 }
 
 #[test]
+fn parses_if_statement_without_else() {
+    let statements = parse_statements("if (true) print 1;");
+
+    match statements.as_slice() {
+        [
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch: None,
+            },
+        ] => {
+            assert_eq!(AstPrinter.print(condition), "true");
+            match then_branch.as_ref() {
+                Stmt::Print { expression } => {
+                    assert_eq!(AstPrinter.print(expression), "1");
+                }
+                _ => panic!("expected a print statement in the then branch"),
+            }
+        }
+        _ => panic!("expected a single if statement without else"),
+    }
+}
+
+#[test]
+fn parses_if_statement_with_else() {
+    let statements = parse_statements("if (true) print 1; else print 2;");
+
+    match statements.as_slice() {
+        [
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch: Some(else_branch),
+            },
+        ] => {
+            assert_eq!(AstPrinter.print(condition), "true");
+            match then_branch.as_ref() {
+                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "1"),
+                _ => panic!("expected a print statement in the then branch"),
+            }
+            match else_branch.as_ref() {
+                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "2"),
+                _ => panic!("expected a print statement in the else branch"),
+            }
+        }
+        _ => panic!("expected a single if statement with else"),
+    }
+}
+
+#[test]
+fn dangling_else_binds_to_the_nearest_if() {
+    let statements = parse_statements("if (first) if (second) print 1; else print 2;");
+
+    match statements.as_slice() {
+        [
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch: None,
+            },
+        ] => {
+            assert_eq!(AstPrinter.print(condition), "first");
+            match then_branch.as_ref() {
+                Stmt::If {
+                    condition,
+                    then_branch,
+                    else_branch: Some(else_branch),
+                } => {
+                    assert_eq!(AstPrinter.print(condition), "second");
+                    match then_branch.as_ref() {
+                        Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "1"),
+                        _ => panic!("expected a print statement in the inner then branch"),
+                    }
+                    match else_branch.as_ref() {
+                        Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "2"),
+                        _ => panic!("expected a print statement in the inner else branch"),
+                    }
+                }
+                _ => panic!("expected the outer then branch to be another if statement"),
+            }
+        }
+        _ => panic!("expected the dangling else to bind to the inner if"),
+    }
+}
+
+#[test]
 fn parses_block_statement() {
     let statements = parse_statements("{ var beverage = 1; print beverage; }");
 
     match statements.as_slice() {
-        [Stmt::Block {
-            statements: block_statements,
-        }] => match block_statements.as_slice() {
+        [
+            Stmt::Block {
+                statements: block_statements,
+            },
+        ] => match block_statements.as_slice() {
             [
                 Stmt::Var {
                     name,
@@ -88,10 +176,12 @@ fn parses_var_declaration_with_initializer() {
     let statements = parse_statements("var beverage = 1 + 2;");
 
     match statements.as_slice() {
-        [Stmt::Var {
-            name,
-            initializer: Some(initializer),
-        }] => {
+        [
+            Stmt::Var {
+                name,
+                initializer: Some(initializer),
+            },
+        ] => {
             assert_eq!(name.lexeme, "beverage");
             assert_eq!(AstPrinter.print(initializer), "(+ 1 2)");
         }
@@ -104,10 +194,12 @@ fn parses_var_declaration_without_initializer() {
     let statements = parse_statements("var beverage;");
 
     match statements.as_slice() {
-        [Stmt::Var {
-            name,
-            initializer: None,
-        }] => {
+        [
+            Stmt::Var {
+                name,
+                initializer: None,
+            },
+        ] => {
             assert_eq!(name.lexeme, "beverage");
         }
         _ => panic!("expected a single variable declaration without an initializer"),
@@ -121,15 +213,15 @@ fn parses_variable_expression_statement() {
 
 #[test]
 fn parses_assignment_expression_statement() {
-    assert_eq!(parse_expression_to_string("beverage = 1;"), "(= beverage 1)");
+    assert_eq!(
+        parse_expression_to_string("beverage = 1;"),
+        "(= beverage 1)"
+    );
 }
 
 #[test]
 fn parses_assignment_as_right_associative() {
-    assert_eq!(
-        parse_expression_to_string("a = b = 1;"),
-        "(= a (= b 1))"
-    );
+    assert_eq!(parse_expression_to_string("a = b = 1;"), "(= a (= b 1))");
 }
 
 #[test]
@@ -168,10 +260,12 @@ fn synchronizes_to_var_declaration_after_error() {
     let statements = parser.parse();
 
     match statements.as_slice() {
-        [Stmt::Var {
-            name,
-            initializer: Some(initializer),
-        }] => {
+        [
+            Stmt::Var {
+                name,
+                initializer: Some(initializer),
+            },
+        ] => {
             assert_eq!(name.lexeme, "beverage");
             assert_eq!(AstPrinter.print(initializer), "tea");
         }
@@ -186,7 +280,12 @@ fn reports_invalid_assignment_target_and_recovers() {
     let statements = parser.parse();
 
     match statements.as_slice() {
-        [Stmt::Expression { expression }, Stmt::Print { expression: printed }] => {
+        [
+            Stmt::Expression { expression },
+            Stmt::Print {
+                expression: printed,
+            },
+        ] => {
             assert_eq!(AstPrinter.print(expression), "(+ a b)");
             assert_eq!(AstPrinter.print(printed), "1");
         }
@@ -296,9 +395,12 @@ fn synchronizes_within_block_without_skipping_the_closing_brace() {
     let statements = parser.parse();
 
     match statements.as_slice() {
-        [Stmt::Block {
-            statements: block_statements,
-        }, Stmt::Print { expression }] => {
+        [
+            Stmt::Block {
+                statements: block_statements,
+            },
+            Stmt::Print { expression },
+        ] => {
             assert!(block_statements.is_empty());
             assert_eq!(AstPrinter.print(expression), "2");
         }

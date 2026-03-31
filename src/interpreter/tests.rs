@@ -52,6 +52,67 @@ fn evaluates_conditional_expression() {
 }
 
 #[test]
+fn executes_if_then_branch_when_condition_is_truthy() {
+    let statements =
+        parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("truthy if branch should update the variable"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::String("after".to_string()));
+}
+
+#[test]
+fn executes_if_else_branch_when_condition_is_falsey() {
+    let statements = parse_statements(
+        "var beverage = \"before\";\nif (false) beverage = \"then\"; else beverage = \"else\";\nbeverage;",
+    );
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("falsey if branch should execute the else branch"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::String("else".to_string()));
+}
+
+#[test]
+fn skips_unselected_if_branch_runtime_errors() {
+    let statements = parse_statements("if (false) print missing; else print 1;");
+    let interpreter = Interpreter::new();
+
+    assert!(
+        interpreter.execute(&statements[0]).is_ok(),
+        "false condition should skip the erroneous then branch"
+    );
+}
+
+#[test]
+fn skips_unselected_else_branch_runtime_errors() {
+    let statements = parse_statements("if (true) print 1; else print missing;");
+    let interpreter = Interpreter::new();
+
+    assert!(
+        interpreter.execute(&statements[0]).is_ok(),
+        "true condition should skip the erroneous else branch"
+    );
+}
+
+#[test]
 fn evaluates_comma_expression() {
     assert_eq!(interpret("1, 2 + 3"), Value::Number(5.0));
 }
@@ -152,7 +213,8 @@ fn redeclaring_a_global_variable_overwrites_the_previous_value() {
 
 #[test]
 fn block_assignment_updates_an_enclosing_variable() {
-    let statements = parse_statements("var beverage = \"before\";\n{ beverage = \"after\"; }\nbeverage;");
+    let statements =
+        parse_statements("var beverage = \"before\";\n{ beverage = \"after\"; }\nbeverage;");
     let interpreter = Interpreter::new();
 
     assert!(interpreter.execute(&statements[0]).is_ok());
@@ -170,7 +232,8 @@ fn block_assignment_updates_an_enclosing_variable() {
 
 #[test]
 fn block_local_variable_shadows_outer_variable_without_leaking() {
-    let statements = parse_statements("var beverage = \"outer\";\n{ var beverage = \"inner\"; }\nbeverage;");
+    let statements =
+        parse_statements("var beverage = \"outer\";\n{ var beverage = \"inner\"; }\nbeverage;");
     let interpreter = Interpreter::new();
 
     assert!(interpreter.execute(&statements[0]).is_ok());

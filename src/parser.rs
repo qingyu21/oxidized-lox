@@ -77,8 +77,12 @@ impl Parser {
         Ok(Stmt::var(name, initializer))
     }
 
-    // statement -> printStmt | block | exprStmt ;
+    // statement -> ifStmt | printStmt | block | exprStmt ;
     fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::If]) {
+            return self.if_statement();
+        }
+
         if self.match_token(&[TokenType::Print]) {
             return self.print_statement();
         }
@@ -88,6 +92,22 @@ impl Parser {
         }
 
         self.expression_statement()
+    }
+
+    // ifStmt -> "if" "(" expression ")" statement ( "else" statement )? ;
+    fn if_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after if condition.")?;
+
+        let then_branch = self.statement()?;
+        let else_branch = if self.match_token(&[TokenType::Else]) {
+            Some(self.statement()?)
+        } else {
+            None
+        };
+
+        Ok(Stmt::if_stmt(condition, then_branch, else_branch))
     }
 
     // block -> "{" declaration* "}" ;
@@ -363,6 +383,7 @@ impl Parser {
         matches!(
             self.peek().type_,
             TokenType::Var
+                | TokenType::If
                 | TokenType::Print
                 | TokenType::LeftBrace
                 | TokenType::Identifier
