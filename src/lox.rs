@@ -66,6 +66,8 @@ fn run(source: &str) {
     run_tokens(tokens);
 }
 
+// REPL input may be either a full statement or a bare expression whose value
+// should be echoed back to the user.
 fn run_repl(source: &str) {
     // TODO(perf): This pipeline materializes both the full token stream and
     // the full AST before evaluation. A bytecode VM or arena-backed frontend
@@ -110,6 +112,8 @@ fn is_empty_input(tokens: &[Token]) -> bool {
     matches!(tokens, [Token { type_: TokenType::Eof, .. }])
 }
 
+// Use a small token-based heuristic so the REPL can accept bare expressions
+// without first trying statement parsing and emitting a spurious syntax error.
 fn should_eval_repl_expression(tokens: &[Token]) -> bool {
     if starts_with_statement(tokens) {
         return false;
