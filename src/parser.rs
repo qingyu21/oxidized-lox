@@ -178,9 +178,9 @@ impl Parser {
         Ok(expr)
     }
 
-    // conditional -> equality ( "?" expression ":" conditional )? ;
+    // conditional -> logic_or ( "?" expression ":" conditional )? ;
     fn conditional(&mut self) -> Result<Expr, ParseError> {
-        let expr = self.equality()?;
+        let expr = self.logic_or()?;
 
         if self.match_token(&[TokenType::Question]) {
             let then_branch = self.expression()?;
@@ -190,6 +190,32 @@ impl Parser {
             )?;
             let else_branch = self.conditional()?;
             return Ok(Expr::conditional(expr, then_branch, else_branch));
+        }
+
+        Ok(expr)
+    }
+
+    // logic_or -> logic_and ( "or" logic_and )* ;
+    fn logic_or(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.logic_and()?;
+
+        while self.match_token(&[TokenType::Or]) {
+            let operator = self.previous().clone();
+            let right = self.logic_and()?;
+            expr = Expr::logical(expr, operator, right);
+        }
+
+        Ok(expr)
+    }
+
+    // logic_and -> equality ( "and" equality )* ;
+    fn logic_and(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.equality()?;
+
+        while self.match_token(&[TokenType::And]) {
+            let operator = self.previous().clone();
+            let right = self.equality()?;
+            expr = Expr::logical(expr, operator, right);
         }
 
         Ok(expr)
@@ -326,6 +352,8 @@ impl Parser {
     fn missing_left_operand_rule(&self) -> Option<ParseRule> {
         match self.peek().type_ {
             TokenType::Comma => Some(Self::conditional),
+            TokenType::Or => Some(Self::logic_and),
+            TokenType::And => Some(Self::equality),
             TokenType::BangEqual | TokenType::EqualEqual => Some(Self::comparison),
             TokenType::Greater
             | TokenType::GreaterEqual

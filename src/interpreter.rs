@@ -124,6 +124,11 @@ impl Interpreter {
             // runtime string. A shared string representation could avoid
             // copying literal text into `Value`.
             Expr::Literal { value } => Ok(value.clone().into()),
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => self.evaluate_logical(left, operator, right),
             Expr::Variable { name } => self.current_environment().borrow().get(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Conditional {
@@ -146,6 +151,22 @@ impl Interpreter {
             .borrow_mut()
             .assign(name, value.clone())?;
         Ok(value)
+    }
+
+    fn evaluate_logical(
+        &self,
+        left_expr: &Expr,
+        operator: &Token,
+        right_expr: &Expr,
+    ) -> Result<Value, RuntimeError> {
+        let left = self.evaluate(left_expr)?;
+
+        match operator.type_ {
+            TokenType::Or if Self::is_truthy(&left) => Ok(left),
+            TokenType::And if !Self::is_truthy(&left) => Ok(left),
+            TokenType::Or | TokenType::And => self.evaluate(right_expr),
+            _ => unreachable!("parser should only build valid logical operators"),
+        }
     }
 
     fn evaluate_conditional(

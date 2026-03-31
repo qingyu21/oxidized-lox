@@ -27,6 +27,11 @@ pub enum Expr {
     Literal {
         value: Literal,
     },
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
     Variable {
         name: Token,
     },
@@ -56,6 +61,15 @@ impl Expr {
     // Construct a literal expression from an already-parsed literal value.
     pub fn literal(value: Literal) -> Self {
         Expr::Literal { value }
+    }
+
+    // Construct a logical expression that may short-circuit.
+    pub fn logical(left: Expr, operator: Token, right: Expr) -> Self {
+        Expr::Logical {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        }
     }
 
     // Construct a variable expression that refers to a named binding.

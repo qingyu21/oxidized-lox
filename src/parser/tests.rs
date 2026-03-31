@@ -38,6 +38,43 @@ fn parses_full_expression_in_then_branch() {
 }
 
 #[test]
+fn parses_logical_or_and_and_with_expected_precedence() {
+    assert_eq!(
+        parse_expression_to_string("true or false and nil;"),
+        "(or true (and false nil))"
+    );
+}
+
+#[test]
+fn parses_logical_or_as_left_associative() {
+    assert_eq!(parse_expression_to_string("a or b or c;"), "(or (or a b) c)");
+}
+
+#[test]
+fn parses_logical_and_as_left_associative() {
+    assert_eq!(
+        parse_expression_to_string("a and b and c;"),
+        "(and (and a b) c)"
+    );
+}
+
+#[test]
+fn parses_conditional_after_logical_or() {
+    assert_eq!(
+        parse_expression_to_string("false or true ? 1 : 2;"),
+        "(?: (or false true) 1 2)"
+    );
+}
+
+#[test]
+fn parses_assignment_after_logical_or() {
+    assert_eq!(
+        parse_expression_to_string("beverage = false or true;"),
+        "(= beverage (or false true))"
+    );
+}
+
+#[test]
 fn parses_unary_and_grouping() {
     assert_eq!(
         parse_expression_to_string("!(false == true);"),
@@ -237,6 +274,11 @@ fn discards_comparison_expression_after_missing_left_operand() {
 #[test]
 fn discards_conditional_expression_after_missing_left_comma() {
     assert_parse_error_consumes_to_end(", false ? 1 : 2;");
+}
+
+#[test]
+fn discards_logical_expression_after_missing_left_operand() {
+    assert_parse_error_consumes_to_end("or false and true;");
 }
 
 #[test]

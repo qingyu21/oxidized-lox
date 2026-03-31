@@ -50,6 +50,8 @@ pub(crate) fn run_prompt() -> io::Result<()> {
             break;
         }
 
+        // TODO(repl): Buffer incomplete multi-line input so statements like
+        // `if (...)` or blocks can span multiple prompt lines before parsing.
         run_repl(line.trim_end());
         clear_error();
         clear_runtime_error();

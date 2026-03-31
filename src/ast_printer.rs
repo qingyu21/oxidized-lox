@@ -15,6 +15,11 @@ impl AstPrinter {
             } => self.parenthesize(&operator.lexeme, [left.as_ref(), right.as_ref()]),
             Expr::Grouping { expression } => self.parenthesize("group", [expression.as_ref()]),
             Expr::Literal { value } => value.to_string(),
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => self.parenthesize(&operator.lexeme, [left.as_ref(), right.as_ref()]),
             Expr::Conditional {
                 condition,
                 then_branch,

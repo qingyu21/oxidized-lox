@@ -52,6 +52,27 @@ fn evaluates_conditional_expression() {
 }
 
 #[test]
+fn evaluates_logical_or_and_and() {
+    assert_eq!(
+        interpret("nil or \"yes\""),
+        Value::String("yes".to_string())
+    );
+    assert_eq!(interpret("\"hi\" or 2"), Value::String("hi".to_string()));
+    assert_eq!(interpret("nil and \"yes\""), Value::Nil);
+    assert_eq!(interpret("\"hi\" and 2"), Value::Number(2.0));
+}
+
+#[test]
+fn logical_and_short_circuits_unselected_right_operand() {
+    assert_eq!(interpret("false and 1 / 0"), Value::Bool(false));
+}
+
+#[test]
+fn logical_or_short_circuits_unselected_right_operand() {
+    assert_eq!(interpret("true or 1 / 0"), Value::Bool(true));
+}
+
+#[test]
 fn executes_if_then_branch_when_condition_is_truthy() {
     let statements =
         parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");
