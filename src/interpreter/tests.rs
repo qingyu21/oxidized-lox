@@ -103,6 +103,18 @@ fn executes_var_declaration_and_reads_back_the_value() {
 }
 
 #[test]
+fn block_can_read_a_variable_from_its_enclosing_scope() {
+    let statements = parse_statements("var beverage = \"tea\";\n{ beverage; }");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(
+        interpreter.execute(&statements[1]).is_ok(),
+        "inner block should be able to read the outer variable"
+    );
+}
+
+#[test]
 fn initializes_variables_to_nil_when_no_initializer_is_present() {
     let statements = parse_statements("var beverage;\nbeverage;");
     let interpreter = Interpreter::new();
@@ -136,6 +148,59 @@ fn redeclaring_a_global_variable_overwrites_the_previous_value() {
     };
 
     assert_eq!(value, Value::String("after".to_string()));
+}
+
+#[test]
+fn block_assignment_updates_an_enclosing_variable() {
+    let statements = parse_statements("var beverage = \"before\";\n{ beverage = \"after\"; }\nbeverage;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("assignment in an inner block should update the outer binding"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::String("after".to_string()));
+}
+
+#[test]
+fn block_local_variable_shadows_outer_variable_without_leaking() {
+    let statements = parse_statements("var beverage = \"outer\";\n{ var beverage = \"inner\"; }\nbeverage;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("outer variable should still be visible after the block ends"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::String("outer".to_string()));
+}
+
+#[test]
+fn block_local_variable_is_not_visible_after_the_block_ends() {
+    let statements = parse_statements("{ var beverage = \"tea\"; }\nbeverage;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let error = match &statements[1] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect_err("block-local variables should not outlive their block"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(error.message, "Undefined variable 'beverage'.");
 }
 
 #[test]

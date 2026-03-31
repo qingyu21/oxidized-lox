@@ -1,6 +1,6 @@
 use std::{cell::RefCell, fmt};
 
-use crate::environment::Environment;
+use crate::environment::{Environment, EnvironmentRef};
 use crate::expr::Expr;
 use crate::lox;
 use crate::stmt::Stmt;
@@ -21,13 +21,13 @@ pub(crate) struct RuntimeError {
 }
 
 pub struct Interpreter {
-    environment: RefCell<Environment>,
+    environment: RefCell<EnvironmentRef>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            environment: RefCell::new(Environment::new()),
+            environment: RefCell::new(Environment::new_ref()),
         }
     }
 
@@ -47,6 +47,11 @@ impl Interpreter {
 
     fn execute(&self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
+            Stmt::Block { statements } => {
+                let block_environment =
+                    Environment::new_enclosed_ref(self.current_environment());
+                self.execute_block(statements, block_environment)
+            }
             Stmt::Expression { expression } => {
                 self.evaluate(expression)?;
                 Ok(())
@@ -61,12 +66,29 @@ impl Interpreter {
                     Some(initializer) => self.evaluate(initializer)?,
                     None => Value::Nil,
                 };
-                self.environment
+                self.current_environment()
                     .borrow_mut()
                     .define(name.lexeme.clone(), value);
                 Ok(())
             }
         }
+    }
+
+    fn execute_block(
+        &self,
+        statements: &[Stmt],
+        environment: EnvironmentRef,
+    ) -> Result<(), RuntimeError> {
+        // TODO(robustness): Use a guard so the previous environment is
+        // restored even if block execution panics.
+        let previous = self.environment.replace(environment);
+        let result = self.execute_all(statements);
+        self.environment.replace(previous);
+        result
+    }
+
+    fn current_environment(&self) -> EnvironmentRef {
+        self.environment.borrow().clone()
     }
 
     fn evaluate(&self, expr: &Expr) -> Result<Value, RuntimeError> {
@@ -76,7 +98,7 @@ impl Interpreter {
             // runtime string. A shared string representation could avoid
             // copying literal text into `Value`.
             Expr::Literal { value } => Ok(value.clone().into()),
-            Expr::Variable { name } => self.environment.borrow().get(name),
+            Expr::Variable { name } => self.current_environment().borrow().get(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Conditional {
                 condition,
@@ -94,7 +116,7 @@ impl Interpreter {
 
     fn evaluate_assign(&self, name: &Token, value_expr: &Expr) -> Result<Value, RuntimeError> {
         let value = self.evaluate(value_expr)?;
-        self.environment
+        self.current_environment()
             .borrow_mut()
             .assign(name, value.clone())?;
         Ok(value)

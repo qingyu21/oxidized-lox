@@ -59,6 +59,31 @@ fn parses_print_statement() {
 }
 
 #[test]
+fn parses_block_statement() {
+    let statements = parse_statements("{ var beverage = 1; print beverage; }");
+
+    match statements.as_slice() {
+        [Stmt::Block {
+            statements: block_statements,
+        }] => match block_statements.as_slice() {
+            [
+                Stmt::Var {
+                    name,
+                    initializer: Some(initializer),
+                },
+                Stmt::Print { expression },
+            ] => {
+                assert_eq!(name.lexeme, "beverage");
+                assert_eq!(AstPrinter.print(initializer), "1");
+                assert_eq!(AstPrinter.print(expression), "beverage");
+            }
+            _ => panic!("expected a variable declaration followed by a print inside the block"),
+        },
+        _ => panic!("expected a single block statement"),
+    }
+}
+
+#[test]
 fn parses_var_declaration_with_initializer() {
     let statements = parse_statements("var beverage = 1 + 2;");
 
@@ -262,6 +287,23 @@ fn synchronizes_to_minus_started_expression_statement() {
         recover_to_expression_statement_string("print (1 + ) -2;"),
         "(- 2)"
     );
+}
+
+#[test]
+fn synchronizes_within_block_without_skipping_the_closing_brace() {
+    let tokens = Scanner::new("{ print 1 + ; } print 2;").scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse();
+
+    match statements.as_slice() {
+        [Stmt::Block {
+            statements: block_statements,
+        }, Stmt::Print { expression }] => {
+            assert!(block_statements.is_empty());
+            assert_eq!(AstPrinter.print(expression), "2");
+        }
+        _ => panic!("expected recovery to preserve the enclosing block boundary"),
+    }
 }
 
 fn parse_expression_to_string(source: &str) -> String {

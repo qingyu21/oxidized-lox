@@ -65,13 +65,32 @@ impl Parser {
         Ok(Stmt::var(name, initializer))
     }
 
-    // statement -> printStmt | exprStmt ;
+    // statement -> printStmt | block | exprStmt ;
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         if self.match_token(&[TokenType::Print]) {
             return self.print_statement();
         }
 
+        if self.match_token(&[TokenType::LeftBrace]) {
+            return Ok(Stmt::block(self.block()?));
+        }
+
         self.expression_statement()
+    }
+
+    // block -> "{" declaration* "}" ;
+    fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        let mut statements = Vec::new();
+
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            match self.declaration() {
+                Ok(stmt) => statements.push(stmt),
+                Err(_) => self.synchronize(),
+            }
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(statements)
     }
 
     // printStmt -> "print" expression ";" ;
@@ -315,6 +334,10 @@ impl Parser {
                 return;
             }
 
+            if self.check(TokenType::RightBrace) {
+                return;
+            }
+
             if self.can_start_declaration() {
                 return;
             }
@@ -329,6 +352,7 @@ impl Parser {
             self.peek().type_,
             TokenType::Var
                 | TokenType::Print
+                | TokenType::LeftBrace
                 | TokenType::Identifier
                 | TokenType::False
                 | TokenType::True

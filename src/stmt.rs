@@ -4,6 +4,7 @@ use crate::token::Token;
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    Block { statements: Vec<Stmt> },
     Expression { expression: Expr },
     Print { expression: Expr },
     Var {
@@ -14,6 +15,11 @@ pub enum Stmt {
 
 #[allow(dead_code)]
 impl Stmt {
+    // Construct a block statement with its nested declarations and statements.
+    pub fn block(statements: Vec<Stmt>) -> Self {
+        Stmt::Block { statements }
+    }
+
     // Construct a statement that evaluates an expression for its side effects.
     pub fn expression(expression: Expr) -> Self {
         Stmt::Expression { expression }
