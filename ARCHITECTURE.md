@@ -112,6 +112,8 @@ flowchart TD
 - Consumes `Vec<Token>` and produces either `Vec<Stmt>` or one `Expr`.
 - Encodes precedence and associativity through recursive-descent methods such
   as `assignment()`, `conditional()`, `logic_or()`, and `term()`.
+- Desugars `for` loops into existing `Stmt::Block` and `Stmt::While` nodes
+  instead of introducing a separate runtime-only statement form.
 - Performs local error recovery with `synchronize()`.
 
 `Expr`
@@ -125,6 +127,8 @@ flowchart TD
 - Statement AST nodes.
 - Represents syntax that executes for effect: variable declarations, print
   statements, blocks, `if`, `while`, and expression statements.
+- `for` does not have its own `Stmt` variant because the parser lowers it to
+  more primitive statements during parsing.
 
 ### Runtime
 

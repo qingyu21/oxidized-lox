@@ -34,13 +34,12 @@ Implemented today:
 - scanning for punctuation, operators, identifiers, keywords, strings, numbers,
   line comments, and block comments
 - recursive-descent parsing for expressions and statements
-- variables, assignment, block scope, `if`, `while`, logical `and` / `or`,
+- variables, assignment, block scope, `if`, `while`, `for`, logical `and` / `or`,
   and `?:`
 - a tree-walk interpreter with a small REPL
 
 Later book stages still missing:
 
-- `for`
 - functions
 - classes
 - resolver / bytecode VM stages from later in the book
@@ -121,13 +120,13 @@ cargo fmt
 - The REPL evaluates one input line at a time and does not yet buffer
   incomplete multi-line statements.
 - The language implementation is still a subset of full Lox and does not yet
-  support `for`, functions, or classes.
+  support functions or classes.
 
 ## Roadmap
 
 Near-term goals:
 
-- add `for` and the next features from the book
+- add functions and the next features from the book
 - continue expanding parser and interpreter test coverage
 - keep the code structure aligned with the book while documenting Rust-specific
   implementation choices

@@ -75,8 +75,12 @@ impl Parser {
         Ok(Stmt::var(name, initializer))
     }
 
-    // statement -> ifStmt | printStmt | whileStmt | block | exprStmt ;
+    // statement -> forStmt | ifStmt | printStmt | whileStmt | block | exprStmt ;
     fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::For]) {
+            return self.for_statement();
+        }
+
         if self.match_token(&[TokenType::If]) {
             return self.if_statement();
         }
@@ -94,6 +98,54 @@ impl Parser {
         }
 
         self.expression_statement()
+    }
+
+    // forStmt -> "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement ;
+    fn for_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
+
+        // Parse the initializer clause, which may be omitted, a `var`
+        // declaration, or a plain expression statement.
+        let initializer = if self.match_token(&[TokenType::Semicolon]) {
+            None
+        } else if self.match_token(&[TokenType::Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        // Parse the loop condition and increment clauses. Either may be
+        // omitted in a C-style `for` loop.
+        let condition = if !self.check(TokenType::Semicolon) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(TokenType::Semicolon, "Expect ';' after loop condition.")?;
+
+        let increment = if !self.check(TokenType::RightParen) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(TokenType::RightParen, "Expect ')' after for clauses.")?;
+
+        // Parse the original loop body, then desugar the whole construct into
+        // the primitive statements the interpreter already knows how to run.
+        let mut body = self.statement()?;
+
+        if let Some(increment) = increment {
+            body = Stmt::block(vec![body, Stmt::expression(increment)]);
+        }
+
+        let condition = condition.unwrap_or_else(|| Expr::literal(Literal::Bool(true)));
+        body = Stmt::while_stmt(condition, body);
+
+        if let Some(initializer) = initializer {
+            body = Stmt::block(vec![initializer, body]);
+        }
+
+        Ok(body)
     }
 
     // ifStmt -> "if" "(" expression ")" statement ( "else" statement )? ;
@@ -422,6 +474,7 @@ impl Parser {
         matches!(
             self.peek().type_,
             TokenType::Var
+                | TokenType::For
                 | TokenType::If
                 | TokenType::While
                 | TokenType::Print

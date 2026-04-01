@@ -142,6 +142,63 @@ fn skips_while_body_when_condition_is_falsey() {
 }
 
 #[test]
+fn executes_for_loop_desugared_by_the_parser() {
+    let statements = parse_statements(
+        "var history = 0;\nfor (var i = 0; i < 3; i = i + 1) history = history * 10 + i;\nhistory;",
+    );
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("for loop should update the outer variable through each iteration"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::Number(12.0));
+}
+
+#[test]
+fn for_initializer_is_scoped_to_the_loop() {
+    let statements = parse_statements("for (var i = 0; i < 1; i = i + 1) print i;\ni;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let error = match &statements[1] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect_err("for initializer variable should not leak outside the loop"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(error.message, "Undefined variable 'i'.");
+}
+
+#[test]
+fn for_loop_without_initializer_reuses_existing_binding() {
+    let statements = parse_statements(
+        "var count = 0;\nfor (; count < 3; count = count + 1) print count;\ncount;",
+    );
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("for loop without initializer should keep using the existing variable"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::Number(3.0));
+}
+
+#[test]
 fn skips_unselected_if_branch_runtime_errors() {
     let statements = parse_statements("if (false) print missing; else print 1;");
     let interpreter = Interpreter::new();
