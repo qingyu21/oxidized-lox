@@ -142,6 +142,26 @@ fn skips_while_body_when_condition_is_falsey() {
 }
 
 #[test]
+fn break_exits_the_nearest_enclosing_loop() {
+    let statements = parse_statements(
+        "var count = 0;\nwhile (true) { count = count + 1; if (count == 3) { { break; } } }\ncount;",
+    );
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("break should exit the loop after the nested if/block"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::Number(3.0));
+}
+
+#[test]
 fn executes_for_loop_desugared_by_the_parser() {
     let statements = parse_statements(
         "var history = 0;\nfor (var i = 0; i < 3; i = i + 1) history = history * 10 + i;\nhistory;",
@@ -159,6 +179,26 @@ fn executes_for_loop_desugared_by_the_parser() {
     };
 
     assert_eq!(value, Value::Number(12.0));
+}
+
+#[test]
+fn break_in_a_for_loop_skips_the_increment_clause() {
+    let statements = parse_statements(
+        "var count = 0;\nfor (; true; count = count + 100) { count = count + 1; break; }\ncount;",
+    );
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("breaking from a for loop should bypass the increment clause"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::Number(1.0));
 }
 
 #[test]

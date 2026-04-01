@@ -10,13 +10,19 @@ pub struct Parser {
     tokens: Vec<Token>,
     // Index of the next token to be parsed.
     current: usize,
+    // Number of enclosing loop statements currently being parsed.
+    loop_depth: usize,
 }
 
 type ParseRule = fn(&mut Parser) -> Result<Expr, ParseError>;
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, current: 0 }
+        Self {
+            tokens,
+            current: 0,
+            loop_depth: 0,
+        }
     }
 
     // program -> declaration* EOF ;
@@ -75,8 +81,12 @@ impl Parser {
         Ok(Stmt::var(name, initializer))
     }
 
-    // statement -> forStmt | ifStmt | printStmt | whileStmt | block | exprStmt ;
+    // statement -> breakStmt | forStmt | ifStmt | printStmt | whileStmt | block | exprStmt ;
     fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::Break]) {
+            return self.break_statement();
+        }
+
         if self.match_token(&[TokenType::For]) {
             return self.for_statement();
         }
@@ -98,6 +108,18 @@ impl Parser {
         }
 
         self.expression_statement()
+    }
+
+    // breakStmt -> "break" ";" ;
+    fn break_statement(&mut self) -> Result<Stmt, ParseError> {
+        let keyword = self.previous().clone();
+        self.consume(TokenType::Semicolon, "Expect ';' after 'break'.")?;
+
+        if self.loop_depth == 0 {
+            return Err(self.error(&keyword, "Can't use 'break' outside of a loop."));
+        }
+
+        Ok(Stmt::break_stmt())
     }
 
     // forStmt -> "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement ;
@@ -132,9 +154,13 @@ impl Parser {
 
         // Parse the original loop body, then desugar the whole construct into
         // the primitive statements the interpreter already knows how to run.
-        let mut body = self.statement()?;
+        let mut body = self.in_loop(Self::statement)?;
 
         if let Some(increment) = increment {
+            // TODO(control-flow): If Lox later grows `continue`, desugared
+            // `for` loops need to preserve the increment clause on continue.
+            // A naive continue that exits this block early would skip the
+            // increment, which is not the behavior users expect from `for`.
             body = Stmt::block(vec![body, Stmt::expression(increment)]);
         }
 
@@ -169,7 +195,7 @@ impl Parser {
         self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
-        let body = self.statement()?;
+        let body = self.in_loop(Self::statement)?;
         Ok(Stmt::while_stmt(condition, body))
     }
 
@@ -450,6 +476,18 @@ impl Parser {
         ParseError
     }
 
+    // Parse nested statements with loop context so `break;` is only accepted
+    // inside the body of an enclosing `while` or `for`.
+    fn in_loop<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T, ParseError>,
+    ) -> Result<T, ParseError> {
+        self.loop_depth += 1;
+        let result = parse(self);
+        self.loop_depth -= 1;
+        result
+    }
+
     // Discard tokens until the parser reaches a likely statement boundary.
     fn synchronize(&mut self) {
         while !self.is_at_end() {
@@ -473,7 +511,8 @@ impl Parser {
     fn can_start_declaration(&self) -> bool {
         matches!(
             self.peek().type_,
-            TokenType::Var
+            TokenType::Break
+                | TokenType::Var
                 | TokenType::For
                 | TokenType::If
                 | TokenType::While

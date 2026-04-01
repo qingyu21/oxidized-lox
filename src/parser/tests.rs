@@ -99,6 +99,25 @@ fn parses_print_statement() {
 }
 
 #[test]
+fn parses_break_statement_inside_a_loop() {
+    let statements = parse_statements("while (true) { break; }");
+
+    match statements.as_slice() {
+        [Stmt::While { condition, body }] => {
+            assert_eq!(AstPrinter.print(condition), "true");
+            match body.as_ref() {
+                Stmt::Block { statements } => match statements.as_slice() {
+                    [Stmt::Break] => {}
+                    _ => panic!("expected a single break statement inside the while block"),
+                },
+                _ => panic!("expected a block statement in the while body"),
+            }
+        }
+        _ => panic!("expected a single while statement"),
+    }
+}
+
+#[test]
 fn parses_if_statement_without_else() {
     let statements = parse_statements("if (true) print 1;");
 
@@ -415,6 +434,18 @@ fn synchronizes_to_var_declaration_after_error() {
 }
 
 #[test]
+fn reports_break_outside_loop_and_recovers() {
+    let tokens = Scanner::new("break; print 1;").scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse();
+
+    match statements.as_slice() {
+        [Stmt::Print { expression }] => assert_eq!(AstPrinter.print(expression), "1"),
+        _ => panic!("expected the parser to recover after break outside a loop"),
+    }
+}
+
+#[test]
 fn synchronizes_to_while_statement_after_error() {
     let tokens = Scanner::new("print 1 + ; while (true) print 2;").scan_tokens();
     let mut parser = Parser::new(tokens);
@@ -429,6 +460,24 @@ fn synchronizes_to_while_statement_after_error() {
             }
         }
         _ => panic!("expected the parser to recover to the next while statement"),
+    }
+}
+
+#[test]
+fn synchronizes_to_break_statement_inside_a_loop_block() {
+    let tokens = Scanner::new("while (true) { print 1 + ; break; }").scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse();
+
+    match statements.as_slice() {
+        [Stmt::While { body, .. }] => match body.as_ref() {
+            Stmt::Block { statements } => match statements.as_slice() {
+                [Stmt::Break] => {}
+                _ => panic!("expected recovery to preserve the following break statement"),
+            },
+            _ => panic!("expected a block statement in the while body"),
+        },
+        _ => panic!("expected a single while statement after recovery"),
     }
 }
 

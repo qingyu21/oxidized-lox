@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::LazyLock};
 static KEYWORDS: LazyLock<HashMap<&'static str, TokenType>> = LazyLock::new(|| {
     let mut keywords = HashMap::new();
     keywords.insert("and", TokenType::And);
+    keywords.insert("break", TokenType::Break);
     keywords.insert("class", TokenType::Class);
     keywords.insert("else", TokenType::Else);
     keywords.insert("false", TokenType::False);
@@ -302,13 +303,14 @@ mod tests {
 
     #[test]
     fn distinguishes_keywords_from_identifiers() {
-        let tokens = scan("and breakfast var");
+        let tokens = scan("and break breakfast var");
         let types = tokens.iter().map(|token| token.type_).collect::<Vec<_>>();
 
         assert_eq!(
             types,
             vec![
                 TokenType::And,
+                TokenType::Break,
                 TokenType::Identifier,
                 TokenType::Var,
                 TokenType::Eof,

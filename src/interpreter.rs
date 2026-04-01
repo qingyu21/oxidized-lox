@@ -20,6 +20,12 @@ pub(crate) struct RuntimeError {
     message: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ControlFlow {
+    None,
+    Break,
+}
+
 pub struct Interpreter {
     environment: RefCell<EnvironmentRef>,
 }
@@ -32,8 +38,12 @@ impl Interpreter {
     }
 
     pub fn interpret(&self, statements: &[Stmt]) {
-        if let Err(error) = self.execute_all(statements) {
-            lox::runtime_error(&error.token, &error.message);
+        match self.execute_all(statements) {
+            Ok(ControlFlow::None) => {}
+            Ok(ControlFlow::Break) => {
+                unreachable!("parser should reject break statements outside loops");
+            }
+            Err(error) => lox::runtime_error(&error.token, &error.message),
         }
     }
 
@@ -44,23 +54,27 @@ impl Interpreter {
         }
     }
 
-    fn execute_all(&self, statements: &[Stmt]) -> Result<(), RuntimeError> {
+    fn execute_all(&self, statements: &[Stmt]) -> Result<ControlFlow, RuntimeError> {
         for stmt in statements {
-            self.execute(stmt)?;
+            match self.execute(stmt)? {
+                ControlFlow::None => {}
+                ControlFlow::Break => return Ok(ControlFlow::Break),
+            }
         }
 
-        Ok(())
+        Ok(ControlFlow::None)
     }
 
-    fn execute(&self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn execute(&self, stmt: &Stmt) -> Result<ControlFlow, RuntimeError> {
         match stmt {
             Stmt::Block { statements } => {
                 let block_environment = Environment::new_enclosed_ref(self.current_environment());
                 self.execute_block(statements, block_environment)
             }
+            Stmt::Break => Ok(ControlFlow::Break),
             Stmt::Expression { expression } => {
                 self.evaluate(expression)?;
-                Ok(())
+                Ok(ControlFlow::None)
             }
             Stmt::If {
                 condition,
@@ -70,7 +84,7 @@ impl Interpreter {
             Stmt::Print { expression } => {
                 let value = self.evaluate(expression)?;
                 println!("{value}");
-                Ok(())
+                Ok(ControlFlow::None)
             }
             Stmt::Var { name, initializer } => {
                 let value = match initializer {
@@ -80,7 +94,7 @@ impl Interpreter {
                 self.current_environment()
                     .borrow_mut()
                     .define(name.lexeme.clone(), value);
-                Ok(())
+                Ok(ControlFlow::None)
             }
             Stmt::While { condition, body } => self.execute_while(condition, body),
         }
@@ -90,7 +104,7 @@ impl Interpreter {
         &self,
         statements: &[Stmt],
         environment: EnvironmentRef,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<ControlFlow, RuntimeError> {
         // TODO(robustness): Use a guard so the previous environment is
         // restored even if block execution panics.
         let previous = self.environment.replace(environment);
@@ -104,22 +118,25 @@ impl Interpreter {
         condition: &Expr,
         then_branch: &Stmt,
         else_branch: Option<&Stmt>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<ControlFlow, RuntimeError> {
         if Self::is_truthy(&self.evaluate(condition)?) {
             self.execute(then_branch)
         } else if let Some(else_branch) = else_branch {
             self.execute(else_branch)
         } else {
-            Ok(())
+            Ok(ControlFlow::None)
         }
     }
 
-    fn execute_while(&self, condition: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+    fn execute_while(&self, condition: &Expr, body: &Stmt) -> Result<ControlFlow, RuntimeError> {
         while Self::is_truthy(&self.evaluate(condition)?) {
-            self.execute(body)?;
+            match self.execute(body)? {
+                ControlFlow::None => {}
+                ControlFlow::Break => break,
+            }
         }
 
-        Ok(())
+        Ok(ControlFlow::None)
     }
 
     fn current_environment(&self) -> EnvironmentRef {

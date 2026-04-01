@@ -34,7 +34,8 @@ Implemented today:
 - scanning for punctuation, operators, identifiers, keywords, strings, numbers,
   line comments, and block comments
 - recursive-descent parsing for expressions and statements
-- variables, assignment, block scope, `if`, `while`, `for`, logical `and` / `or`,
+- variables, assignment, block scope, `if`, `while`, `for`, `break`,
+  logical `and` / `or`,
   and `?:`
 - a tree-walk interpreter with a small REPL
 

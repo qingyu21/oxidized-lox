@@ -126,7 +126,7 @@ flowchart TD
 
 - Statement AST nodes.
 - Represents syntax that executes for effect: variable declarations, print
-  statements, blocks, `if`, `while`, and expression statements.
+  statements, blocks, `if`, `while`, `break`, and expression statements.
 - `for` does not have its own `Stmt` variant because the parser lowers it to
   more primitive statements during parsing.
 

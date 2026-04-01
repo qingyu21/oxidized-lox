@@ -140,6 +140,7 @@ fn starts_with_statement(tokens: &[Token]) -> bool {
                 | TokenType::If
                 | TokenType::While
                 | TokenType::For
+                | TokenType::Break
                 | TokenType::Fun
                 | TokenType::Class
                 | TokenType::Return

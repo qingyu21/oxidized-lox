@@ -1,11 +1,11 @@
 use crate::expr::Expr;
 use crate::token::Token;
-
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Block {
         statements: Vec<Stmt>,
     },
+    Break,
     Expression {
         expression: Expr,
     },
@@ -31,6 +31,11 @@ impl Stmt {
     // Construct a block statement with its nested declarations and statements.
     pub fn block(statements: Vec<Stmt>) -> Self {
         Stmt::Block { statements }
+    }
+
+    // Construct a break statement that exits the nearest enclosing loop.
+    pub fn break_stmt() -> Self {
+        Stmt::Break
     }
 
     // Construct a statement that evaluates an expression for its side effects.
