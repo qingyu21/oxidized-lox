@@ -149,6 +149,41 @@ fn parses_if_statement_with_else() {
 }
 
 #[test]
+fn parses_while_statement_with_expression_body() {
+    let statements = parse_statements("while (true) print 1;");
+
+    match statements.as_slice() {
+        [Stmt::While { condition, body }] => {
+            assert_eq!(AstPrinter.print(condition), "true");
+            match body.as_ref() {
+                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "1"),
+                _ => panic!("expected a print statement in the while body"),
+            }
+        }
+        _ => panic!("expected a single while statement"),
+    }
+}
+
+#[test]
+fn parses_while_statement_with_block_body() {
+    let statements = parse_statements("while (beverage) { print 1; }");
+
+    match statements.as_slice() {
+        [Stmt::While { condition, body }] => {
+            assert_eq!(AstPrinter.print(condition), "beverage");
+            match body.as_ref() {
+                Stmt::Block { statements } => match statements.as_slice() {
+                    [Stmt::Print { expression }] => assert_eq!(AstPrinter.print(expression), "1"),
+                    _ => panic!("expected one print statement inside the while block"),
+                },
+                _ => panic!("expected a block statement in the while body"),
+            }
+        }
+        _ => panic!("expected a single while statement"),
+    }
+}
+
+#[test]
 fn dangling_else_binds_to_the_nearest_if() {
     let statements = parse_statements("if (first) if (second) print 1; else print 2;");
 
@@ -315,6 +350,24 @@ fn synchronizes_to_var_declaration_after_error() {
             assert_eq!(AstPrinter.print(initializer), "tea");
         }
         _ => panic!("expected the parser to recover to the next variable declaration"),
+    }
+}
+
+#[test]
+fn synchronizes_to_while_statement_after_error() {
+    let tokens = Scanner::new("print 1 + ; while (true) print 2;").scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse();
+
+    match statements.as_slice() {
+        [Stmt::While { condition, body }] => {
+            assert_eq!(AstPrinter.print(condition), "true");
+            match body.as_ref() {
+                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "2"),
+                _ => panic!("expected a print statement in the recovered while body"),
+            }
+        }
+        _ => panic!("expected the parser to recover to the next while statement"),
     }
 }
 

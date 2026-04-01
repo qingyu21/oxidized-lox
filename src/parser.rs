@@ -75,7 +75,7 @@ impl Parser {
         Ok(Stmt::var(name, initializer))
     }
 
-    // statement -> ifStmt | printStmt | block | exprStmt ;
+    // statement -> ifStmt | printStmt | whileStmt | block | exprStmt ;
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         if self.match_token(&[TokenType::If]) {
             return self.if_statement();
@@ -83,6 +83,10 @@ impl Parser {
 
         if self.match_token(&[TokenType::Print]) {
             return self.print_statement();
+        }
+
+        if self.match_token(&[TokenType::While]) {
+            return self.while_statement();
         }
 
         if self.match_token(&[TokenType::LeftBrace]) {
@@ -106,6 +110,15 @@ impl Parser {
         };
 
         Ok(Stmt::if_stmt(condition, then_branch, else_branch))
+    }
+
+    // whileStmt -> "while" "(" expression ")" statement ;
+    fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
+        let body = self.statement()?;
+        Ok(Stmt::while_stmt(condition, body))
     }
 
     // block -> "{" declaration* "}" ;
@@ -410,6 +423,7 @@ impl Parser {
             self.peek().type_,
             TokenType::Var
                 | TokenType::If
+                | TokenType::While
                 | TokenType::Print
                 | TokenType::LeftBrace
                 | TokenType::Identifier

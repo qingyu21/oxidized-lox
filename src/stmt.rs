@@ -21,6 +21,10 @@ pub enum Stmt {
         name: Token,
         initializer: Option<Expr>,
     },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
 }
 
 impl Stmt {
@@ -51,5 +55,13 @@ impl Stmt {
     // Construct a variable declaration with an optional initializer.
     pub fn var(name: Token, initializer: Option<Expr>) -> Self {
         Stmt::Var { name, initializer }
+    }
+
+    // Construct a while statement with a condition and loop body.
+    pub fn while_stmt(condition: Expr, body: Stmt) -> Self {
+        Stmt::While {
+            condition,
+            body: Box::new(body),
+        }
     }
 }

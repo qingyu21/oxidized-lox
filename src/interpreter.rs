@@ -82,6 +82,7 @@ impl Interpreter {
                     .define(name.lexeme.clone(), value);
                 Ok(())
             }
+            Stmt::While { condition, body } => self.execute_while(condition, body),
         }
     }
 
@@ -111,6 +112,14 @@ impl Interpreter {
         } else {
             Ok(())
         }
+    }
+
+    fn execute_while(&self, condition: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+        while Self::is_truthy(&self.evaluate(condition)?) {
+            self.execute(body)?;
+        }
+
+        Ok(())
     }
 
     fn current_environment(&self) -> EnvironmentRef {

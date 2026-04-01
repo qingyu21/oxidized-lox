@@ -124,7 +124,7 @@ flowchart TD
 
 - Statement AST nodes.
 - Represents syntax that executes for effect: variable declarations, print
-  statements, blocks, `if`, and expression statements.
+  statements, blocks, `if`, `while`, and expression statements.
 
 ### Runtime
 

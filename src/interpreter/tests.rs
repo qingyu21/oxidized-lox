@@ -112,6 +112,36 @@ fn executes_if_else_branch_when_condition_is_falsey() {
 }
 
 #[test]
+fn executes_while_loop_until_condition_becomes_false() {
+    let statements =
+        parse_statements("var count = 0;\nwhile (count < 3) count = count + 1;\ncount;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("while loop should keep updating the variable"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::Number(3.0));
+}
+
+#[test]
+fn skips_while_body_when_condition_is_falsey() {
+    let statements = parse_statements("while (false) print missing;");
+    let interpreter = Interpreter::new();
+
+    assert!(
+        interpreter.execute(&statements[0]).is_ok(),
+        "false condition should skip the erroneous while body"
+    );
+}
+
+#[test]
 fn skips_unselected_if_branch_runtime_errors() {
     let statements = parse_statements("if (false) print missing; else print 1;");
     let interpreter = Interpreter::new();
