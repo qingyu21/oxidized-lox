@@ -107,6 +107,8 @@ fn run_tokens(tokens: Vec<Token>) {
         return;
     }
 
+    // TODO(ch11): Insert a dedicated resolver pass between parsing and
+    // interpretation once binding analysis is implemented.
     INTERPRETER.with(|interpreter| interpreter.borrow().interpret(&statements));
 }
 

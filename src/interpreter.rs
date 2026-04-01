@@ -31,6 +31,8 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
+    // TODO(module-layout): Split execution, evaluation, callable, and class
+    // runtime support into submodules once Chapters 10-13 add those domains.
     pub fn new() -> Self {
         Self {
             environment: RefCell::new(Environment::new_ref()),

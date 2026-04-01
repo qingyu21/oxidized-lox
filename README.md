@@ -99,7 +99,9 @@ cargo fmt
 ## Source Map
 
 - `src/scanner.rs`: turns source text into `Vec<Token>`
-- `src/parser.rs`: turns tokens into `Stmt` / `Expr` AST nodes
+- `src/parser/mod.rs`: parser entry points, declarations, token helpers, and error recovery
+- `src/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, and `break`
+- `src/parser/expressions.rs`: expression parsing and precedence handling
 - `src/expr.rs`: expression AST definitions
 - `src/stmt.rs`: statement AST definitions
 - `src/interpreter.rs`: executes statements and evaluates expressions

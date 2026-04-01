@@ -110,6 +110,9 @@ flowchart TD
 `Parser`
 
 - Consumes `Vec<Token>` and produces either `Vec<Stmt>` or one `Expr`.
+- Is split into a small root module plus `statements.rs` and
+  `expressions.rs`, so statement parsing and expression precedence logic stay
+  separated as the grammar grows.
 - Encodes precedence and associativity through recursive-descent methods such
   as `assignment()`, `conditional()`, `logic_or()`, and `term()`.
 - Desugars `for` loops into existing `Stmt::Block` and `Stmt::While` nodes
