@@ -107,6 +107,8 @@ fn run_tokens(tokens: Vec<Token>) {
         return;
     }
 
+    // The tree-walk pipeline is scanner -> parser -> interpreter, with the
+    // resolver to be inserted here in the next book stage.
     // TODO(ch11): Insert a dedicated resolver pass between parsing and
     // interpretation once binding analysis is implemented.
     INTERPRETER.with(|interpreter| interpreter.borrow().interpret(&statements));

@@ -184,6 +184,7 @@ impl Parser {
     }
 
     fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
+        // Parse the comma-separated argument list after seeing the opening `(`.
         let mut arguments = Vec::new();
 
         if !self.check(TokenType::RightParen) {
@@ -204,6 +205,8 @@ impl Parser {
             }
         }
 
+        // Keep the closing parenthesis token so runtime call errors can point
+        // at the call site instead of some later token.
         let paren = self
             .consume(TokenType::RightParen, "Expect ')' after arguments.")?
             .clone();

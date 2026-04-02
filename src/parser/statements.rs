@@ -113,6 +113,13 @@ impl Parser {
         Ok(Stmt::if_stmt(condition, then_branch, else_branch))
     }
 
+    // printStmt -> "print" expression ";" ;
+    pub(super) fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        Ok(Stmt::print(value))
+    }
+
     // whileStmt -> "while" "(" expression ")" statement ;
     pub(super) fn while_statement(&mut self) -> Result<Stmt, ParseError> {
         self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
@@ -126,6 +133,8 @@ impl Parser {
     pub(super) fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
         let mut statements = Vec::new();
 
+        // Keep parsing nested declarations until the matching `}` so blocks
+        // can contain the same mix of statements and declarations as the top level.
         while !self.check(TokenType::RightBrace) && !self.is_at_end() {
             match self.declaration() {
                 Ok(stmt) => statements.push(stmt),
@@ -135,13 +144,6 @@ impl Parser {
 
         self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
         Ok(statements)
-    }
-
-    // printStmt -> "print" expression ";" ;
-    pub(super) fn print_statement(&mut self) -> Result<Stmt, ParseError> {
-        let value = self.expression()?;
-        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
-        Ok(Stmt::print(value))
     }
 
     // exprStmt -> expression ";" ;

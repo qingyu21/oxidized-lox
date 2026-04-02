@@ -62,12 +62,28 @@ impl Expr {
         }
     }
 
+    // Construct a binary expression with left and right operands.
+    pub fn binary(left: Expr, operator: Token, right: Expr) -> Self {
+        Expr::Binary {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        }
+    }
+
     // Construct a function call expression with a callee and zero or more arguments.
     pub fn call(callee: Expr, paren: Token, arguments: Vec<Expr>) -> Self {
         Expr::Call {
             callee: Box::new(callee),
             paren,
             arguments,
+        }
+    }
+
+    // Construct a grouping expression that preserves explicit parentheses.
+    pub fn grouping(expression: Expr) -> Self {
+        Expr::Grouping {
+            expression: Box::new(expression),
         }
     }
 
@@ -90,13 +106,6 @@ impl Expr {
         Expr::Variable { name }
     }
 
-    // Construct a grouping expression that preserves explicit parentheses.
-    pub fn grouping(expression: Expr) -> Self {
-        Expr::Grouping {
-            expression: Box::new(expression),
-        }
-    }
-
     // Construct a conditional expression with then/else branches.
     pub fn conditional(condition: Expr, then_branch: Expr, else_branch: Expr) -> Self {
         Expr::Conditional {
@@ -109,15 +118,6 @@ impl Expr {
     // Construct a unary expression with one operand.
     pub fn unary(operator: Token, right: Expr) -> Self {
         Expr::Unary {
-            operator,
-            right: Box::new(right),
-        }
-    }
-
-    // Construct a binary expression with left and right operands.
-    pub fn binary(left: Expr, operator: Token, right: Expr) -> Self {
-        Expr::Binary {
-            left: Box::new(left),
             operator,
             right: Box::new(right),
         }

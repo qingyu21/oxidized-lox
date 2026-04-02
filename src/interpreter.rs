@@ -160,6 +160,8 @@ impl Interpreter {
         params: &[Token],
         body: &[Stmt],
     ) -> Result<ControlFlow, RuntimeError> {
+        // Function declarations are executable statements: evaluating one
+        // creates a callable runtime value and binds it in the current scope.
         let function = LoxFunction::new(
             name.clone(),
             params.to_vec(),

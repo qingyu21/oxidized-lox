@@ -180,6 +180,8 @@ impl Scanner {
     }
 
     fn block_comment(&mut self) {
+        // Consume until the first terminating `*/`, updating line numbers
+        // along the way. Nested block comments are not supported yet.
         while !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
