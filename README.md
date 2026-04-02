@@ -34,6 +34,7 @@ Implemented today:
 - scanning for punctuation, operators, identifiers, keywords, strings, numbers,
   line comments, and block comments
 - recursive-descent parsing for expressions and statements
+- call-expression parsing groundwork for upcoming function support
 - variables, assignment, block scope, `if`, `while`, `for`, `break`,
   logical `and` / `or`,
   and `?:`
@@ -44,6 +45,10 @@ Later book stages still missing:
 - functions
 - classes
 - resolver / bytecode VM stages from later in the book
+
+At the moment, call syntax like `clock()` is parsed into the AST, but callable
+runtime values are not implemented yet, so executing a call still reports a
+runtime error placeholder.
 
 ## Running
 
@@ -101,7 +106,7 @@ cargo fmt
 - `src/scanner.rs`: turns source text into `Vec<Token>`
 - `src/parser/mod.rs`: parser entry points, declarations, token helpers, and error recovery
 - `src/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, and `break`
-- `src/parser/expressions.rs`: expression parsing and precedence handling
+- `src/parser/expressions.rs`: expression parsing and precedence handling, including call syntax
 - `src/expr.rs`: expression AST definitions
 - `src/stmt.rs`: statement AST definitions
 - `src/interpreter.rs`: executes statements and evaluates expressions

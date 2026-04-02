@@ -148,6 +148,11 @@ impl Interpreter {
     fn evaluate(&self, expr: &Expr) -> Result<Value, RuntimeError> {
         match expr {
             Expr::Assign { name, value } => self.evaluate_assign(name, value),
+            Expr::Call {
+                callee,
+                paren,
+                arguments,
+            } => self.evaluate_call(callee, paren, arguments),
             // TODO(perf): Cloning string literals here allocates a fresh
             // runtime string. A shared string representation could avoid
             // copying literal text into `Value`.
@@ -179,6 +184,20 @@ impl Interpreter {
             .borrow_mut()
             .assign(name, value.clone())?;
         Ok(value)
+    }
+
+    fn evaluate_call(
+        &self,
+        _callee_expr: &Expr,
+        paren: &Token,
+        _arguments: &[Expr],
+    ) -> Result<Value, RuntimeError> {
+        // TODO(ch10): Replace this placeholder with real callable
+        // evaluation once functions and classes become runtime values.
+        Err(RuntimeError::new(
+            paren.clone(),
+            "Function calls are not supported yet.",
+        ))
     }
 
     fn evaluate_logical(

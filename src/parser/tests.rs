@@ -94,6 +94,35 @@ fn parses_grouped_binary_expression() {
 }
 
 #[test]
+fn parses_call_with_arguments() {
+    assert_eq!(
+        parse_expression_to_string("average(1, 2);"),
+        "(call average 1 2)"
+    );
+}
+
+#[test]
+fn parses_zero_argument_and_chained_calls() {
+    assert_eq!(
+        parse_expression_to_string("getCallback()();"),
+        "(call (call getCallback))"
+    );
+}
+
+#[test]
+fn parses_call_with_higher_precedence_than_unary() {
+    assert_eq!(parse_expression_to_string("-clock();"), "(- (call clock))");
+}
+
+#[test]
+fn parses_grouped_comma_expression_as_a_single_call_argument() {
+    assert_eq!(
+        parse_expression_to_string("log((1, 2));"),
+        "(call log (group (, 1 2)))"
+    );
+}
+
+#[test]
 fn parses_print_statement() {
     assert_eq!(parse_print_to_string("print 1 + 2;"), "(+ 1 2)");
 }
@@ -592,7 +621,6 @@ fn synchronizes_to_supported_expression_statement_starts() {
         ("nil", "nil"),
         ("2", "2"),
         ("\"lox\"", "lox"),
-        ("(2 + 3)", "(group (+ 2 3))"),
         ("!false", "(! false)"),
     ];
 
@@ -604,6 +632,14 @@ fn synchronizes_to_supported_expression_statement_starts() {
             "failed for {source}"
         );
     }
+}
+
+#[test]
+fn synchronizes_to_grouped_expression_statement_after_operator_error() {
+    assert_eq!(
+        recover_to_expression_statement_string("print 1 + ; (2 + 3);"),
+        "(group (+ 2 3))"
+    );
 }
 
 #[test]

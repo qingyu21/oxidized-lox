@@ -114,7 +114,7 @@ flowchart TD
   `expressions.rs`, so statement parsing and expression precedence logic stay
   separated as the grammar grows.
 - Encodes precedence and associativity through recursive-descent methods such
-  as `assignment()`, `conditional()`, `logic_or()`, and `term()`.
+  as `assignment()`, `conditional()`, `logic_or()`, `call()`, and `term()`.
 - Desugars `for` loops into existing `Stmt::Block` and `Stmt::While` nodes
   instead of introducing a separate runtime-only statement form.
 - Performs local error recovery with `synchronize()`.
@@ -123,7 +123,9 @@ flowchart TD
 
 - Expression AST nodes.
 - Represents syntax that evaluates to a value: literals, variables, unary and
-  binary operators, assignment, logical operators, and `?:`.
+  binary operators, assignment, logical operators, `?:`, and call expressions.
+- Call expressions are parsed now so the upcoming function chapter can plug
+  into the existing AST and precedence structure.
 
 `Stmt`
 
@@ -168,6 +170,8 @@ flowchart TD
 - Executes `Stmt` nodes and evaluates `Expr` nodes.
 - Owns the current environment and implements the runtime semantics of the
   language.
+- Currently recognizes call expressions, but still reports a placeholder
+  runtime error until callable values are introduced.
 
 ## Important Boundaries
 

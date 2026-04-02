@@ -11,6 +11,12 @@ impl AstPrinter {
                 operator,
                 right,
             } => self.parenthesize(&operator.lexeme, [left.as_ref(), right.as_ref()]),
+            Expr::Call {
+                callee, arguments, ..
+            } => self.parenthesize(
+                "call",
+                std::iter::once(callee.as_ref()).chain(arguments.iter()),
+            ),
             Expr::Grouping { expression } => self.parenthesize("group", [expression.as_ref()]),
             Expr::Literal { value } => value.to_string(),
             Expr::Logical {

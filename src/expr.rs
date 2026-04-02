@@ -20,6 +20,11 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    Call {
+        callee: Box<Expr>,
+        paren: Token,
+        arguments: Vec<Expr>,
+    },
     Grouping {
         expression: Box<Expr>,
     },
@@ -54,6 +59,15 @@ impl Expr {
         Expr::Assign {
             name,
             value: Box::new(value),
+        }
+    }
+
+    // Construct a function call expression with a callee and zero or more arguments.
+    pub fn call(callee: Expr, paren: Token, arguments: Vec<Expr>) -> Self {
+        Expr::Call {
+            callee: Box::new(callee),
+            paren,
+            arguments,
         }
     }
 

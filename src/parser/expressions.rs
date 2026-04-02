@@ -154,7 +154,7 @@ impl Parser {
         Ok(expr)
     }
 
-    // unary -> ( "!" | "-" ) unary | primary ;
+    // unary -> ( "!" | "-" ) unary | call ;
     pub(super) fn unary(&mut self) -> Result<Expr, ParseError> {
         if self.match_token(&[TokenType::Bang, TokenType::Minus]) {
             // TODO(perf): Cloning the full operator token copies its owned
@@ -165,7 +165,46 @@ impl Parser {
             return Ok(Expr::unary(operator, right));
         }
 
-        self.primary()
+        self.call()
+    }
+
+    // call -> primary ( "(" arguments? ")" )* ;
+    fn call(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.match_token(&[TokenType::LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
+        let mut arguments = Vec::new();
+
+        if !self.check(TokenType::RightParen) {
+            loop {
+                // Argument separators reuse the comma token, so each argument
+                // is parsed at assignment precedence instead of the repo's
+                // full comma-expression precedence. To pass a comma expression
+                // as one argument, wrap it in grouping parentheses.
+                arguments.push(self.assignment()?);
+
+                if !self.match_token(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+
+        let paren = self
+            .consume(TokenType::RightParen, "Expect ')' after arguments.")?
+            .clone();
+
+        Ok(Expr::call(callee, paren, arguments))
     }
 
     // primary -> "true" | "false" | "nil" | NUMBER | STRING | "(" expression ")" | IDENTIFIER ;
