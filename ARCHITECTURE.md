@@ -131,8 +131,9 @@ flowchart TD
 `Stmt`
 
 - Statement AST nodes.
-- Represents syntax that executes for effect: variable declarations, print
-  statements, blocks, `if`, `while`, `break`, and expression statements.
+- Represents syntax that executes for effect: variable declarations, function
+  declarations, print statements, blocks, `if`, `while`, `break`, and
+  expression statements.
 - `for` does not have its own `Stmt` variant because the parser lowers it to
   more primitive statements during parsing.
 
@@ -150,6 +151,12 @@ flowchart TD
 - Runtime trait implemented by anything Lox can invoke with `()`.
 - Defines the callable contract used by native functions today and by
   user-defined functions and classes later on.
+
+`LoxFunction`
+
+- Runtime object created when a `fun` declaration executes.
+- Captures the surrounding environment so declared functions can keep using the
+  scope they were defined in.
 
 `RuntimeError`
 
@@ -180,6 +187,8 @@ flowchart TD
 - Evaluates call expressions by first evaluating the callee and argument
   expressions, then dispatching through `LoxCallable`.
 - Seeds the global environment with the native `clock()` function.
+- Turns function declarations into `LoxFunction` runtime values and binds them
+  into the current environment.
 
 ## Important Boundaries
 

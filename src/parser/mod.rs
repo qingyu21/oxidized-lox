@@ -58,13 +58,62 @@ impl Parser {
         Some(expr)
     }
 
-    // declaration -> varDecl | statement ;
+    // declaration -> funDecl | varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::Fun]) {
+            return self.function("function");
+        }
+
         if self.match_token(&[TokenType::Var]) {
             return self.var_declaration();
         }
 
         self.statement()
+    }
+
+    // funDecl -> "fun" function ;
+    // function -> IDENTIFIER "(" parameters? ")" block ;
+    fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
+        // Parse the declared name and the opening parenthesis before the
+        // parameter list.
+        let name = self
+            .consume(TokenType::Identifier, &format!("Expect {kind} name."))?
+            .clone();
+        self.consume(
+            TokenType::LeftParen,
+            &format!("Expect '(' after {kind} name."),
+        )?;
+
+        // Parse zero or more comma-separated parameter names, while enforcing
+        // the same maximum arity limit used for calls.
+        let mut params = Vec::new();
+        if !self.check(TokenType::RightParen) {
+            loop {
+                if params.len() >= MAX_ARITY {
+                    let message = format!("Can't have more than {MAX_ARITY} parameters.");
+                    let _ = self.error(self.peek(), &message);
+                }
+
+                params.push(
+                    self.consume(TokenType::Identifier, "Expect parameter name.")?
+                        .clone(),
+                );
+
+                if !self.match_token(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+
+        // Parse the braced function body and wrap the whole declaration into
+        // a function statement node.
+        self.consume(TokenType::RightParen, "Expect ')' after parameters.")?;
+        self.consume(
+            TokenType::LeftBrace,
+            &format!("Expect '{{' before {kind} body."),
+        )?;
+        let body = self.block()?;
+        Ok(Stmt::function(name, params, body))
     }
 
     // varDecl -> "var" IDENTIFIER ( "=" expression )? ";" ;
@@ -136,6 +185,7 @@ impl Parser {
         matches!(
             self.peek().type_,
             TokenType::Break
+                | TokenType::Fun
                 | TokenType::Var
                 | TokenType::For
                 | TokenType::If

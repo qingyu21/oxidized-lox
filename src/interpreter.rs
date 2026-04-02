@@ -23,6 +23,13 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 #[derive(Debug)]
 struct ClockFunction;
 
+struct LoxFunction {
+    name: Token,
+    params: Vec<Token>,
+    body: Vec<Stmt>,
+    closure: EnvironmentRef,
+}
+
 // TODO(module-layout): `Value` is already shared across the interpreter and
 // environment. As functions, classes, and instances grow the runtime object
 // model, move it and its trait impls into a dedicated value/runtime module.
@@ -107,6 +114,9 @@ impl Interpreter {
                 self.evaluate(expression)?;
                 Ok(ControlFlow::None)
             }
+            Stmt::Function { name, params, body } => {
+                self.execute_function_declaration(name, params, body)
+            }
             Stmt::If {
                 condition,
                 then_branch,
@@ -142,6 +152,24 @@ impl Interpreter {
         let result = self.execute_all(statements);
         self.environment.replace(previous);
         result
+    }
+
+    fn execute_function_declaration(
+        &self,
+        name: &Token,
+        params: &[Token],
+        body: &[Stmt],
+    ) -> Result<ControlFlow, RuntimeError> {
+        let function = LoxFunction::new(
+            name.clone(),
+            params.to_vec(),
+            body.to_vec(),
+            self.current_environment(),
+        );
+        self.current_environment()
+            .borrow_mut()
+            .define(name.lexeme.clone(), Value::Callable(Rc::new(function)));
+        Ok(ControlFlow::None)
     }
 
     fn execute_if(
@@ -454,6 +482,17 @@ impl RuntimeError {
     }
 }
 
+impl LoxFunction {
+    fn new(name: Token, params: Vec<Token>, body: Vec<Stmt>, closure: EnvironmentRef) -> Self {
+        Self {
+            name,
+            params,
+            body,
+            closure,
+        }
+    }
+}
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -512,6 +551,55 @@ impl LoxCallable for ClockFunction {
 impl fmt::Display for ClockFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<native fn clock>")
+    }
+}
+
+impl LoxCallable for LoxFunction {
+    fn arity(&self) -> usize {
+        self.params.len()
+    }
+
+    fn call(
+        &self,
+        interpreter: &Interpreter,
+        arguments: Vec<Value>,
+    ) -> Result<Value, RuntimeError> {
+        // Each call gets a fresh local scope enclosed by the environment where
+        // the function was declared, which is what preserves lexical scoping.
+        let environment = Environment::new_enclosed_ref(self.closure.clone());
+
+        // Bind evaluated argument values to the function's parameter names.
+        for (param, argument) in self.params.iter().zip(arguments) {
+            environment
+                .borrow_mut()
+                .define(param.lexeme.clone(), argument);
+        }
+
+        // Run the function body in that call environment. Until `return` is
+        // implemented, falling off the end of the body produces `nil`.
+        // TODO(ch10): Once `return` statements are implemented, thread return
+        // values through call boundaries instead of always producing `nil`.
+        match interpreter.execute_block(&self.body, environment)? {
+            ControlFlow::None => Ok(Value::Nil),
+            ControlFlow::Break => {
+                unreachable!("parser should reject break statements that escape a function body");
+            }
+        }
+    }
+}
+
+impl fmt::Debug for LoxFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LoxFunction")
+            .field("name", &self.name.lexeme)
+            .field("arity", &self.params.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Display for LoxFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<fn {}>", self.name.lexeme)
     }
 }
 

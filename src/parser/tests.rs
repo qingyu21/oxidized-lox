@@ -128,6 +128,32 @@ fn parses_print_statement() {
 }
 
 #[test]
+fn parses_function_declaration_with_parameters_and_body() {
+    let statements = parse_statements("fun greet(first, last) { print first + last; }");
+
+    match statements.as_slice() {
+        [Stmt::Function { name, params, body }] => {
+            assert_eq!(name.lexeme, "greet");
+            assert_eq!(
+                params
+                    .iter()
+                    .map(|param| param.lexeme.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["first", "last"]
+            );
+
+            match body.as_slice() {
+                [Stmt::Print { expression }] => {
+                    assert_eq!(AstPrinter.print(expression), "(+ first last)");
+                }
+                _ => panic!("expected a single print statement in the function body"),
+            }
+        }
+        _ => panic!("expected a single function declaration"),
+    }
+}
+
+#[test]
 fn parses_break_statement_inside_a_loop() {
     let statements = parse_statements("while (true) { break; }");
 
@@ -525,6 +551,22 @@ fn synchronizes_to_for_statement_after_error() {
             }
         }
         _ => panic!("expected the parser to recover to the next for statement"),
+    }
+}
+
+#[test]
+fn synchronizes_to_function_declaration_after_error() {
+    let tokens = Scanner::new("print 1 + ; fun noop() {}").scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse();
+
+    match statements.as_slice() {
+        [Stmt::Function { name, params, body }] => {
+            assert_eq!(name.lexeme, "noop");
+            assert!(params.is_empty());
+            assert!(body.is_empty());
+        }
+        _ => panic!("expected the parser to recover to the next function declaration"),
     }
 }
 

@@ -9,6 +9,11 @@ pub enum Stmt {
     Expression {
         expression: Expr,
     },
+    Function {
+        name: Token,
+        params: Vec<Token>,
+        body: Vec<Stmt>,
+    },
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
@@ -41,6 +46,11 @@ impl Stmt {
     // Construct a statement that evaluates an expression for its side effects.
     pub fn expression(expression: Expr) -> Self {
         Stmt::Expression { expression }
+    }
+
+    // Construct a function declaration with its name, parameters, and body.
+    pub fn function(name: Token, params: Vec<Token>, body: Vec<Stmt>) -> Self {
+        Stmt::Function { name, params, body }
     }
 
     // Construct an if statement with an optional else branch.

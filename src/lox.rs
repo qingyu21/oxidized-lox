@@ -306,6 +306,22 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_too_many_function_parameters_as_a_syntax_error() {
+        with_clean_error_state(|| {
+            let params = (0..256)
+                .map(|index| format!("p{index}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let source = format!("fun tooMany({params}) {{}}");
+
+            run(&source);
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn bare_expressions_are_detected_in_the_repl() {
         let tokens = Scanner::new("1 + 2").scan_tokens();
         assert!(should_eval_repl_expression(&tokens));

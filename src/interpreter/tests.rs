@@ -104,6 +104,44 @@ fn reports_runtime_error_for_wrong_call_arity() {
 }
 
 #[test]
+fn declares_and_calls_a_user_defined_function() {
+    let statements = parse_statements("fun noop() {} noop();");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let value = match &statements[1] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("declared function should be callable"),
+        _ => panic!("expected a function call expression statement"),
+    };
+
+    assert_eq!(value, Value::Nil);
+}
+
+#[test]
+fn user_defined_function_binds_parameters_and_closure() {
+    let statements = parse_statements(
+        "var total = 0;\nfun add(amount) { total = total + amount; }\nadd(3);\ntotal;",
+    );
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute(&statements[2]).is_ok());
+
+    let value = match &statements[3] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("function call should update the captured outer variable"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::Number(3.0));
+}
+
+#[test]
 fn executes_if_then_branch_when_condition_is_truthy() {
     let statements =
         parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");
