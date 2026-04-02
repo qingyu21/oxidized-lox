@@ -23,6 +23,8 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 #[derive(Debug)]
 struct ClockFunction;
 
+// Runtime wrapper around a parsed function declaration. Keeping callable
+// behavior here prevents the front-end AST from taking on interpreter duties.
 struct LoxFunction {
     name: Token,
     params: Vec<Token>,

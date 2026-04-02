@@ -142,6 +142,23 @@ fn user_defined_function_binds_parameters_and_closure() {
 }
 
 #[test]
+fn displays_user_defined_function_values_with_their_name() {
+    let statements = parse_statements("fun greet() {} greet;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let value = match &statements[1] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("function name should resolve to the callable value"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(format!("{value}"), "<fn greet>");
+}
+
+#[test]
 fn executes_if_then_branch_when_condition_is_truthy() {
     let statements =
         parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");
