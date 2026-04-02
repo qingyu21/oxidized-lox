@@ -124,8 +124,9 @@ flowchart TD
 - Expression AST nodes.
 - Represents syntax that evaluates to a value: literals, variables, unary and
   binary operators, assignment, logical operators, `?:`, and call expressions.
-- Call expressions are parsed now so the upcoming function chapter can plug
-  into the existing AST and precedence structure.
+- Call expressions already evaluate through the interpreter's callable
+  abstraction, which will later be reused for user-defined functions and
+  classes.
 
 `Stmt`
 
@@ -140,9 +141,15 @@ flowchart TD
 `Value`
 
 - Runtime value produced by evaluation.
-- Current variants are `String`, `Number`, `Bool`, and `Nil`.
+- Current variants are `String`, `Number`, `Bool`, `Nil`, and callable values.
 - This is the value type stored in environments and returned by expression
   evaluation.
+
+`LoxCallable`
+
+- Runtime trait implemented by anything Lox can invoke with `()`.
+- Defines the callable contract used by native functions today and by
+  user-defined functions and classes later on.
 
 `RuntimeError`
 
@@ -170,8 +177,9 @@ flowchart TD
 - Executes `Stmt` nodes and evaluates `Expr` nodes.
 - Owns the current environment and implements the runtime semantics of the
   language.
-- Currently recognizes call expressions, but still reports a placeholder
-  runtime error until callable values are introduced.
+- Evaluates call expressions by first evaluating the callee and argument
+  expressions, then dispatching through `LoxCallable`.
+- Seeds the global environment with the native `clock()` function.
 
 ## Important Boundaries
 

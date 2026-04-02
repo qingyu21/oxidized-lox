@@ -34,21 +34,18 @@ Implemented today:
 - scanning for punctuation, operators, identifiers, keywords, strings, numbers,
   line comments, and block comments
 - recursive-descent parsing for expressions and statements
-- call-expression parsing groundwork for upcoming function support
+- call expressions with runtime dispatch through a callable abstraction
 - variables, assignment, block scope, `if`, `while`, `for`, `break`,
   logical `and` / `or`,
   and `?:`
 - a tree-walk interpreter with a small REPL
+- one native callable, `clock()`
 
 Later book stages still missing:
 
 - functions
 - classes
 - resolver / bytecode VM stages from later in the book
-
-At the moment, call syntax like `clock()` is parsed into the AST, but callable
-runtime values are not implemented yet, so executing a call still reports a
-runtime error placeholder.
 
 ## Running
 

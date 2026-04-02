@@ -9,6 +9,8 @@ mod statements;
 #[derive(Debug, Clone, Copy)]
 struct ParseError;
 
+const MAX_ARITY: usize = 255;
+
 pub struct Parser {
     tokens: Vec<Token>,
     // Index of the next token to be parsed.

@@ -293,6 +293,19 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_too_many_call_arguments_as_a_syntax_error() {
+        with_clean_error_state(|| {
+            let arguments = std::iter::repeat_n("1", 256).collect::<Vec<_>>().join(", ");
+            let source = format!("clock({arguments});");
+
+            run(&source);
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn bare_expressions_are_detected_in_the_repl() {
         let tokens = Scanner::new("1 + 2").scan_tokens();
         assert!(should_eval_repl_expression(&tokens));

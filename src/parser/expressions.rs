@@ -1,4 +1,4 @@
-use super::{ParseError, ParseRule, Parser};
+use super::{MAX_ARITY, ParseError, ParseRule, Parser};
 use crate::expr::Expr;
 use crate::token::{Literal, TokenType};
 
@@ -192,6 +192,10 @@ impl Parser {
                 // is parsed at assignment precedence instead of the repo's
                 // full comma-expression precedence. To pass a comma expression
                 // as one argument, wrap it in grouping parentheses.
+                if arguments.len() >= MAX_ARITY {
+                    let message = format!("Can't have more than {MAX_ARITY} arguments.");
+                    let _ = self.error(self.peek(), &message);
+                }
                 arguments.push(self.assignment()?);
 
                 if !self.match_token(&[TokenType::Comma]) {

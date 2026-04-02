@@ -1,4 +1,9 @@
-use std::{cell::RefCell, fmt};
+use std::{
+    cell::RefCell,
+    fmt,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::environment::{Environment, EnvironmentRef};
 use crate::expr::Expr;
@@ -6,12 +11,28 @@ use crate::lox;
 use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
 
-#[derive(Debug, Clone, PartialEq)]
+pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
+    fn arity(&self) -> usize;
+    fn call(&self, interpreter: &Interpreter, arguments: Vec<Value>)
+    -> Result<Value, RuntimeError>;
+}
+
+// TODO(module-layout): Once more native functions or callable runtime types
+// exist, move `LoxCallable` and builtin implementations like `ClockFunction`
+// into dedicated callable/native modules.
+#[derive(Debug)]
+struct ClockFunction;
+
+// TODO(module-layout): `Value` is already shared across the interpreter and
+// environment. As functions, classes, and instances grow the runtime object
+// model, move it and its trait impls into a dedicated value/runtime module.
+#[derive(Debug, Clone)]
 pub(crate) enum Value {
     String(String),
     Number(f64),
     Bool(bool),
     Nil,
+    Callable(Rc<dyn LoxCallable>),
 }
 
 #[derive(Debug, Clone)]
@@ -34,8 +55,16 @@ impl Interpreter {
     // TODO(module-layout): Split execution, evaluation, callable, and class
     // runtime support into submodules once Chapters 10-13 add those domains.
     pub fn new() -> Self {
+        let globals = Environment::new_ref();
+        // TODO(module-layout): If Lox grows more native globals, extract
+        // builtin registration into a dedicated helper/module instead of
+        // expanding `Interpreter::new()`.
+        globals
+            .borrow_mut()
+            .define("clock".to_string(), Value::Callable(Rc::new(ClockFunction)));
+
         Self {
-            environment: RefCell::new(Environment::new_ref()),
+            environment: RefCell::new(globals),
         }
     }
 
@@ -188,16 +217,50 @@ impl Interpreter {
 
     fn evaluate_call(
         &self,
-        _callee_expr: &Expr,
+        callee_expr: &Expr,
         paren: &Token,
-        _arguments: &[Expr],
+        argument_exprs: &[Expr],
     ) -> Result<Value, RuntimeError> {
-        // TODO(ch10): Replace this placeholder with real callable
-        // evaluation once functions and classes become runtime values.
-        Err(RuntimeError::new(
-            paren.clone(),
-            "Function calls are not supported yet.",
-        ))
+        // Evaluate the callee expression first. This may be a simple variable
+        // lookup like `clock`, but the grammar allows any higher-precedence
+        // expression to appear before the call parentheses.
+        let callee = self.evaluate(callee_expr)?;
+
+        // Lox evaluates call arguments from left to right before dispatching
+        // to the callee.
+        let mut arguments = Vec::with_capacity(argument_exprs.len());
+        for argument_expr in argument_exprs {
+            arguments.push(self.evaluate(argument_expr)?);
+        }
+
+        // Convert the runtime value into the callable interface or report a
+        // user-facing runtime error instead of crashing on a host-language
+        // type mismatch.
+        let callable = match callee {
+            Value::Callable(callable) => callable,
+            _ => {
+                return Err(RuntimeError::new(
+                    paren.clone(),
+                    "Can only call functions and classes.",
+                ));
+            }
+        };
+
+        // Enforce arity in one shared place so every callable kind gets the
+        // same argument-count validation.
+        if arguments.len() != callable.arity() {
+            return Err(RuntimeError::new(
+                paren.clone(),
+                format!(
+                    "Expected {} arguments but got {}.",
+                    callable.arity(),
+                    arguments.len()
+                ),
+            ));
+        }
+
+        // Hand off to the concrete callable implementation.
+        callable.call(self, arguments)
     }
 
     fn evaluate_logical(
@@ -391,6 +454,19 @@ impl RuntimeError {
     }
 }
 
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::String(left), Value::String(right)) => left == right,
+            (Value::Number(left), Value::Number(right)) => left == right,
+            (Value::Bool(left), Value::Bool(right)) => left == right,
+            (Value::Nil, Value::Nil) => true,
+            (Value::Callable(left), Value::Callable(right)) => Rc::ptr_eq(left, right),
+            _ => false,
+        }
+    }
+}
+
 impl From<Literal> for Value {
     fn from(value: Literal) -> Self {
         match value {
@@ -409,7 +485,33 @@ impl fmt::Display for Value {
             Value::Number(value) => write!(f, "{value}"),
             Value::Bool(value) => write!(f, "{value}"),
             Value::Nil => write!(f, "nil"),
+            Value::Callable(callable) => write!(f, "{callable}"),
         }
+    }
+}
+
+impl LoxCallable for ClockFunction {
+    fn arity(&self) -> usize {
+        0
+    }
+
+    fn call(
+        &self,
+        _interpreter: &Interpreter,
+        _arguments: Vec<Value>,
+    ) -> Result<Value, RuntimeError> {
+        let seconds = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after the Unix epoch")
+            .as_secs_f64();
+
+        Ok(Value::Number(seconds))
+    }
+}
+
+impl fmt::Display for ClockFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<native fn clock>")
     }
 }
 

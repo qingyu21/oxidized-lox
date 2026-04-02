@@ -73,6 +73,37 @@ fn logical_or_short_circuits_unselected_right_operand() {
 }
 
 #[test]
+fn calls_native_clock_function() {
+    let value = evaluate_result("clock()").expect("clock() should be callable");
+
+    match value {
+        Value::Number(value) => assert!(value >= 0.0),
+        _ => panic!("expected clock() to return a number"),
+    }
+}
+
+#[test]
+fn reports_runtime_error_for_non_callable_callee() {
+    let error = evaluate_result("\"totally not a function\"()")
+        .expect_err("strings should not be callable values");
+    assert_eq!(error.message, "Can only call functions and classes.");
+}
+
+#[test]
+fn call_evaluates_arguments_before_arity_checks() {
+    let error = evaluate_result("clock(1 / 0)")
+        .expect_err("arguments should be evaluated before the call is attempted");
+    assert_eq!(error.message, "Division by zero.");
+}
+
+#[test]
+fn reports_runtime_error_for_wrong_call_arity() {
+    let error =
+        evaluate_result("clock(1)").expect_err("clock() should reject unexpected arguments");
+    assert_eq!(error.message, "Expected 0 arguments but got 1.");
+}
+
+#[test]
 fn executes_if_then_branch_when_condition_is_truthy() {
     let statements =
         parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");
