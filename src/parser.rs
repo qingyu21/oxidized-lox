@@ -17,6 +17,8 @@ pub struct Parser {
     current: usize,
     // Number of enclosing loop statements currently being parsed.
     loop_depth: usize,
+    // Number of enclosing function bodies currently being parsed.
+    function_depth: usize,
 }
 
 type ParseRule = fn(&mut Parser) -> Result<Expr, ParseError>;
@@ -27,6 +29,7 @@ impl Parser {
             tokens,
             current: 0,
             loop_depth: 0,
+            function_depth: 0,
         }
     }
 
@@ -112,7 +115,7 @@ impl Parser {
             TokenType::LeftBrace,
             &format!("Expect '{{' before {kind} body."),
         )?;
-        let body = self.block()?;
+        let body = self.in_function(Self::block)?;
         Ok(Stmt::function(name, params, body))
     }
 
@@ -161,6 +164,18 @@ impl Parser {
         result
     }
 
+    // Parse nested declarations with function context so `return;` is only
+    // accepted inside the body of an enclosing function declaration.
+    fn in_function<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T, ParseError>,
+    ) -> Result<T, ParseError> {
+        self.function_depth += 1;
+        let result = parse(self);
+        self.function_depth -= 1;
+        result
+    }
+
     // Discard tokens until the parser reaches a likely statement boundary.
     fn synchronize(&mut self) {
         while !self.is_at_end() {
@@ -189,6 +204,7 @@ impl Parser {
                 | TokenType::Var
                 | TokenType::For
                 | TokenType::If
+                | TokenType::Return
                 | TokenType::While
                 | TokenType::Print
                 | TokenType::LeftBrace

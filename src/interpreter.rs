@@ -50,10 +50,11 @@ pub(crate) struct RuntimeError {
     message: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 enum ControlFlow {
     None,
     Break,
+    Return(Value),
 }
 
 pub struct Interpreter {
@@ -83,6 +84,9 @@ impl Interpreter {
             Ok(ControlFlow::Break) => {
                 unreachable!("parser should reject break statements outside loops");
             }
+            Ok(ControlFlow::Return(_)) => {
+                unreachable!("parser should reject return statements outside functions");
+            }
             Err(error) => lox::runtime_error(&error.token, &error.message),
         }
     }
@@ -99,6 +103,7 @@ impl Interpreter {
             match self.execute(stmt)? {
                 ControlFlow::None => {}
                 ControlFlow::Break => return Ok(ControlFlow::Break),
+                ControlFlow::Return(value) => return Ok(ControlFlow::Return(value)),
             }
         }
 
@@ -129,6 +134,7 @@ impl Interpreter {
                 println!("{value}");
                 Ok(ControlFlow::None)
             }
+            Stmt::Return { keyword, value } => self.execute_return(keyword, value.as_ref()),
             Stmt::Var { name, initializer } => {
                 let value = match initializer {
                     Some(initializer) => self.evaluate(initializer)?,
@@ -176,6 +182,21 @@ impl Interpreter {
         Ok(ControlFlow::None)
     }
 
+    fn execute_return(
+        &self,
+        _keyword: &Token,
+        value_expr: Option<&Expr>,
+    ) -> Result<ControlFlow, RuntimeError> {
+        // Evaluate the optional return value and turn it into an internal
+        // control-flow signal that enclosing statements can propagate upward.
+        let value = match value_expr {
+            Some(value_expr) => self.evaluate(value_expr)?,
+            None => Value::Nil,
+        };
+
+        Ok(ControlFlow::Return(value))
+    }
+
     fn execute_if(
         &self,
         condition: &Expr,
@@ -196,6 +217,7 @@ impl Interpreter {
             match self.execute(body)? {
                 ControlFlow::None => {}
                 ControlFlow::Break => break,
+                ControlFlow::Return(value) => return Ok(ControlFlow::Return(value)),
             }
         }
 
@@ -579,12 +601,12 @@ impl LoxCallable for LoxFunction {
                 .define(param.lexeme.clone(), argument);
         }
 
-        // Run the function body in that call environment. Until `return` is
-        // implemented, falling off the end of the body produces `nil`.
-        // TODO(ch10): Once `return` statements are implemented, thread return
-        // values through call boundaries instead of always producing `nil`.
+        // Run the function body in that call environment. An explicit
+        // `return` carries its value back out through the control-flow signal;
+        // falling off the end of the body still produces `nil`.
         match interpreter.execute_block(&self.body, environment)? {
             ControlFlow::None => Ok(Value::Nil),
+            ControlFlow::Return(value) => Ok(value),
             ControlFlow::Break => {
                 unreachable!("parser should reject break statements that escape a function body");
             }

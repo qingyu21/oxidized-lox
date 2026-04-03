@@ -154,6 +154,47 @@ fn parses_function_declaration_with_parameters_and_body() {
 }
 
 #[test]
+fn parses_return_statement_with_value_inside_function() {
+    let statements = parse_statements("fun identity(value) { return value; }");
+
+    match statements.as_slice() {
+        [Stmt::Function { body, .. }] => match body.as_slice() {
+            [
+                Stmt::Return {
+                    keyword,
+                    value: Some(value),
+                },
+            ] => {
+                assert_eq!(keyword.lexeme, "return");
+                assert_eq!(AstPrinter.print(value), "value");
+            }
+            _ => panic!("expected a single valued return statement in the function body"),
+        },
+        _ => panic!("expected a single function declaration"),
+    }
+}
+
+#[test]
+fn parses_bare_return_statement_inside_function() {
+    let statements = parse_statements("fun done() { return; }");
+
+    match statements.as_slice() {
+        [Stmt::Function { body, .. }] => match body.as_slice() {
+            [
+                Stmt::Return {
+                    keyword,
+                    value: None,
+                },
+            ] => {
+                assert_eq!(keyword.lexeme, "return");
+            }
+            _ => panic!("expected a single bare return statement in the function body"),
+        },
+        _ => panic!("expected a single function declaration"),
+    }
+}
+
+#[test]
 fn parses_break_statement_inside_a_loop() {
     let statements = parse_statements("while (true) { break; }");
 
@@ -497,6 +538,18 @@ fn reports_break_outside_loop_and_recovers() {
     match statements.as_slice() {
         [Stmt::Print { expression }] => assert_eq!(AstPrinter.print(expression), "1"),
         _ => panic!("expected the parser to recover after break outside a loop"),
+    }
+}
+
+#[test]
+fn reports_return_outside_function_and_recovers() {
+    let tokens = Scanner::new("return 1; print 2;").scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse();
+
+    match statements.as_slice() {
+        [Stmt::Print { expression }] => assert_eq!(AstPrinter.print(expression), "2"),
+        _ => panic!("expected the parser to recover after return outside a function"),
     }
 }
 

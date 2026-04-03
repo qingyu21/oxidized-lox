@@ -22,6 +22,10 @@ pub enum Stmt {
     Print {
         expression: Expr,
     },
+    Return {
+        keyword: Token,
+        value: Option<Expr>,
+    },
     Var {
         name: Token,
         initializer: Option<Expr>,
@@ -65,6 +69,11 @@ impl Stmt {
     // Construct a statement that evaluates and prints an expression.
     pub fn print(expression: Expr) -> Self {
         Stmt::Print { expression }
+    }
+
+    // Construct a return statement with an optional value expression.
+    pub fn return_stmt(keyword: Token, value: Option<Expr>) -> Self {
+        Stmt::Return { keyword, value }
     }
 
     // Construct a variable declaration with an optional initializer.

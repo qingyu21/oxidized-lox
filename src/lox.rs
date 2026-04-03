@@ -324,6 +324,16 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_top_level_return_as_a_syntax_error() {
+        with_clean_error_state(|| {
+            run("return 1;");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn bare_expressions_are_detected_in_the_repl() {
         let tokens = Scanner::new("1 + 2").scan_tokens();
         assert!(should_eval_repl_expression(&tokens));

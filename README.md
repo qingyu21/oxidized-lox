@@ -35,7 +35,7 @@ Implemented today:
   line comments, and block comments
 - recursive-descent parsing for expressions and statements
 - call expressions with runtime dispatch through a callable abstraction
-- user-defined function declarations and calls
+- user-defined function declarations, calls, and `return`
 - variables, assignment, block scope, `if`, `while`, `for`, `break`,
   logical `and` / `or`,
   and `?:`
@@ -44,7 +44,6 @@ Implemented today:
 
 Later book stages still missing:
 
-- `return` statements and the rest of the function chapter
 - classes
 - resolver / bytecode VM stages from later in the book
 
@@ -103,10 +102,10 @@ cargo fmt
 
 - `src/scanner.rs`: turns source text into `Vec<Token>`
 - `src/parser.rs`: parser entry points, declarations, token helpers, and error recovery
-- `src/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, and `break`
+- `src/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, `break`, and `return`
 - `src/parser/expressions.rs`: expression parsing and precedence handling, including call syntax
 - `src/expr.rs`: expression AST definitions
-- `src/stmt.rs`: statement AST definitions, including function declarations
+- `src/stmt.rs`: statement AST definitions, including function declarations and `return`
 - `src/interpreter.rs`: executes statements and evaluates expressions
 - `src/environment.rs`: lexical scope chain and variable storage
 - `src/lox.rs`: top-level run modes, REPL flow, and error reporting
@@ -126,14 +125,13 @@ cargo fmt
 - The REPL evaluates one input line at a time and does not yet buffer
   incomplete multi-line statements.
 - The language implementation is still a subset of full Lox and does not yet
-  support `return`, classes, or the later resolver/VM stages.
+  support classes or the later resolver/VM stages.
 
 ## Roadmap
 
 Near-term goals:
 
-- add functions and the next features from the book
-- finish the remaining function features such as `return`
+- continue into the resolver and binding chapter
 - continue expanding parser and interpreter test coverage
 - keep the code structure aligned with the book while documenting Rust-specific
   implementation choices

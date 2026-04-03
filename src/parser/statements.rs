@@ -4,7 +4,7 @@ use crate::stmt::Stmt;
 use crate::token::{Literal, TokenType};
 
 impl Parser {
-    // statement -> breakStmt | forStmt | ifStmt | printStmt | whileStmt | block | exprStmt ;
+    // statement -> breakStmt | forStmt | ifStmt | printStmt | returnStmt | whileStmt | block | exprStmt ;
     pub(super) fn statement(&mut self) -> Result<Stmt, ParseError> {
         if self.match_token(&[TokenType::Break]) {
             return self.break_statement();
@@ -20,6 +20,10 @@ impl Parser {
 
         if self.match_token(&[TokenType::Print]) {
             return self.print_statement();
+        }
+
+        if self.match_token(&[TokenType::Return]) {
+            return self.return_statement();
         }
 
         if self.match_token(&[TokenType::While]) {
@@ -118,6 +122,23 @@ impl Parser {
         let value = self.expression()?;
         self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::print(value))
+    }
+
+    // returnStmt -> "return" expression? ";" ;
+    pub(super) fn return_statement(&mut self) -> Result<Stmt, ParseError> {
+        let keyword = self.previous().clone();
+        let value = if !self.check(TokenType::Semicolon) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
+
+        if self.function_depth == 0 {
+            return Err(self.error(&keyword, "Can't return from top-level code."));
+        }
+
+        Ok(Stmt::return_stmt(keyword, value))
     }
 
     // whileStmt -> "while" "(" expression ")" statement ;

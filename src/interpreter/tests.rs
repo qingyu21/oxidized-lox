@@ -159,6 +159,32 @@ fn displays_user_defined_function_values_with_their_name() {
 }
 
 #[test]
+fn returns_explicit_values_from_user_defined_functions() {
+    assert_eq!(
+        interpret_script_result("fun identity(value) { return value; } identity(42)"),
+        Value::Number(42.0)
+    );
+}
+
+#[test]
+fn bare_return_produces_nil() {
+    assert_eq!(
+        interpret_script_result("fun done() { return; } done()"),
+        Value::Nil
+    );
+}
+
+#[test]
+fn return_exits_nested_control_flow_inside_function() {
+    assert_eq!(
+        interpret_script_result(
+            "fun count(n) { while (n < 100) { if (n == 3) return n; n = n + 1; } } count(1)"
+        ),
+        Value::Number(3.0)
+    );
+}
+
+#[test]
 fn executes_if_then_branch_when_condition_is_truthy() {
     let statements =
         parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");
@@ -571,6 +597,28 @@ fn parse_statements(source: &str) -> Vec<Stmt> {
     let tokens = Scanner::new(source).scan_tokens();
     let mut parser = Parser::new(tokens);
     parser.parse()
+}
+
+fn interpret_script_result(source: &str) -> Value {
+    let source = format!("{source};");
+    let statements = parse_statements(&source);
+    let interpreter = Interpreter::new();
+    let (last, prefix) = statements
+        .split_last()
+        .expect("expected at least one statement in the test input");
+
+    for statement in prefix {
+        interpreter
+            .execute(statement)
+            .expect("setup statements should execute successfully");
+    }
+
+    match last {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("final expression should evaluate successfully"),
+        _ => panic!("expected the final statement to be an expression statement"),
+    }
 }
 
 fn evaluate_result(source: &str) -> Result<Value, super::RuntimeError> {
