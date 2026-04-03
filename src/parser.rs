@@ -63,6 +63,11 @@ impl Parser {
 
     // declaration -> funDecl | varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        // TODO(function-expr): If Lox gains anonymous function expressions
+        // like `fun (...) { ... }`, this branch will need one-token lookahead.
+        // `fun` followed by an identifier stays a declaration, while `fun`
+        // followed by `(` should fall through to expression parsing so
+        // statement forms like `fun () {};` are treated as expression statements.
         if self.match_token(&[TokenType::Fun]) {
             return self.function("function");
         }
