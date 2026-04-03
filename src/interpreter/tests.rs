@@ -185,6 +185,28 @@ fn return_exits_nested_control_flow_inside_function() {
 }
 
 #[test]
+fn local_functions_close_over_enclosing_bindings_after_return() {
+    assert_eq!(
+        interpret_script_result(
+            "fun makeCounter() {
+               var i = 0;
+               fun count() {
+                 i = i + 1;
+                 return i;
+               }
+
+               return count;
+             }
+
+             var counter = makeCounter();
+             counter();
+             counter()"
+        ),
+        Value::Number(2.0)
+    );
+}
+
+#[test]
 fn executes_if_then_branch_when_condition_is_truthy() {
     let statements =
         parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");

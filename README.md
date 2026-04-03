@@ -35,7 +35,7 @@ Implemented today:
   line comments, and block comments
 - recursive-descent parsing for expressions and statements
 - call expressions with runtime dispatch through a callable abstraction
-- user-defined function declarations, calls, and `return`
+- user-defined functions, local functions, closures, and `return`
 - variables, assignment, block scope, `if`, `while`, `for`, `break`,
   logical `and` / `or`,
   and `?:`
@@ -138,7 +138,7 @@ Near-term goals:
 
 Longer-term goals:
 
-- keep extending function support through closures and methods
+- keep extending function support through methods and classes
 - add classes and methods
 - explore the resolver and later bytecode VM stages
 
