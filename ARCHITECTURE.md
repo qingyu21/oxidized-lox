@@ -138,9 +138,12 @@ flowchart TD
 `Resolver`
 
 - Walks the parsed AST before interpretation and performs static name binding.
-- Tracks local lexical scopes with a stack of `HashMap<String, bool>`.
+- Tracks local lexical scopes with a stack of
+  `HashMap<String, BindingInfo>`, where each entry remembers the binding's
+  token, kind, definition state, and whether it was ever read.
 - Detects semantic errors such as reading a local variable inside its own
-  initializer.
+  initializer, redeclaring a local name in the same scope, and leaving a local
+  variable unused.
 - Records lexical distances in the interpreter so runtime lookup can jump
   straight to the correct environment.
 
@@ -218,8 +221,8 @@ flowchart TD
   into the current environment.
 - Threads `break` and `return` upward through an internal control-flow enum so
   nested statements can unwind without host-language exceptions.
-- Stores the resolver's lexical-distance results and uses them for direct
-  local/global variable lookup at runtime.
+- Stores the resolver's binding decisions keyed by token id and uses them for
+  direct local/global variable lookup at runtime.
 
 ## Important Boundaries
 

@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{expr::Expr, interpreter::Interpreter, lox, stmt::Stmt, token::Token};
+use crate::{
+    expr::Expr,
+    interpreter::{Interpreter, ResolvedBinding},
+    lox,
+    stmt::Stmt,
+    token::Token,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ResolveError;
@@ -56,12 +62,7 @@ impl<'a> Resolver<'a> {
             Stmt::Block { statements } => {
                 self.begin_scope();
                 let result = self.resolve_statements(statements);
-                if result.is_ok() {
-                    self.end_scope()?;
-                } else {
-                    self.discard_scope();
-                }
-                result
+                self.finish_scope(result)
             }
             Stmt::Break => Ok(()),
             Stmt::Expression { expression } => self.resolve_expression_node(expression),
@@ -171,12 +172,7 @@ impl<'a> Resolver<'a> {
         }
 
         let result = self.resolve_statements(body);
-        if result.is_ok() {
-            self.end_scope()?;
-        } else {
-            self.discard_scope();
-        }
-        result
+        self.finish_scope(result)
     }
 
     // Push a fresh lexical scope for a block or function body.
@@ -210,6 +206,16 @@ impl<'a> Resolver<'a> {
 
     fn discard_scope(&mut self) {
         self.scopes.pop();
+    }
+
+    fn finish_scope(&mut self, result: Result<(), ResolveError>) -> Result<(), ResolveError> {
+        match result {
+            Ok(()) => self.end_scope(),
+            Err(error) => {
+                self.discard_scope();
+                Err(error)
+            }
+        }
     }
 
     // Record a name in the current scope before its initializer resolves so
@@ -254,12 +260,13 @@ impl<'a> Resolver<'a> {
                 if mark_used {
                     binding.used = true;
                 }
-                self.interpreter.resolve(name, Some(distance));
+                self.interpreter
+                    .resolve(name, ResolvedBinding::Local(distance));
                 return;
             }
         }
 
-        self.interpreter.resolve(name, None);
+        self.interpreter.resolve(name, ResolvedBinding::Global);
     }
 
     // Report a resolver error through the shared Lox error reporter and stop

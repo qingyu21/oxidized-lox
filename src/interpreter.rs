@@ -58,14 +58,24 @@ enum ControlFlow {
     Return(Value),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResolvedBinding {
+    Local(usize),
+    Global,
+    Unresolved,
+}
+
 pub struct Interpreter {
     // Fixed handle to the outermost global scope so resolved global lookups
     // do not depend on whatever the current environment happens to be.
     globals: EnvironmentRef,
     environment: RefCell<EnvironmentRef>,
     // Maps a variable-use token id to the lexical distance computed by the
-    // resolver. `None` means the name resolved to the global scope.
-    locals: RefCell<HashMap<u64, Option<usize>>>,
+    // resolver, or records that the name was resolved as global.
+    // TODO(ch11-challenge4): This still stores only scope distance. The
+    // Chapter 11 challenge to assign per-scope local indexes and access locals
+    // by slot instead of name has not been implemented in this interpreter.
+    locals: RefCell<HashMap<u64, ResolvedBinding>>,
 }
 
 impl Interpreter {
@@ -109,8 +119,8 @@ impl Interpreter {
 
     // Record the resolver's binding decision for a variable-use token so
     // runtime lookup can jump straight to the right environment.
-    pub(crate) fn resolve(&self, name: &Token, depth: Option<usize>) {
-        self.locals.borrow_mut().insert(name.id, depth);
+    pub(crate) fn resolve(&self, name: &Token, binding: ResolvedBinding) {
+        self.locals.borrow_mut().insert(name.id, binding);
     }
 
     fn execute_all(&self, statements: &[Stmt]) -> Result<ControlFlow, RuntimeError> {
@@ -243,6 +253,14 @@ impl Interpreter {
         self.environment.borrow().clone()
     }
 
+    fn resolved_binding(&self, name: &Token) -> ResolvedBinding {
+        self.locals
+            .borrow()
+            .get(&name.id)
+            .copied()
+            .unwrap_or(ResolvedBinding::Unresolved)
+    }
+
     fn evaluate(&self, expr: &Expr) -> Result<Value, RuntimeError> {
         match expr {
             Expr::Assign { name, value } => self.evaluate_assign(name, value),
@@ -278,12 +296,12 @@ impl Interpreter {
 
     fn evaluate_assign(&self, name: &Token, value_expr: &Expr) -> Result<Value, RuntimeError> {
         let value = self.evaluate(value_expr)?;
-        match self.locals.borrow().get(&name.id).copied() {
-            Some(Some(distance)) => {
+        match self.resolved_binding(name) {
+            ResolvedBinding::Local(distance) => {
                 Environment::assign_at(&self.current_environment(), distance, name, value.clone())?
             }
-            Some(None) => self.globals.borrow_mut().assign(name, value.clone())?,
-            None => self
+            ResolvedBinding::Global => self.globals.borrow_mut().assign(name, value.clone())?,
+            ResolvedBinding::Unresolved => self
                 .current_environment()
                 .borrow_mut()
                 .assign(name, value.clone())?,
@@ -295,12 +313,12 @@ impl Interpreter {
     // available, falling back to dynamic lookup only for unresolved tests and
     // legacy call sites that bypass the resolver pass.
     fn look_up_variable(&self, name: &Token) -> Result<Value, RuntimeError> {
-        match self.locals.borrow().get(&name.id).copied() {
-            Some(Some(distance)) => {
+        match self.resolved_binding(name) {
+            ResolvedBinding::Local(distance) => {
                 Environment::get_at(&self.current_environment(), distance, name)
             }
-            Some(None) => self.globals.borrow().get(name),
-            None => self.current_environment().borrow().get(name),
+            ResolvedBinding::Global => self.globals.borrow().get(name),
+            ResolvedBinding::Unresolved => self.current_environment().borrow().get(name),
         }
     }
 
