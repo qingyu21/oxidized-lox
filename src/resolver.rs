@@ -5,11 +5,26 @@ use crate::{expr::Expr, interpreter::Interpreter, lox, stmt::Stmt, token::Token}
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ResolveError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BindingKind {
+    Variable,
+    Parameter,
+    Function,
+}
+
+#[derive(Debug, Clone)]
+struct BindingInfo {
+    token: Token,
+    kind: BindingKind,
+    defined: bool,
+    used: bool,
+}
+
 pub(crate) struct Resolver<'a> {
     interpreter: &'a Interpreter,
-    // Stack of lexical scopes being resolved. The bool tracks whether a name
-    // has finished being defined (`true`) or is only declared so far (`false`).
-    scopes: Vec<HashMap<String, bool>>,
+    // Stack of lexical scopes being resolved. Each binding tracks whether it is
+    // fully defined yet and whether it was ever read before the scope ended.
+    scopes: Vec<HashMap<String, BindingInfo>>,
 }
 
 impl<'a> Resolver<'a> {
@@ -41,13 +56,17 @@ impl<'a> Resolver<'a> {
             Stmt::Block { statements } => {
                 self.begin_scope();
                 let result = self.resolve_statements(statements);
-                self.end_scope();
+                if result.is_ok() {
+                    self.end_scope()?;
+                } else {
+                    self.discard_scope();
+                }
                 result
             }
             Stmt::Break => Ok(()),
             Stmt::Expression { expression } => self.resolve_expression_node(expression),
             Stmt::Function { name, params, body } => {
-                self.declare(name)?;
+                self.declare(name, BindingKind::Function)?;
                 self.define(name);
                 self.resolve_function(params, body)
             }
@@ -71,7 +90,7 @@ impl<'a> Resolver<'a> {
                 Ok(())
             }
             Stmt::Var { name, initializer } => {
-                self.declare(name)?;
+                self.declare(name, BindingKind::Variable)?;
                 if let Some(initializer) = initializer {
                     self.resolve_expression_node(initializer)?;
                 }
@@ -91,7 +110,7 @@ impl<'a> Resolver<'a> {
         match expression {
             Expr::Assign { name, value } => {
                 self.resolve_expression_node(value)?;
-                self.resolve_local(name);
+                self.resolve_local(name, false);
                 Ok(())
             }
             Expr::Binary { left, right, .. } => {
@@ -114,16 +133,18 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression_node(right)
             }
             Expr::Variable { name } => {
-                if matches!(
-                    self.scopes
-                        .last()
-                        .and_then(|scope| scope.get(&name.lexeme)),
-                    Some(false)
-                ) {
-                    return Err(self.error(name, "Can't read local variable in its own initializer."));
+                if self
+                    .scopes
+                    .last()
+                    .and_then(|scope| scope.get(&name.lexeme))
+                    .is_some_and(|binding| !binding.defined)
+                {
+                    return Err(
+                        self.error(name, "Can't read local variable in its own initializer.")
+                    );
                 }
 
-                self.resolve_local(name);
+                self.resolve_local(name, true);
                 Ok(())
             }
             Expr::Conditional {
@@ -145,12 +166,16 @@ impl<'a> Resolver<'a> {
         self.begin_scope();
 
         for param in params {
-            self.declare(param)?;
+            self.declare(param, BindingKind::Parameter)?;
             self.define(param);
         }
 
         let result = self.resolve_statements(body);
-        self.end_scope();
+        if result.is_ok() {
+            self.end_scope()?;
+        } else {
+            self.discard_scope();
+        }
         result
     }
 
@@ -159,45 +184,82 @@ impl<'a> Resolver<'a> {
         self.scopes.push(HashMap::new());
     }
 
-    // Pop the innermost lexical scope once resolution leaves it.
-    fn end_scope(&mut self) {
+    // Pop the innermost lexical scope once resolution leaves it, reporting a
+    // resolver error if a local variable in that scope was never read.
+    fn end_scope(&mut self) -> Result<(), ResolveError> {
+        let Some(scope) = self.scopes.pop() else {
+            return Ok(());
+        };
+
+        let unused = scope
+            .values()
+            .filter(|binding| {
+                binding.kind == BindingKind::Variable && binding.defined && !binding.used
+            })
+            .min_by_key(|binding| binding.token.id);
+
+        if let Some(binding) = unused {
+            return Err(self.error(
+                &binding.token,
+                &format!("Local variable '{}' is never used.", binding.token.lexeme),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn discard_scope(&mut self) {
         self.scopes.pop();
     }
 
     // Record a name in the current scope before its initializer resolves so
     // reads from the variable's own initializer can be rejected.
-    fn declare(&mut self, name: &Token) -> Result<(), ResolveError> {
+    fn declare(&mut self, name: &Token, kind: BindingKind) -> Result<(), ResolveError> {
         let Some(scope) = self.scopes.last_mut() else {
             return Ok(());
         };
 
         if scope.contains_key(&name.lexeme) {
-            return Err(self.error(
-                name,
-                "Already a variable with this name in this scope.",
-            ));
+            return Err(self.error(name, "Already a variable with this name in this scope."));
         }
 
-        scope.insert(name.lexeme.clone(), false);
+        scope.insert(
+            name.lexeme.clone(),
+            BindingInfo {
+                token: name.clone(),
+                kind,
+                defined: false,
+                used: false,
+            },
+        );
         Ok(())
     }
 
     // Mark a previously declared local as fully available for reads.
     fn define(&mut self, name: &Token) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.lexeme.clone(), true);
+        if let Some(binding) = self
+            .scopes
+            .last_mut()
+            .and_then(|scope| scope.get_mut(&name.lexeme))
+        {
+            binding.defined = true;
         }
     }
 
     // Find how many scopes outward this name resolves to and hand that lexical
     // distance to the interpreter for later fast runtime lookup.
-    fn resolve_local(&self, name: &Token) {
-        let depth = self
-            .scopes
-            .iter()
-            .rev()
-            .position(|scope| scope.contains_key(&name.lexeme));
-        self.interpreter.resolve(name, depth);
+    fn resolve_local(&mut self, name: &Token, mark_used: bool) {
+        for (distance, scope) in self.scopes.iter_mut().rev().enumerate() {
+            if let Some(binding) = scope.get_mut(&name.lexeme) {
+                if mark_used {
+                    binding.used = true;
+                }
+                self.interpreter.resolve(name, Some(distance));
+                return;
+            }
+        }
+
+        self.interpreter.resolve(name, None);
     }
 
     // Report a resolver error through the shared Lox error reporter and stop

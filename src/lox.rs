@@ -378,6 +378,61 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_unused_local_variable_as_a_resolution_error() {
+        with_clean_error_state(|| {
+            run("{ var beverage = \"tea\"; }");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_allows_used_local_variables() {
+        with_clean_error_state(|| {
+            run("{ var beverage = \"tea\"; print beverage; }");
+
+            assert!(!had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_treats_closure_reads_as_using_the_enclosing_local() {
+        with_clean_error_state(|| {
+            run("fun outer() {
+                   var beverage = \"tea\";
+                   fun inner() {
+                     print beverage;
+                   }
+                 }");
+
+            assert!(!had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_does_not_report_unused_function_parameters() {
+        with_clean_error_state(|| {
+            run("fun show(beverage) {}");
+
+            assert!(!had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_still_marks_assignment_only_locals_as_unused() {
+        with_clean_error_state(|| {
+            run("{ var count = 1; count = 2; }");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn bare_expressions_are_detected_in_the_repl() {
         let tokens = Scanner::new("1 + 2").scan_tokens();
         assert!(should_eval_repl_expression(&tokens));

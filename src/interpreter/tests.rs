@@ -273,6 +273,7 @@ fn resolver_keeps_closure_bound_to_the_scope_visible_at_declaration_time() {
 
                showA = localShowA;
                var a = \"block\";
+               a;
              }
 
              showA()"

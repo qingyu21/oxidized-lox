@@ -296,7 +296,9 @@ impl Interpreter {
     // legacy call sites that bypass the resolver pass.
     fn look_up_variable(&self, name: &Token) -> Result<Value, RuntimeError> {
         match self.locals.borrow().get(&name.id).copied() {
-            Some(Some(distance)) => Environment::get_at(&self.current_environment(), distance, name),
+            Some(Some(distance)) => {
+                Environment::get_at(&self.current_environment(), distance, name)
+            }
             Some(None) => self.globals.borrow().get(name),
             None => self.current_environment().borrow().get(name),
         }
