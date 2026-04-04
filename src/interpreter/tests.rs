@@ -1,7 +1,8 @@
-use super::{Interpreter, Value};
+use super::Interpreter;
 use crate::expr::Expr;
 use crate::parser::Parser;
 use crate::resolver::Resolver;
+use crate::runtime::{RuntimeError, Value};
 use crate::scanner::Scanner;
 use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
@@ -720,7 +721,7 @@ fn interpret_script_result(source: &str) -> Value {
     }
 }
 
-fn evaluate_result(source: &str) -> Result<Value, super::RuntimeError> {
+fn evaluate_result(source: &str) -> Result<Value, RuntimeError> {
     let source = format!("{source};");
     let statements = parse_statements(&source);
     let interpreter = Interpreter::new();

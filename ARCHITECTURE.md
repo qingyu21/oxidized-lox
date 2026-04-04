@@ -173,12 +173,16 @@ flowchart TD
 - Current variants are `String`, `Number`, `Bool`, `Nil`, and callable values.
 - This is the value type stored in environments and returned by expression
   evaluation.
+- Lives in `src/runtime.rs` so environments and interpreter submodules can
+  share it without depending on one large interpreter file.
 
 `LoxCallable`
 
 - Runtime trait implemented by anything Lox can invoke with `()`.
 - Defines the callable contract used by native functions today and by
   user-defined functions and classes later on.
+- Lives in `src/runtime.rs`, while concrete callable implementations live in
+  `src/interpreter/callable.rs`.
 
 `LoxFunction`
 
@@ -191,6 +195,7 @@ flowchart TD
 - Error raised during execution rather than parsing.
 - Carries both a message and the relevant `Token` for source-location
   reporting.
+- Lives in `src/runtime.rs` for the same reason as `Value`.
 
 `EnvironmentRef`
 
@@ -223,6 +228,9 @@ flowchart TD
   nested statements can unwind without host-language exceptions.
 - Stores the resolver's binding decisions keyed by token id and uses them for
   direct local/global variable lookup at runtime.
+- Is implemented as a small module tree:
+  `src/interpreter/mod.rs`, `src/interpreter/execute.rs`,
+  `src/interpreter/evaluate.rs`, and `src/interpreter/callable.rs`.
 
 ## Important Boundaries
 

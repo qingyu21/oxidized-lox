@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::interpreter::{RuntimeError, Value};
+use crate::runtime::{RuntimeError, Value};
 use crate::token::Token;
 
 pub type EnvironmentRef = Rc<RefCell<Environment>>;

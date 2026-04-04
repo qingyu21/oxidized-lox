@@ -111,7 +111,11 @@ cargo fmt
 - `src/expr.rs`: expression AST definitions
 - `src/stmt.rs`: statement AST definitions, including function declarations and `return`
 - `src/resolver.rs`: static scope resolution and lexical binding analysis
-- `src/interpreter.rs`: executes statements and evaluates expressions
+- `src/runtime.rs`: shared runtime types such as `Value`, `RuntimeError`, and the callable trait
+- `src/interpreter/mod.rs`: interpreter entry points, environment handles, and resolver binding cache
+- `src/interpreter/execute.rs`: statement execution and control-flow propagation
+- `src/interpreter/evaluate.rs`: expression evaluation and runtime operator semantics
+- `src/interpreter/callable.rs`: native/user-defined callable runtime objects
 - `src/environment.rs`: lexical scope chain and variable storage
 - `src/lox.rs`: top-level run modes, REPL flow, and error reporting
 - `src/token.rs`: token and literal data types
