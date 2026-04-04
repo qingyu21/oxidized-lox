@@ -13,16 +13,15 @@ flowchart LR
     Parser["Parser"]
     Program["Vec<Stmt>"]
     ReplExpr["Expr"]
+    Resolver["Resolver"]
     Interpreter["Interpreter"]
     Env["EnvironmentRef -> Environment"]
     Value["Value"]
     RuntimeError["RuntimeError"]
 
     Source --> Scanner --> Tokens --> Parser
-    Parser --> Program
-    Parser --> ReplExpr
-    Program --> Interpreter
-    ReplExpr --> Interpreter
+    Parser --> Program --> Resolver --> Interpreter
+    Parser --> ReplExpr --> Resolver
     Interpreter --> Env
     Interpreter --> Value
     Interpreter --> RuntimeError
@@ -30,9 +29,9 @@ flowchart LR
 
 The same pipeline is reused in both modes:
 
-- script mode: source text is parsed into `Vec<Stmt>` and executed
-- REPL bare-expression mode: source text is parsed into one `Expr` and
-  evaluated directly
+- script mode: source text is parsed into `Vec<Stmt>`, resolved, and executed
+- REPL bare-expression mode: source text is parsed into one `Expr`, resolved,
+  and evaluated directly
 
 ## Core Type Graph
 
@@ -44,6 +43,8 @@ flowchart TD
     Scanner["Scanner"]
     ParseError["ParseError"]
     Parser["Parser"]
+    ResolveError["ResolveError"]
+    Resolver["Resolver"]
     Expr["Expr"]
     Stmt["Stmt"]
     Interpreter["Interpreter"]
@@ -59,6 +60,11 @@ flowchart TD
     Parser --> ParseError
     Parser --> Expr
     Parser --> Stmt
+    Token --> Resolver
+    Expr --> Resolver
+    Stmt --> Resolver
+    Resolver --> ResolveError
+    Resolver --> Interpreter
     Literal --> Expr
     Token --> Expr
     Token --> Stmt
@@ -90,10 +96,12 @@ flowchart TD
 
 `Token`
 
-- Bundles `type_`, `lexeme`, optional `literal`, and `line`.
+- Bundles `type_`, `lexeme`, optional `literal`, `line`, and a stable token id.
 - Acts as the common unit passed from scanner to parser.
 - Is also kept inside AST nodes and runtime errors so later stages still know
   which source token they came from.
+- The token id lets the resolver and interpreter associate lexical-binding
+  results with variable-use sites without reshaping the AST.
 
 `Scanner`
 
@@ -106,6 +114,12 @@ flowchart TD
 - Lightweight marker type used inside the parser to unwind after a syntax
   failure.
 - User-facing parse diagnostics are reported through `lox.rs`.
+
+`ResolveError`
+
+- Lightweight marker type used inside the resolver to stop after a static
+  binding error.
+- User-facing resolver diagnostics are also reported through `lox.rs`.
 
 `Parser`
 
@@ -120,6 +134,15 @@ flowchart TD
 - Tracks loop and function nesting so `break` and `return` can be validated
   against the current parsing context.
 - Performs local error recovery with `synchronize()`.
+
+`Resolver`
+
+- Walks the parsed AST before interpretation and performs static name binding.
+- Tracks local lexical scopes with a stack of `HashMap<String, bool>`.
+- Detects semantic errors such as reading a local variable inside its own
+  initializer.
+- Records lexical distances in the interpreter so runtime lookup can jump
+  straight to the correct environment.
 
 `Expr`
 
@@ -179,6 +202,8 @@ flowchart TD
 - Optionally points to an enclosing environment to implement lexical scope and
   shadowing.
 - Handles `define`, `assign`, and `get`.
+- Also provides ancestor-based `get_at` / `assign_at` used by resolved local
+  variable access.
 
 `Interpreter`
 
@@ -193,6 +218,8 @@ flowchart TD
   into the current environment.
 - Threads `break` and `return` upward through an internal control-flow enum so
   nested statements can unwind without host-language exceptions.
+- Stores the resolver's lexical-distance results and uses them for direct
+  local/global variable lookup at runtime.
 
 ## Important Boundaries
 
@@ -214,9 +241,10 @@ flowchart TD
 - `EnvironmentRef` is the shared handle used to store and pass environments
   around safely in Rust.
 
-`ParseError` vs `RuntimeError`
+`ParseError` vs `ResolveError` vs `RuntimeError`
 
 - `ParseError` means the source code could not be parsed.
+- `ResolveError` means the parsed program failed static binding analysis.
 - `RuntimeError` means the parsed program failed while executing.
 
 ## Coordination
@@ -225,7 +253,8 @@ flowchart TD
 
 - `run_file()` handles script execution
 - `run_prompt()` handles the REPL
-- `run_tokens()` feeds parsed statements into the interpreter
+- `run_tokens()` feeds parsed statements through the resolver and then into the
+  interpreter
 - error flags and reporting helpers keep parse/runtime failures separated
 
 The REPL reuses the same interpreter instance across inputs, so state such as

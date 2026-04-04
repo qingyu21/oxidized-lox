@@ -1,4 +1,9 @@
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static NEXT_TOKEN_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
@@ -64,6 +69,7 @@ pub enum Literal {
 
 #[derive(Debug, Clone)]
 pub struct Token {
+    pub id: u64,
     pub type_: TokenType,
     pub lexeme: String,
     pub literal: Option<Literal>,
@@ -95,6 +101,7 @@ impl Token {
         line: u32,
     ) -> Self {
         Token {
+            id: NEXT_TOKEN_ID.fetch_add(1, Ordering::Relaxed),
             type_,
             lexeme,
             literal,

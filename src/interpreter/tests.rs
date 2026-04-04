@@ -1,6 +1,7 @@
 use super::{Interpreter, Value};
 use crate::expr::Expr;
 use crate::parser::Parser;
+use crate::resolver::Resolver;
 use crate::scanner::Scanner;
 use crate::stmt::Stmt;
 use crate::token::{Literal, Token, TokenType};
@@ -203,6 +204,80 @@ fn local_functions_close_over_enclosing_bindings_after_return() {
              counter()"
         ),
         Value::Number(2.0)
+    );
+}
+
+#[test]
+fn function_can_resolve_its_own_name_recursively() {
+    assert_eq!(
+        interpret_script_result(
+            "fun countdown(n) {
+               if (n <= 0) return 0;
+               return countdown(n - 1);
+             }
+
+             countdown(2)"
+        ),
+        Value::Number(0.0)
+    );
+}
+
+#[test]
+fn function_parameters_shadow_outer_bindings() {
+    assert_eq!(
+        interpret_script_result(
+            "var value = \"outer\";
+             fun show(value) {
+               return value;
+             }
+
+             show(\"inner\")"
+        ),
+        Value::String("inner".to_string())
+    );
+}
+
+#[test]
+fn assignment_updates_the_resolved_enclosing_binding_not_a_global_of_the_same_name() {
+    assert_eq!(
+        interpret_script_result(
+            "var a = \"global\";
+             fun make() {
+               var a = \"local\";
+               fun set() {
+                 a = \"changed\";
+                 return a;
+               }
+
+               return set;
+             }
+
+             var set = make();
+             var localResult = set();
+             localResult + \"|\" + a"
+        ),
+        Value::String("changed|global".to_string())
+    );
+}
+
+#[test]
+fn resolver_keeps_closure_bound_to_the_scope_visible_at_declaration_time() {
+    assert_eq!(
+        interpret_script_result(
+            "var a = \"global\";
+             var showA;
+             {
+               fun localShowA() {
+                 return a;
+               }
+
+               showA = localShowA;
+               var a = \"block\";
+             }
+
+             showA()"
+        ),
+        Value::String("global".to_string())
     );
 }
 
@@ -625,6 +700,7 @@ fn interpret_script_result(source: &str) -> Value {
     let source = format!("{source};");
     let statements = parse_statements(&source);
     let interpreter = Interpreter::new();
+    resolve_statements(&interpreter, &statements);
     let (last, prefix) = statements
         .split_last()
         .expect("expected at least one statement in the test input");
@@ -647,6 +723,7 @@ fn evaluate_result(source: &str) -> Result<Value, super::RuntimeError> {
     let source = format!("{source};");
     let statements = parse_statements(&source);
     let interpreter = Interpreter::new();
+    resolve_statements(&interpreter, &statements);
     let expr = match statements.as_slice() {
         [Stmt::Expression { expression }] => expression,
         _ => panic!("expected a single expression statement"),
@@ -661,4 +738,11 @@ fn invalid_statement(line: u32) -> Stmt {
         operator: Token::new(TokenType::Print, "print".to_string(), None, line),
         right: Box::new(Expr::literal(Literal::Number(2.0))),
     })
+}
+
+fn resolve_statements(interpreter: &Interpreter, statements: &[Stmt]) {
+    let mut resolver = Resolver::new(interpreter);
+    resolver
+        .resolve_statements(statements)
+        .expect("test input should resolve successfully");
 }

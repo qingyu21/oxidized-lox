@@ -1,6 +1,7 @@
 use crate::{
     interpreter::Interpreter,
     parser::Parser,
+    resolver::Resolver,
     scanner::Scanner,
     token::{Token, TokenType},
 };
@@ -91,7 +92,15 @@ fn run_repl(source: &str) {
             return;
         }
 
-        INTERPRETER.with(|interpreter| interpreter.borrow().interpret_expression(&expr));
+        INTERPRETER.with(|interpreter| {
+            let interpreter = interpreter.borrow();
+            let mut resolver = Resolver::new(&interpreter);
+            if resolver.resolve_expression(&expr).is_err() || had_error() {
+                return;
+            }
+
+            interpreter.interpret_expression(&expr);
+        });
         return;
     }
 
@@ -107,11 +116,16 @@ fn run_tokens(tokens: Vec<Token>) {
         return;
     }
 
-    // The tree-walk pipeline is scanner -> parser -> interpreter, with the
-    // resolver to be inserted here in the next book stage.
-    // TODO(ch11): Insert a dedicated resolver pass between parsing and
-    // interpretation once binding analysis is implemented.
-    INTERPRETER.with(|interpreter| interpreter.borrow().interpret(&statements));
+    // The tree-walk pipeline is scanner -> parser -> resolver -> interpreter.
+    INTERPRETER.with(|interpreter| {
+        let interpreter = interpreter.borrow();
+        let mut resolver = Resolver::new(&interpreter);
+        if resolver.resolve_statements(&statements).is_err() || had_error() {
+            return;
+        }
+
+        interpreter.interpret(&statements);
+    });
 }
 
 fn is_empty_input(tokens: &[Token]) -> bool {
@@ -327,6 +341,36 @@ mod tests {
     fn run_marks_top_level_return_as_a_syntax_error() {
         with_clean_error_state(|| {
             run("return 1;");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_marks_local_self_initializer_as_a_syntax_error() {
+        with_clean_error_state(|| {
+            run("{ var a = a; }");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn duplicate_local_variable_in_same_scope_is_a_resolver_error() {
+        with_clean_error_state(|| {
+            run("{ var a = 1; var a = 2; }");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn duplicate_function_parameter_name_is_a_resolver_error() {
+        with_clean_error_state(|| {
+            run("fun bad(a, a) {}");
 
             assert!(had_error());
             assert!(!had_runtime_error());

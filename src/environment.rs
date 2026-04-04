@@ -72,4 +72,65 @@ impl Environment {
             ))
         }
     }
+
+    // Update a binding in the ancestor environment selected by the resolver's
+    // precomputed lexical distance.
+    pub fn assign_at(
+        environment: &EnvironmentRef,
+        distance: usize,
+        name: &Token,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        let ancestor = Self::ancestor(environment, distance);
+        let mut ancestor = ancestor.borrow_mut();
+
+        if let Some(slot) = ancestor.values.get_mut(&name.lexeme) {
+            *slot = value;
+            Ok(())
+        } else {
+            Err(RuntimeError::new(
+                name.clone(),
+                format!("Undefined variable '{}'.", name.lexeme),
+            ))
+        }
+    }
+
+    // Read a binding from the ancestor environment selected by the resolver's
+    // precomputed lexical distance.
+    pub fn get_at(
+        environment: &EnvironmentRef,
+        distance: usize,
+        name: &Token,
+    ) -> Result<Value, RuntimeError> {
+        let ancestor = Self::ancestor(environment, distance);
+        let ancestor = ancestor.borrow();
+
+        if let Some(value) = ancestor.values.get(&name.lexeme) {
+            Ok(value.clone())
+        } else {
+            Err(RuntimeError::new(
+                name.clone(),
+                format!("Undefined variable '{}'.", name.lexeme),
+            ))
+        }
+    }
+
+    // Walk outward `distance` scopes from `environment` and return that
+    // ancestor environment handle.
+    fn ancestor(environment: &EnvironmentRef, distance: usize) -> EnvironmentRef {
+        let mut environment = environment.clone();
+
+        for _ in 0..distance {
+            let enclosing = {
+                let environment_ref = environment.borrow();
+                environment_ref
+                    .enclosing
+                    .clone()
+                    .expect("resolver should only record valid scope distances")
+            };
+            environment = enclosing;
+        }
+
+        environment
+    }
 }

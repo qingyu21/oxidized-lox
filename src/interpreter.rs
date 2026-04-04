@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     fmt,
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
@@ -58,7 +59,13 @@ enum ControlFlow {
 }
 
 pub struct Interpreter {
+    // Fixed handle to the outermost global scope so resolved global lookups
+    // do not depend on whatever the current environment happens to be.
+    globals: EnvironmentRef,
     environment: RefCell<EnvironmentRef>,
+    // Maps a variable-use token id to the lexical distance computed by the
+    // resolver. `None` means the name resolved to the global scope.
+    locals: RefCell<HashMap<u64, Option<usize>>>,
 }
 
 impl Interpreter {
@@ -74,7 +81,9 @@ impl Interpreter {
             .define("clock".to_string(), Value::Callable(Rc::new(ClockFunction)));
 
         Self {
+            globals: globals.clone(),
             environment: RefCell::new(globals),
+            locals: RefCell::new(HashMap::new()),
         }
     }
 
@@ -96,6 +105,12 @@ impl Interpreter {
             Ok(value) => println!("{value}"),
             Err(error) => lox::runtime_error(&error.token, &error.message),
         }
+    }
+
+    // Record the resolver's binding decision for a variable-use token so
+    // runtime lookup can jump straight to the right environment.
+    pub(crate) fn resolve(&self, name: &Token, depth: Option<usize>) {
+        self.locals.borrow_mut().insert(name.id, depth);
     }
 
     fn execute_all(&self, statements: &[Stmt]) -> Result<ControlFlow, RuntimeError> {
@@ -245,7 +260,7 @@ impl Interpreter {
                 operator,
                 right,
             } => self.evaluate_logical(left, operator, right),
-            Expr::Variable { name } => self.current_environment().borrow().get(name),
+            Expr::Variable { name } => self.look_up_variable(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Conditional {
                 condition,
@@ -263,10 +278,28 @@ impl Interpreter {
 
     fn evaluate_assign(&self, name: &Token, value_expr: &Expr) -> Result<Value, RuntimeError> {
         let value = self.evaluate(value_expr)?;
-        self.current_environment()
-            .borrow_mut()
-            .assign(name, value.clone())?;
+        match self.locals.borrow().get(&name.id).copied() {
+            Some(Some(distance)) => {
+                Environment::assign_at(&self.current_environment(), distance, name, value.clone())?
+            }
+            Some(None) => self.globals.borrow_mut().assign(name, value.clone())?,
+            None => self
+                .current_environment()
+                .borrow_mut()
+                .assign(name, value.clone())?,
+        }
         Ok(value)
+    }
+
+    // Read a variable using the resolver's precomputed lexical distance when
+    // available, falling back to dynamic lookup only for unresolved tests and
+    // legacy call sites that bypass the resolver pass.
+    fn look_up_variable(&self, name: &Token) -> Result<Value, RuntimeError> {
+        match self.locals.borrow().get(&name.id).copied() {
+            Some(Some(distance)) => Environment::get_at(&self.current_environment(), distance, name),
+            Some(None) => self.globals.borrow().get(name),
+            None => self.current_environment().borrow().get(name),
+        }
     }
 
     fn evaluate_call(

@@ -16,11 +16,12 @@ flowchart LR
     Tokens["Vec<Token>"]
     Parser["Parser"]
     Ast["Vec<Stmt> / Expr"]
+    Resolver["Resolver"]
     Interpreter["Interpreter"]
     Env["Environment chain"]
     Result["Value / RuntimeError"]
 
-    Source --> Scanner --> Tokens --> Parser --> Ast --> Interpreter
+    Source --> Scanner --> Tokens --> Parser --> Ast --> Resolver --> Interpreter
     Interpreter --> Env
     Interpreter --> Result
 ```
@@ -39,13 +40,15 @@ Implemented today:
 - variables, assignment, block scope, `if`, `while`, `for`, `break`,
   logical `and` / `or`,
   and `?:`
+- a resolver pass for lexical scope binding and static name checks such as
+  local self-initializer errors
 - a tree-walk interpreter with a small REPL
 - one native callable, `clock()`
 
 Later book stages still missing:
 
 - classes
-- resolver / bytecode VM stages from later in the book
+- bytecode VM stages from later in the book
 
 ## Running
 
@@ -106,6 +109,7 @@ cargo fmt
 - `src/parser/expressions.rs`: expression parsing and precedence handling, including call syntax
 - `src/expr.rs`: expression AST definitions
 - `src/stmt.rs`: statement AST definitions, including function declarations and `return`
+- `src/resolver.rs`: static scope resolution and lexical binding analysis
 - `src/interpreter.rs`: executes statements and evaluates expressions
 - `src/environment.rs`: lexical scope chain and variable storage
 - `src/lox.rs`: top-level run modes, REPL flow, and error reporting
@@ -121,17 +125,17 @@ cargo fmt
 ## Current Limitations
 
 - The interpreter is still in the tree-walk stage and does not include the
-  resolver or bytecode VM from later parts of the book.
+  bytecode VM from later parts of the book.
 - The REPL evaluates one input line at a time and does not yet buffer
   incomplete multi-line statements.
 - The language implementation is still a subset of full Lox and does not yet
-  support classes or the later resolver/VM stages.
+  support classes or the later VM stages.
 
 ## Roadmap
 
 Near-term goals:
 
-- continue into the resolver and binding chapter
+- continue into the classes and methods chapters
 - continue expanding parser and interpreter test coverage
 - keep the code structure aligned with the book while documenting Rust-specific
   implementation choices
@@ -140,7 +144,7 @@ Longer-term goals:
 
 - keep extending function support through methods and classes
 - add classes and methods
-- explore the resolver and later bytecode VM stages
+- explore the later bytecode VM stages
 
 ## References
 
