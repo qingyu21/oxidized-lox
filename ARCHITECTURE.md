@@ -248,7 +248,7 @@ flowchart TD
 - Stores the resolver's binding decisions keyed by token id and uses them for
   direct local/global variable lookup at runtime.
 - Is implemented as a small module tree:
-  `src/interpreter/mod.rs`, `src/interpreter/execute.rs`,
+  `src/interpreter.rs`, `src/interpreter/execute.rs`,
   `src/interpreter/evaluate.rs`, and `src/interpreter/callable.rs`.
 
 ## Important Boundaries
