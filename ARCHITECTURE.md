@@ -194,18 +194,19 @@ flowchart TD
 
 `LoxClass`
 
-- Minimal runtime object created when a `class` declaration executes.
-- Currently stores only the class name, but it is now callable and creates
-  first-draft instances.
-- Method lookup, `this`, and inheritance are left for later class chapters.
+- Runtime object created when a `class` declaration executes.
+- Stores the class name plus a method table mapping method names to
+  user-defined callable objects.
+- Is still callable itself and creates first-draft instances.
+- Bound methods, `this`, and inheritance are left for later class chapters.
 
 `LoxInstance`
 
 - Runtime object created by calling a `LoxClass`.
 - Stores its class reference plus an open `HashMap<String, Value>` of fields,
   matching the book's "instances are bags of state" model.
-- Property reads and writes are handled dynamically at runtime rather than by
-  the resolver.
+- Property reads first check instance fields and then fall back to class
+  methods, while writes always target instance fields.
 
 `RuntimeError`
 
@@ -240,6 +241,8 @@ flowchart TD
   expressions, then dispatching through `LoxCallable`.
 - Evaluates property get/set expressions by first evaluating the receiver
   expression, then operating on `LoxInstance` field storage.
+- Executes class declarations by lowering parsed methods into a runtime method
+  table stored on `LoxClass`.
 - Seeds the global environment with the native `clock()` function.
 - Turns function declarations into `LoxFunction` runtime values and binds them
   into the current environment.

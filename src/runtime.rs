@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 use crate::{
-    interpreter::Interpreter,
+    interpreter::{Interpreter, LoxFunction},
     token::{Literal, Token},
 };
 
@@ -14,6 +14,7 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 #[derive(Debug, Clone)]
 pub(crate) struct LoxClass {
     name: String,
+    methods: HashMap<String, Rc<LoxFunction>>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,12 +50,16 @@ impl RuntimeError {
 }
 
 impl LoxClass {
-    pub(crate) fn new(name: String) -> Self {
-        Self { name }
+    pub(crate) fn new(name: String, methods: HashMap<String, Rc<LoxFunction>>) -> Self {
+        Self { name, methods }
     }
 
     pub(crate) fn instantiate(class: Rc<LoxClass>) -> Value {
         Value::Instance(Rc::new(LoxInstance::new(class)))
+    }
+
+    pub(crate) fn find_method(&self, name: &str) -> Option<Rc<LoxFunction>> {
+        self.methods.get(name).cloned()
     }
 }
 
@@ -69,6 +74,8 @@ impl LoxInstance {
     pub(crate) fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
         if let Some(value) = self.fields.borrow().get(&name.lexeme).cloned() {
             Ok(value)
+        } else if let Some(method) = self.klass.find_method(&name.lexeme) {
+            Ok(Value::Callable(method))
         } else {
             Err(RuntimeError::new(
                 name.clone(),

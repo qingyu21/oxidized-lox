@@ -18,7 +18,7 @@ struct ClockFunction;
 
 // Runtime wrapper around a parsed function declaration. Keeping callable
 // behavior here prevents the front-end AST from taking on interpreter duties.
-struct LoxFunction {
+pub(crate) struct LoxFunction {
     name: Token,
     params: Vec<Token>,
     body: Vec<Stmt>,
@@ -37,8 +37,21 @@ pub(super) fn make_function(
     body: &[Stmt],
     closure: EnvironmentRef,
 ) -> Value {
-    let function = LoxFunction::new(name.clone(), params.to_vec(), body.to_vec(), closure);
-    Value::Callable(Rc::new(function))
+    Value::Callable(make_function_ref(name, params, body, closure))
+}
+
+pub(super) fn make_function_ref(
+    name: &Token,
+    params: &[Token],
+    body: &[Stmt],
+    closure: EnvironmentRef,
+) -> Rc<LoxFunction> {
+    Rc::new(LoxFunction::new(
+        name.clone(),
+        params.to_vec(),
+        body.to_vec(),
+        closure,
+    ))
 }
 
 impl LoxFunction {

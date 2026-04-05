@@ -12,6 +12,7 @@ use crate::{
     token::Token,
 };
 
+pub(crate) use self::callable::LoxFunction;
 use self::callable::install_native_globals;
 
 #[derive(Debug, Clone)]

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     environment::{Environment, EnvironmentRef},
@@ -8,7 +8,10 @@ use crate::{
     token::Token,
 };
 
-use super::{ControlFlow, Interpreter, callable::make_function};
+use super::{
+    ControlFlow, Interpreter,
+    callable::{make_function, make_function_ref},
+};
 
 impl Interpreter {
     pub(super) fn execute_all(&self, statements: &[Stmt]) -> Result<ControlFlow, RuntimeError> {
@@ -94,7 +97,7 @@ impl Interpreter {
     fn execute_class_declaration(
         &self,
         name: &Token,
-        _methods: &[Stmt],
+        methods: &[Stmt],
     ) -> Result<ControlFlow, RuntimeError> {
         // Bind the class name before creating the runtime class object so
         // later class chapters can support self-references from methods.
@@ -102,7 +105,27 @@ impl Interpreter {
             .borrow_mut()
             .define(name.lexeme.clone(), Value::Nil);
 
-        let klass = Value::Class(Rc::new(LoxClass::new(name.lexeme.clone())));
+        // Each parsed method becomes a runtime function closed over the
+        // environment where the class declaration executes.
+        let closure = self.current_environment();
+        let mut method_table = HashMap::new();
+        for method in methods {
+            let Stmt::Function {
+                name: method_name,
+                params,
+                body,
+            } = method
+            else {
+                unreachable!("parser should only store function-shaped methods in classes");
+            };
+
+            let function = make_function_ref(method_name, params, body, closure.clone());
+            method_table.insert(method_name.lexeme.clone(), function);
+        }
+
+        // The runtime class object stores behavior in its method table, then
+        // replaces the temporary nil binding we inserted above.
+        let klass = Value::Class(Rc::new(LoxClass::new(name.lexeme.clone(), method_table)));
         self.current_environment()
             .borrow_mut()
             .assign(name, klass)?;

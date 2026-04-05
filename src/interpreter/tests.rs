@@ -195,6 +195,61 @@ fn class_calls_have_zero_arity_before_initializers_exist() {
 }
 
 #[test]
+fn methods_can_be_called_through_instances() {
+    assert_eq!(
+        interpret_script_result(
+            "class Bacon {
+               eat() {
+                 return \"Crunch crunch crunch!\";
+               }
+             }
+
+             Bacon().eat()"
+        ),
+        Value::String("Crunch crunch crunch!".to_string())
+    );
+}
+
+#[test]
+fn instance_fields_shadow_methods_and_can_store_functions() {
+    assert_eq!(
+        interpret_script_result(
+            "fun notMethod(argument) {
+               return \"called function with \" + argument;
+             }
+
+             class Box {
+               function() {
+                 return \"method\";
+               }
+             }
+
+             var box = Box();
+             box.function = notMethod;
+             box.function(\"argument\")"
+        ),
+        Value::String("called function with argument".to_string())
+    );
+}
+
+#[test]
+fn grabbed_methods_are_plain_callable_values_before_this_is_added() {
+    assert_eq!(
+        interpret_script_result(
+            "class Bacon {
+               eat() {
+                 return \"Crunch crunch crunch!\";
+               }
+             }
+
+             var method = Bacon().eat;
+             method()"
+        ),
+        Value::String("Crunch crunch crunch!".to_string())
+    );
+}
+
+#[test]
 fn instances_store_and_read_back_fields() {
     assert_eq!(
         interpret_script_result(

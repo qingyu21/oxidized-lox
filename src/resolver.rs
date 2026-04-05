@@ -66,11 +66,20 @@ impl<'a> Resolver<'a> {
                 self.finish_scope(result)
             }
             Stmt::Break => Ok(()),
-            Stmt::Class { name, methods: _ } => {
+            Stmt::Class { name, methods } => {
                 // Class names behave like declarations in the surrounding
-                // scope. Method resolution comes in a later class section.
+                // scope. Class methods then reuse the existing function-body
+                // resolver so their local bindings are prepared before run time.
                 self.declare(name, BindingKind::Class)?;
                 self.define(name);
+
+                for method in methods {
+                    let Stmt::Function { params, body, .. } = method else {
+                        unreachable!("parser should only store function-shaped methods in classes");
+                    };
+                    self.resolve_function(params, body)?;
+                }
+
                 Ok(())
             }
             Stmt::Expression { expression } => self.resolve_expression_node(expression),
