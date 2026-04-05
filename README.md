@@ -44,7 +44,8 @@ Implemented today:
   local self-initializer errors, duplicate local declarations, and unused
   local variables
 - class declarations, instance methods, bound methods, `this`, callable class
-  objects, and first-draft instances with open fields plus property get/set
+  objects, `init` initializers / constructors, and open instances with field
+  storage plus property get/set
 - a tree-walk interpreter with a small REPL
 - one native callable, `clock()`
 
@@ -137,20 +138,20 @@ cargo fmt
 - The REPL evaluates one input line at a time and does not yet buffer
   incomplete multi-line statements.
 - The language implementation is still a subset of full Lox and does not yet
-  support method binding, `this`, inheritance, or the later VM stages.
+  support `super`, inheritance, or the later VM stages.
 
 ## Roadmap
 
 Near-term goals:
 
-- continue into the classes and methods chapters
+- continue into the inheritance and `super` chapter work
 - continue expanding parser and interpreter test coverage
 - keep the code structure aligned with the book while documenting Rust-specific
   implementation choices
 
 Longer-term goals:
 
-- keep extending class support through methods, `this`, and inheritance
+- keep extending class support through inheritance and `super`
 - explore the later bytecode VM stages
 
 ## References
