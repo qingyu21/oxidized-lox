@@ -11,6 +11,9 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
     -> Result<Value, RuntimeError>;
 }
 
+// TODO(ch12-challenge1): Static methods are not implemented yet. The larger
+// metaclass-style solution would need class objects to participate in property
+// lookup the way instances do, instead of only carrying an instance-method table.
 #[derive(Debug, Clone)]
 pub(crate) struct LoxClass {
     name: String,
