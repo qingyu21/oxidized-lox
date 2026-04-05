@@ -74,6 +74,9 @@ impl LoxInstance {
         }
     }
 
+    // TODO(ch12-challenge2): Getter methods are not implemented yet. Property
+    // reads currently return stored fields or bound methods, but they do not
+    // execute user-defined getter bodies declared without parameter lists.
     pub(crate) fn get(self: &Rc<Self>, name: &Token) -> Result<Value, RuntimeError> {
         if let Some(value) = self.fields.borrow().get(&name.lexeme).cloned() {
             Ok(value)
