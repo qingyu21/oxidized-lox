@@ -54,8 +54,8 @@ impl LoxClass {
         Self { name, methods }
     }
 
-    pub(crate) fn instantiate(class: Rc<LoxClass>) -> Value {
-        Value::Instance(Rc::new(LoxInstance::new(class)))
+    fn instantiate(class: Rc<LoxClass>) -> Rc<LoxInstance> {
+        Rc::new(LoxInstance::new(class))
     }
 
     pub(crate) fn find_method(&self, name: &str) -> Option<Rc<LoxFunction>> {
@@ -91,15 +91,24 @@ impl LoxInstance {
 
 impl LoxCallable for LoxClass {
     fn arity(&self) -> usize {
-        0
+        self.find_method("init")
+            .map_or(0, |initializer| initializer.arity())
     }
 
     fn call(
         &self,
-        _interpreter: &Interpreter,
-        _arguments: Vec<Value>,
+        interpreter: &Interpreter,
+        arguments: Vec<Value>,
     ) -> Result<Value, RuntimeError> {
-        Ok(Self::instantiate(Rc::new(self.clone())))
+        let instance = Self::instantiate(Rc::new(self.clone()));
+
+        if let Some(initializer) = self.find_method("init") {
+            initializer
+                .bind(instance.clone())
+                .call(interpreter, arguments)?;
+        }
+
+        Ok(Value::Instance(instance))
     }
 }
 

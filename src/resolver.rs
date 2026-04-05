@@ -31,6 +31,14 @@ enum ClassType {
     Class,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FunctionType {
+    None,
+    Function,
+    Method,
+    Initializer,
+}
+
 #[derive(Debug, Clone)]
 struct BindingInfo {
     token: Token,
@@ -47,6 +55,7 @@ pub(crate) struct Resolver<'a> {
     // Surrounding class context for the current resolver walk. This lets us
     // reject `this` outside classes and restore outer state for nested classes.
     current_class: ClassType,
+    current_function: FunctionType,
 }
 
 impl<'a> Resolver<'a> {
@@ -55,6 +64,7 @@ impl<'a> Resolver<'a> {
             interpreter,
             scopes: Vec::new(),
             current_class: ClassType::None,
+            current_function: FunctionType::None,
         }
     }
 
@@ -101,12 +111,22 @@ impl<'a> Resolver<'a> {
                 // returning from the outer resolver method.
                 let result = (|| {
                     for method in methods {
-                        let Stmt::Function { params, body, .. } = method else {
+                        let Stmt::Function {
+                            name: method_name,
+                            params,
+                            body,
+                        } = method
+                        else {
                             unreachable!(
                                 "parser should only store function-shaped methods in classes"
                             );
                         };
-                        self.resolve_function(params, body)?;
+                        let function_type = if method_name.lexeme == "init" {
+                            FunctionType::Initializer
+                        } else {
+                            FunctionType::Method
+                        };
+                        self.resolve_function(params, body, function_type)?;
                     }
                     Ok(())
                 })();
@@ -119,7 +139,7 @@ impl<'a> Resolver<'a> {
             Stmt::Function { name, params, body } => {
                 self.declare(name, BindingKind::Function)?;
                 self.define(name);
-                self.resolve_function(params, body)
+                self.resolve_function(params, body, FunctionType::Function)
             }
             Stmt::If {
                 condition,
@@ -134,8 +154,13 @@ impl<'a> Resolver<'a> {
                 Ok(())
             }
             Stmt::Print { expression } => self.resolve_expression_node(expression),
-            Stmt::Return { value, .. } => {
+            Stmt::Return { keyword, value } => {
                 if let Some(value) = value {
+                    if self.current_function == FunctionType::Initializer {
+                        return Err(
+                            self.error(keyword, "Can't return a value from an initializer.")
+                        );
+                    }
                     self.resolve_expression_node(value)?;
                 }
                 Ok(())
@@ -226,16 +251,28 @@ impl<'a> Resolver<'a> {
 
     // Resolve a function body in its own scope, with each parameter behaving
     // like a local variable declared at the start of that body.
-    fn resolve_function(&mut self, params: &[Token], body: &[Stmt]) -> Result<(), ResolveError> {
+    fn resolve_function(
+        &mut self,
+        params: &[Token],
+        body: &[Stmt],
+        function_type: FunctionType,
+    ) -> Result<(), ResolveError> {
+        let enclosing_function = self.current_function;
+        self.current_function = function_type;
         self.begin_scope();
 
-        for param in params {
-            self.declare(param, BindingKind::Parameter)?;
-            self.define(param);
-        }
+        let result = (|| {
+            for param in params {
+                self.declare(param, BindingKind::Parameter)?;
+                self.define(param);
+            }
 
-        let result = self.resolve_statements(body);
-        self.finish_scope(result)
+            self.resolve_statements(body)
+        })();
+
+        let result = self.finish_scope(result);
+        self.current_function = enclosing_function;
+        result
     }
 
     fn define_this(&mut self, line: u32) {

@@ -8,7 +8,7 @@ use crate::{
     environment::{Environment, EnvironmentRef},
     runtime::{LoxCallable, LoxInstance, RuntimeError, Value},
     stmt::Stmt,
-    token::Token,
+    token::{Token, TokenType},
 };
 
 use super::{ControlFlow, Interpreter};
@@ -23,6 +23,7 @@ pub(crate) struct LoxFunction {
     params: Vec<Token>,
     body: Vec<Stmt>,
     closure: EnvironmentRef,
+    is_initializer: bool,
 }
 
 pub(super) fn install_native_globals(globals: &EnvironmentRef) {
@@ -37,7 +38,7 @@ pub(super) fn make_function(
     body: &[Stmt],
     closure: EnvironmentRef,
 ) -> Value {
-    Value::Callable(make_function_ref(name, params, body, closure))
+    Value::Callable(make_function_ref(name, params, body, closure, false))
 }
 
 pub(super) fn make_function_ref(
@@ -45,22 +46,31 @@ pub(super) fn make_function_ref(
     params: &[Token],
     body: &[Stmt],
     closure: EnvironmentRef,
+    is_initializer: bool,
 ) -> Rc<LoxFunction> {
     Rc::new(LoxFunction::new(
         name.clone(),
         params.to_vec(),
         body.to_vec(),
         closure,
+        is_initializer,
     ))
 }
 
 impl LoxFunction {
-    fn new(name: Token, params: Vec<Token>, body: Vec<Stmt>, closure: EnvironmentRef) -> Self {
+    fn new(
+        name: Token,
+        params: Vec<Token>,
+        body: Vec<Stmt>,
+        closure: EnvironmentRef,
+        is_initializer: bool,
+    ) -> Self {
         Self {
             name,
             params,
             body,
             closure,
+            is_initializer,
         }
     }
 
@@ -75,7 +85,14 @@ impl LoxFunction {
             self.params.clone(),
             self.body.clone(),
             environment,
+            self.is_initializer,
         ))
+    }
+
+    fn bound_this(&self) -> Value {
+        let keyword = Token::new(TokenType::This, "this".to_string(), None, self.name.line);
+        Environment::get_at(&self.closure, 0, &keyword)
+            .expect("initializer methods should always have a bound 'this'")
     }
 }
 
@@ -128,9 +145,26 @@ impl LoxCallable for LoxFunction {
         // Run the function body in that call environment. An explicit
         // `return` carries its value back out through the control-flow signal;
         // falling off the end of the body still produces `nil`.
+        //
+        // Initializers are the one exception: whether they fall off the end or
+        // execute `return;`, the call still evaluates to the bound instance
+        // (`this`). The resolver rejects `return value;` in init methods, and
+        // this runtime branch preserves the same rule as a final backstop.
         match interpreter.execute_block(&self.body, environment)? {
-            ControlFlow::None => Ok(Value::Nil),
-            ControlFlow::Return(value) => Ok(value),
+            ControlFlow::None => {
+                if self.is_initializer {
+                    Ok(self.bound_this())
+                } else {
+                    Ok(Value::Nil)
+                }
+            }
+            ControlFlow::Return(value) => {
+                if self.is_initializer {
+                    Ok(self.bound_this())
+                } else {
+                    Ok(value)
+                }
+            }
             ControlFlow::Break => {
                 unreachable!("parser should reject break statements that escape a function body");
             }

@@ -398,6 +398,16 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_returning_a_value_from_an_initializer_as_a_resolution_error() {
+        with_clean_error_state(|| {
+            run("class Foo { init() { return \"something else\"; } }");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn run_marks_unused_local_variable_as_a_resolution_error() {
         with_clean_error_state(|| {
             run("{ var beverage = \"tea\"; }");

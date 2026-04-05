@@ -119,7 +119,13 @@ impl Interpreter {
                 unreachable!("parser should only store function-shaped methods in classes");
             };
 
-            let function = make_function_ref(method_name, params, body, closure.clone());
+            let function = make_function_ref(
+                method_name,
+                params,
+                body,
+                closure.clone(),
+                method_name.lexeme == "init",
+            );
             method_table.insert(method_name.lexeme.clone(), function);
         }
 
