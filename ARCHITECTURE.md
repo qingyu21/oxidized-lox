@@ -171,7 +171,7 @@ flowchart TD
 
 - Runtime value produced by evaluation.
 - Current variants are `String`, `Number`, `Bool`, `Nil`, callable values, and
-  first-draft class objects.
+  first-draft class and instance objects.
 - This is the value type stored in environments and returned by expression
   evaluation.
 - Lives in `src/runtime.rs` so environments and interpreter submodules can
@@ -194,8 +194,15 @@ flowchart TD
 `LoxClass`
 
 - Minimal runtime object created when a `class` declaration executes.
-- Currently stores only the class name; method lookup, instances, `this`, and
-  inheritance are left for later class chapters.
+- Currently stores only the class name, but it is now callable and creates
+  first-draft instances.
+- Method lookup, fields, `this`, and inheritance are left for later class
+  chapters.
+
+`LoxInstance`
+
+- Minimal runtime object created by calling a `LoxClass`.
+- Currently stores only its class reference for display purposes.
 
 `RuntimeError`
 

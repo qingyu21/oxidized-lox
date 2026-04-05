@@ -1,7 +1,7 @@
 use crate::{
     environment::Environment,
     expr::Expr,
-    runtime::{RuntimeError, Value},
+    runtime::{LoxCallable, LoxClass, RuntimeError, Value},
     token::{Token, TokenType},
 };
 
@@ -90,31 +90,43 @@ impl Interpreter {
         // Convert the runtime value into the callable interface or report a
         // user-facing runtime error instead of crashing on a host-language
         // type mismatch.
-        let callable = match callee {
-            Value::Callable(callable) => callable,
-            _ => {
-                return Err(RuntimeError::new(
-                    paren.clone(),
-                    "Can only call functions and classes.",
-                ));
+        match callee {
+            Value::Callable(callable) => {
+                // Enforce arity in one shared place so every callable kind gets the
+                // same argument-count validation.
+                if arguments.len() != callable.arity() {
+                    return Err(RuntimeError::new(
+                        paren.clone(),
+                        format!(
+                            "Expected {} arguments but got {}.",
+                            callable.arity(),
+                            arguments.len()
+                        ),
+                    ));
+                }
+
+                // Hand off to the concrete callable implementation.
+                callable.call(self, arguments)
             }
-        };
+            Value::Class(class) => {
+                if arguments.len() != class.arity() {
+                    return Err(RuntimeError::new(
+                        paren.clone(),
+                        format!(
+                            "Expected {} arguments but got {}.",
+                            class.arity(),
+                            arguments.len()
+                        ),
+                    ));
+                }
 
-        // Enforce arity in one shared place so every callable kind gets the
-        // same argument-count validation.
-        if arguments.len() != callable.arity() {
-            return Err(RuntimeError::new(
+                Ok(LoxClass::instantiate(class))
+            }
+            _ => Err(RuntimeError::new(
                 paren.clone(),
-                format!(
-                    "Expected {} arguments but got {}.",
-                    callable.arity(),
-                    arguments.len()
-                ),
-            ));
+                "Can only call functions and classes.",
+            )),
         }
-
-        // Hand off to the concrete callable implementation.
-        callable.call(self, arguments)
     }
 
     fn evaluate_logical(

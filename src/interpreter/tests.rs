@@ -170,6 +170,31 @@ fn displays_class_values_with_their_name() {
 }
 
 #[test]
+fn calling_a_class_creates_an_instance() {
+    let value = interpret_script_result("class Bagel {} Bagel()");
+
+    assert_eq!(format!("{value}"), "Bagel instance");
+}
+
+#[test]
+fn class_calls_have_zero_arity_before_initializers_exist() {
+    let statements = parse_statements("class Bagel {} Bagel(1);");
+    let interpreter = Interpreter::new();
+    resolve_statements(&interpreter, &statements);
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let error = match &statements[1] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect_err("class calls should reject arguments before constructors exist"),
+        _ => panic!("expected a class call expression statement"),
+    };
+
+    assert_eq!(error.message, "Expected 0 arguments but got 1.");
+}
+
+#[test]
 fn returns_explicit_values_from_user_defined_functions() {
     assert_eq!(
         interpret_script_result("fun identity(value) { return value; } identity(42)"),
