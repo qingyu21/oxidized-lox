@@ -91,13 +91,13 @@ REPL notes:
 Run the test suite:
 
 ```bash
-cargo test
+cargo test -- --test-threads=1
 ```
 
-Run lints:
+Run lints with warnings treated as errors:
 
 ```bash
-cargo clippy
+cargo clippy -- -D warnings
 ```
 
 Format the codebase:
