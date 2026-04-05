@@ -32,8 +32,10 @@ impl Parser {
             let equals = self.previous().clone();
             let value = self.assignment()?;
 
-            if let Expr::Variable { name } = expr {
-                return Ok(Expr::assign(name, value));
+            match expr {
+                Expr::Variable { name } => return Ok(Expr::assign(name, value)),
+                Expr::Get { object, name } => return Ok(Expr::set(*object, name, value)),
+                _ => {}
             }
 
             let _ = self.error(&equals, "Invalid assignment target.");
@@ -168,13 +170,18 @@ impl Parser {
         self.call()
     }
 
-    // call -> primary ( "(" arguments? ")" )* ;
+    // call -> primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
     fn call(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.primary()?;
 
         loop {
             if self.match_token(&[TokenType::LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_token(&[TokenType::Dot]) {
+                let name = self
+                    .consume(TokenType::Identifier, "Expect property name after '.'.")?
+                    .clone();
+                expr = Expr::get(expr, name);
             } else {
                 break;
             }

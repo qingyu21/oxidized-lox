@@ -25,6 +25,10 @@ pub enum Expr {
         paren: Token,
         arguments: Vec<Expr>,
     },
+    Get {
+        object: Box<Expr>,
+        name: Token,
+    },
     Grouping {
         expression: Box<Expr>,
     },
@@ -35,6 +39,11 @@ pub enum Expr {
         left: Box<Expr>,
         operator: Token,
         right: Box<Expr>,
+    },
+    Set {
+        object: Box<Expr>,
+        name: Token,
+        value: Box<Expr>,
     },
     Variable {
         name: Token,
@@ -80,6 +89,14 @@ impl Expr {
         }
     }
 
+    // Construct a property read expression like `object.name`.
+    pub fn get(object: Expr, name: Token) -> Self {
+        Expr::Get {
+            object: Box::new(object),
+            name,
+        }
+    }
+
     // Construct a grouping expression that preserves explicit parentheses.
     pub fn grouping(expression: Expr) -> Self {
         Expr::Grouping {
@@ -98,6 +115,15 @@ impl Expr {
             left: Box::new(left),
             operator,
             right: Box::new(right),
+        }
+    }
+
+    // Construct a property assignment like `object.name = value`.
+    pub fn set(object: Expr, name: Token, value: Expr) -> Self {
+        Expr::Set {
+            object: Box::new(object),
+            name,
+            value: Box::new(value),
         }
     }
 

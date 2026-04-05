@@ -151,7 +151,8 @@ flowchart TD
 
 - Expression AST nodes.
 - Represents syntax that evaluates to a value: literals, variables, unary and
-  binary operators, assignment, logical operators, `?:`, and call expressions.
+  binary operators, assignment, logical operators, `?:`, call expressions, and
+  instance property get/set expressions.
 - Call expressions already evaluate through the interpreter's callable
   abstraction, which will later be reused for user-defined functions and
   classes.
@@ -196,13 +197,15 @@ flowchart TD
 - Minimal runtime object created when a `class` declaration executes.
 - Currently stores only the class name, but it is now callable and creates
   first-draft instances.
-- Method lookup, fields, `this`, and inheritance are left for later class
-  chapters.
+- Method lookup, `this`, and inheritance are left for later class chapters.
 
 `LoxInstance`
 
-- Minimal runtime object created by calling a `LoxClass`.
-- Currently stores only its class reference for display purposes.
+- Runtime object created by calling a `LoxClass`.
+- Stores its class reference plus an open `HashMap<String, Value>` of fields,
+  matching the book's "instances are bags of state" model.
+- Property reads and writes are handled dynamically at runtime rather than by
+  the resolver.
 
 `RuntimeError`
 
@@ -235,6 +238,8 @@ flowchart TD
   language.
 - Evaluates call expressions by first evaluating the callee and argument
   expressions, then dispatching through `LoxCallable`.
+- Evaluates property get/set expressions by first evaluating the receiver
+  expression, then operating on `LoxInstance` field storage.
 - Seeds the global environment with the native `clock()` function.
 - Turns function declarations into `LoxFunction` runtime values and binds them
   into the current environment.

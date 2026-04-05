@@ -16,6 +16,7 @@ impl Interpreter {
                 paren,
                 arguments,
             } => self.evaluate_call(callee, paren, arguments),
+            Expr::Get { object, name } => self.evaluate_get(object, name),
             // TODO(perf): Cloning string literals here allocates a fresh
             // runtime string. A shared string representation could avoid
             // copying literal text into `Value`.
@@ -25,6 +26,11 @@ impl Interpreter {
                 operator,
                 right,
             } => self.evaluate_logical(left, operator, right),
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => self.evaluate_set(object, name, value),
             Expr::Variable { name } => self.look_up_variable(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Conditional {
@@ -54,6 +60,39 @@ impl Interpreter {
                 .assign(name, value.clone())?,
         }
         Ok(value)
+    }
+
+    fn evaluate_get(&self, object_expr: &Expr, name: &Token) -> Result<Value, RuntimeError> {
+        let object = self.evaluate(object_expr)?;
+
+        if let Value::Instance(instance) = object {
+            instance.get(name)
+        } else {
+            Err(RuntimeError::new(
+                name.clone(),
+                "Only instances have properties.",
+            ))
+        }
+    }
+
+    fn evaluate_set(
+        &self,
+        object_expr: &Expr,
+        name: &Token,
+        value_expr: &Expr,
+    ) -> Result<Value, RuntimeError> {
+        let object = self.evaluate(object_expr)?;
+
+        if let Value::Instance(instance) = object {
+            let value = self.evaluate(value_expr)?;
+            instance.set(name, value.clone());
+            Ok(value)
+        } else {
+            Err(RuntimeError::new(
+                name.clone(),
+                "Only instances have fields.",
+            ))
+        }
     }
 
     // Read a variable using the resolver's precomputed lexical distance when

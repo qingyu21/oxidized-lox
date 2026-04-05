@@ -135,11 +135,16 @@ impl<'a> Resolver<'a> {
                 }
                 Ok(())
             }
+            Expr::Get { object, .. } => self.resolve_expression_node(object),
             Expr::Grouping { expression } => self.resolve_expression_node(expression),
             Expr::Literal { .. } => Ok(()),
             Expr::Logical { left, right, .. } => {
                 self.resolve_expression_node(left)?;
                 self.resolve_expression_node(right)
+            }
+            Expr::Set { object, value, .. } => {
+                self.resolve_expression_node(value)?;
+                self.resolve_expression_node(object)
             }
             Expr::Variable { name } => {
                 if self

@@ -1,4 +1,4 @@
-use std::{fmt, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 use crate::{
     interpreter::Interpreter,
@@ -19,6 +19,7 @@ pub(crate) struct LoxClass {
 #[derive(Debug, Clone)]
 pub(crate) struct LoxInstance {
     klass: Rc<LoxClass>,
+    fields: RefCell<HashMap<String, Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +60,25 @@ impl LoxClass {
 
 impl LoxInstance {
     fn new(klass: Rc<LoxClass>) -> Self {
-        Self { klass }
+        Self {
+            klass,
+            fields: RefCell::new(HashMap::new()),
+        }
+    }
+
+    pub(crate) fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
+        if let Some(value) = self.fields.borrow().get(&name.lexeme).cloned() {
+            Ok(value)
+        } else {
+            Err(RuntimeError::new(
+                name.clone(),
+                format!("Undefined property '{}'.", name.lexeme),
+            ))
+        }
+    }
+
+    pub(crate) fn set(&self, name: &Token, value: Value) {
+        self.fields.borrow_mut().insert(name.lexeme.clone(), value);
     }
 }
 

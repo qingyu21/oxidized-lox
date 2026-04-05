@@ -195,6 +195,51 @@ fn class_calls_have_zero_arity_before_initializers_exist() {
 }
 
 #[test]
+fn instances_store_and_read_back_fields() {
+    assert_eq!(
+        interpret_script_result(
+            "class Bagel {}
+             var bagel = Bagel();
+             bagel.flavor = \"sesame\";
+             bagel.flavor"
+        ),
+        Value::String("sesame".to_string())
+    );
+}
+
+#[test]
+fn reports_runtime_error_for_missing_instance_property() {
+    let statements = parse_statements("class Bagel {} Bagel().flavor;");
+    let interpreter = Interpreter::new();
+    resolve_statements(&interpreter, &statements);
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let error = match &statements[1] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect_err("reading a missing property should fail"),
+        _ => panic!("expected a property access expression statement"),
+    };
+
+    assert_eq!(error.message, "Undefined property 'flavor'.");
+}
+
+#[test]
+fn reports_runtime_error_for_property_access_on_non_instance() {
+    let error =
+        evaluate_result("clock.flavor").expect_err("only instances should support properties");
+    assert_eq!(error.message, "Only instances have properties.");
+}
+
+#[test]
+fn reports_runtime_error_for_property_assignment_on_non_instance() {
+    let error = evaluate_result("clock.flavor = \"x\"")
+        .expect_err("only instances should support field assignment");
+    assert_eq!(error.message, "Only instances have fields.");
+}
+
+#[test]
 fn returns_explicit_values_from_user_defined_functions() {
     assert_eq!(
         interpret_script_result("fun identity(value) { return value; } identity(42)"),

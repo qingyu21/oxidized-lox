@@ -110,6 +110,43 @@ fn parses_zero_argument_and_chained_calls() {
 }
 
 #[test]
+fn parses_property_get_after_call() {
+    let statements = parse_statements("Bagel().flavor;");
+
+    match statements.as_slice() {
+        [Stmt::Expression { expression }] => match expression {
+            crate::expr::Expr::Get { object, name } => {
+                assert_eq!(name.lexeme, "flavor");
+                assert_eq!(AstPrinter.print(object), "(call Bagel)");
+            }
+            _ => panic!("expected a property get expression"),
+        },
+        _ => panic!("expected a single expression statement"),
+    }
+}
+
+#[test]
+fn parses_property_set_assignment() {
+    let statements = parse_statements("bagel.flavor = \"sesame\";");
+
+    match statements.as_slice() {
+        [Stmt::Expression { expression }] => match expression {
+            crate::expr::Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                assert_eq!(name.lexeme, "flavor");
+                assert_eq!(AstPrinter.print(object), "bagel");
+                assert_eq!(AstPrinter.print(value), "sesame");
+            }
+            _ => panic!("expected a property set expression"),
+        },
+        _ => panic!("expected a single expression statement"),
+    }
+}
+
+#[test]
 fn parses_call_with_higher_precedence_than_unary() {
     assert_eq!(parse_expression_to_string("-clock();"), "(- (call clock))");
 }

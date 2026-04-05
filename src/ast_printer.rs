@@ -17,6 +17,7 @@ impl AstPrinter {
                 "call",
                 std::iter::once(callee.as_ref()).chain(arguments.iter()),
             ),
+            Expr::Get { object, name } => format!("(. {} {})", self.print(object), name.lexeme),
             Expr::Grouping { expression } => self.parenthesize("group", [expression.as_ref()]),
             Expr::Literal { value } => value.to_string(),
             Expr::Logical {
@@ -24,6 +25,18 @@ impl AstPrinter {
                 operator,
                 right,
             } => self.parenthesize(&operator.lexeme, [left.as_ref(), right.as_ref()]),
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                format!(
+                    "(set {} {} {})",
+                    self.print(object),
+                    name.lexeme,
+                    self.print(value)
+                )
+            }
             Expr::Conditional {
                 condition,
                 then_branch,

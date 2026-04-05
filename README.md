@@ -43,14 +43,14 @@ Implemented today:
 - a resolver pass for lexical scope binding and static name checks such as
   local self-initializer errors, duplicate local declarations, and unused
   local variables
-- class declarations plus callable class objects that create first-draft
-  instances
+- class declarations, callable class objects, and first-draft instances with
+  open fields plus property get/set
 - a tree-walk interpreter with a small REPL
 - one native callable, `clock()`
 
 Later book stages still missing:
 
-- instance fields, property access, method lookup/binding, `this`, and `super`
+- method lookup/binding, `this`, and `super`
 - inheritance
 - bytecode VM stages from later in the book
 
@@ -110,7 +110,7 @@ cargo fmt
 - `src/scanner.rs`: turns source text into `Vec<Token>`
 - `src/parser.rs`: parser entry points, declarations, token helpers, and error recovery
 - `src/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, `break`, and `return`
-- `src/parser/expressions.rs`: expression parsing and precedence handling, including call syntax
+- `src/parser/expressions.rs`: expression parsing and precedence handling, including call and property access syntax
 - `src/expr.rs`: expression AST definitions
 - `src/stmt.rs`: statement AST definitions, including function declarations and `return`
 - `src/resolver.rs`: static scope resolution and lexical binding analysis
@@ -137,7 +137,7 @@ cargo fmt
 - The REPL evaluates one input line at a time and does not yet buffer
   incomplete multi-line statements.
 - The language implementation is still a subset of full Lox and does not yet
-  support classes or the later VM stages.
+  support method binding, `this`, inheritance, or the later VM stages.
 
 ## Roadmap
 
@@ -150,8 +150,7 @@ Near-term goals:
 
 Longer-term goals:
 
-- keep extending function support through methods and classes
-- add classes and methods
+- keep extending class support through methods, `this`, and inheritance
 - explore the later bytecode VM stages
 
 ## References
