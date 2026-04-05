@@ -221,7 +221,7 @@ impl Parser {
         Ok(Expr::call(callee, paren, arguments))
     }
 
-    // primary -> "true" | "false" | "nil" | NUMBER | STRING | "(" expression ")" | IDENTIFIER ;
+    // primary -> "true" | "false" | "nil" | "this" | NUMBER | STRING | "(" expression ")" | IDENTIFIER ;
     pub(super) fn primary(&mut self) -> Result<Expr, ParseError> {
         if let Some(right_operand) = self.missing_left_operand_rule() {
             return self.missing_left_operand(right_operand);
@@ -256,6 +256,10 @@ impl Parser {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::grouping(expr));
+        }
+
+        if self.match_token(&[TokenType::This]) {
+            return Ok(Expr::this(self.previous().clone()));
         }
 
         if self.match_token(&[TokenType::Identifier]) {

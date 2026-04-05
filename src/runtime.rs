@@ -71,11 +71,11 @@ impl LoxInstance {
         }
     }
 
-    pub(crate) fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
+    pub(crate) fn get(self: &Rc<Self>, name: &Token) -> Result<Value, RuntimeError> {
         if let Some(value) = self.fields.borrow().get(&name.lexeme).cloned() {
             Ok(value)
         } else if let Some(method) = self.klass.find_method(&name.lexeme) {
-            Ok(Value::Callable(method))
+            Ok(Value::Callable(method.bind(self.clone())))
         } else {
             Err(RuntimeError::new(
                 name.clone(),

@@ -198,7 +198,7 @@ flowchart TD
 - Stores the class name plus a method table mapping method names to
   user-defined callable objects.
 - Is still callable itself and creates first-draft instances.
-- Bound methods, `this`, and inheritance are left for later class chapters.
+- Inheritance and `super` are left for later class chapters.
 
 `LoxInstance`
 
@@ -206,7 +206,8 @@ flowchart TD
 - Stores its class reference plus an open `HashMap<String, Value>` of fields,
   matching the book's "instances are bags of state" model.
 - Property reads first check instance fields and then fall back to class
-  methods, while writes always target instance fields.
+  methods, binding `this` to the original receiver when a method is retrieved,
+  while writes always target instance fields.
 
 `RuntimeError`
 

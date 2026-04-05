@@ -45,6 +45,9 @@ pub enum Expr {
         name: Token,
         value: Box<Expr>,
     },
+    This {
+        keyword: Token,
+    },
     Variable {
         name: Token,
     },
@@ -125,6 +128,11 @@ impl Expr {
             name,
             value: Box::new(value),
         }
+    }
+
+    // Construct a `this` expression used inside methods.
+    pub fn this(keyword: Token) -> Self {
+        Expr::This { keyword }
     }
 
     // Construct a variable expression that refers to a named binding.

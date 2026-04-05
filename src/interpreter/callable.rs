@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     environment::{Environment, EnvironmentRef},
-    runtime::{LoxCallable, RuntimeError, Value},
+    runtime::{LoxCallable, LoxInstance, RuntimeError, Value},
     stmt::Stmt,
     token::Token,
 };
@@ -62,6 +62,20 @@ impl LoxFunction {
             body,
             closure,
         }
+    }
+
+    pub(crate) fn bind(&self, instance: Rc<LoxInstance>) -> Rc<LoxFunction> {
+        let environment = Environment::new_enclosed_ref(self.closure.clone());
+        environment
+            .borrow_mut()
+            .define("this".to_string(), Value::Instance(instance));
+
+        Rc::new(LoxFunction::new(
+            self.name.clone(),
+            self.params.clone(),
+            self.body.clone(),
+            environment,
+        ))
     }
 }
 

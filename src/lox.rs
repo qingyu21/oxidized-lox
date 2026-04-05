@@ -378,6 +378,26 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_this_outside_a_class_as_a_resolution_error() {
+        with_clean_error_state(|| {
+            run("print this;");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_marks_this_inside_a_non_method_function_as_a_resolution_error() {
+        with_clean_error_state(|| {
+            run("fun notAMethod() { print this; }");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn run_marks_unused_local_variable_as_a_resolution_error() {
         with_clean_error_state(|| {
             run("{ var beverage = \"tea\"; }");

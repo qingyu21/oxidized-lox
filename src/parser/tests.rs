@@ -147,6 +147,11 @@ fn parses_property_set_assignment() {
 }
 
 #[test]
+fn parses_this_expression_statement() {
+    assert_eq!(parse_expression_to_string("this;"), "this");
+}
+
+#[test]
 fn parses_call_with_higher_precedence_than_unary() {
     assert_eq!(parse_expression_to_string("-clock();"), "(- (call clock))");
 }

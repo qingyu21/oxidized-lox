@@ -211,6 +211,24 @@ fn methods_can_be_called_through_instances() {
 }
 
 #[test]
+fn methods_can_access_instance_fields_through_this() {
+    assert_eq!(
+        interpret_script_result(
+            "class Cake {
+               taste() {
+                 return this.flavor;
+               }
+             }
+
+             var cake = Cake();
+             cake.flavor = \"German chocolate\";
+             cake.taste()"
+        ),
+        Value::String("German chocolate".to_string())
+    );
+}
+
+#[test]
 fn instance_fields_shadow_methods_and_can_store_functions() {
     assert_eq!(
         interpret_script_result(
@@ -233,19 +251,45 @@ fn instance_fields_shadow_methods_and_can_store_functions() {
 }
 
 #[test]
-fn grabbed_methods_are_plain_callable_values_before_this_is_added() {
+fn grabbed_methods_remember_the_instance_they_came_from() {
     assert_eq!(
         interpret_script_result(
-            "class Bacon {
-               eat() {
-                 return \"Crunch crunch crunch!\";
+            "class Person {
+               sayName() {
+                 return this.name;
                }
              }
 
-             var method = Bacon().eat;
+             var jane = Person();
+             jane.name = \"Jane\";
+
+             var method = jane.sayName;
              method()"
         ),
-        Value::String("Crunch crunch crunch!".to_string())
+        Value::String("Jane".to_string())
+    );
+}
+
+#[test]
+fn callbacks_returned_from_methods_keep_access_to_this() {
+    assert_eq!(
+        interpret_script_result(
+            "class Thing {
+               getCallback() {
+                 fun localFunction() {
+                   return this.name;
+                 }
+
+                 return localFunction;
+               }
+             }
+
+             var thing = Thing();
+             thing.name = \"widget\";
+             var callback = thing.getCallback();
+             callback()"
+        ),
+        Value::String("widget".to_string())
     );
 }
 

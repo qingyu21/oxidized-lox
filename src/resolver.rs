@@ -5,7 +5,7 @@ use crate::{
     interpreter::{Interpreter, ResolvedBinding},
     lox,
     stmt::Stmt,
-    token::Token,
+    token::{Token, TokenType},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -16,6 +16,18 @@ enum BindingKind {
     Variable,
     Parameter,
     Function,
+    Class,
+    This,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// Resolver-only state that tracks whether we are currently walking inside a
+// class declaration. This exists to validate `this`, not to model runtime
+// class objects.
+enum ClassType {
+    // We are not currently resolving any class body.
+    None,
+    // We are resolving a class body, so methods may refer to `this`.
     Class,
 }
 
@@ -32,6 +44,9 @@ pub(crate) struct Resolver<'a> {
     // Stack of lexical scopes being resolved. Each binding tracks whether it is
     // fully defined yet and whether it was ever read before the scope ended.
     scopes: Vec<HashMap<String, BindingInfo>>,
+    // Surrounding class context for the current resolver walk. This lets us
+    // reject `this` outside classes and restore outer state for nested classes.
+    current_class: ClassType,
 }
 
 impl<'a> Resolver<'a> {
@@ -39,6 +54,7 @@ impl<'a> Resolver<'a> {
         Self {
             interpreter,
             scopes: Vec::new(),
+            current_class: ClassType::None,
         }
     }
 
@@ -70,17 +86,34 @@ impl<'a> Resolver<'a> {
                 // Class names behave like declarations in the surrounding
                 // scope. Class methods then reuse the existing function-body
                 // resolver so their local bindings are prepared before run time.
+                let enclosing_class = self.current_class;
+                self.current_class = ClassType::Class;
+
                 self.declare(name, BindingKind::Class)?;
                 self.define(name);
 
-                for method in methods {
-                    let Stmt::Function { params, body, .. } = method else {
-                        unreachable!("parser should only store function-shaped methods in classes");
-                    };
-                    self.resolve_function(params, body)?;
-                }
+                self.begin_scope();
+                self.define_this(name.line);
 
-                Ok(())
+                // Use an immediately-invoked closure here so `?` stops only the
+                // method-resolution pass. That lets us always unwind the
+                // implicit `this` scope and restore `current_class` before
+                // returning from the outer resolver method.
+                let result = (|| {
+                    for method in methods {
+                        let Stmt::Function { params, body, .. } = method else {
+                            unreachable!(
+                                "parser should only store function-shaped methods in classes"
+                            );
+                        };
+                        self.resolve_function(params, body)?;
+                    }
+                    Ok(())
+                })();
+
+                let result = self.finish_scope(result);
+                self.current_class = enclosing_class;
+                result
             }
             Stmt::Expression { expression } => self.resolve_expression_node(expression),
             Stmt::Function { name, params, body } => {
@@ -155,6 +188,14 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression_node(value)?;
                 self.resolve_expression_node(object)
             }
+            Expr::This { keyword } => {
+                if self.current_class == ClassType::None {
+                    return Err(self.error(keyword, "Can't use 'this' outside of a class."));
+                }
+
+                self.resolve_local(keyword, true);
+                Ok(())
+            }
             Expr::Variable { name } => {
                 if self
                     .scopes
@@ -195,6 +236,23 @@ impl<'a> Resolver<'a> {
 
         let result = self.resolve_statements(body);
         self.finish_scope(result)
+    }
+
+    fn define_this(&mut self, line: u32) {
+        let Some(scope) = self.scopes.last_mut() else {
+            return;
+        };
+
+        let token = Token::new(TokenType::This, "this".to_string(), None, line);
+        scope.insert(
+            "this".to_string(),
+            BindingInfo {
+                token,
+                kind: BindingKind::This,
+                defined: true,
+                used: false,
+            },
+        );
     }
 
     // Push a fresh lexical scope for a block or function body.

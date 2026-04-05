@@ -38,6 +38,7 @@ impl Interpreter {
                 then_branch,
                 else_branch,
             } => self.evaluate_conditional(condition, then_branch, else_branch),
+            Expr::This { keyword } => self.look_up_variable(keyword),
             Expr::Unary { operator, right } => self.evaluate_unary(operator, right),
             Expr::Binary {
                 left,
