@@ -154,6 +154,61 @@ fn parses_function_declaration_with_parameters_and_body() {
 }
 
 #[test]
+fn parses_class_declaration_with_methods() {
+    let statements = parse_statements(
+        "class Breakfast { cook() { print \"Eggs\"; } serve(who) { print who; } }",
+    );
+
+    match statements.as_slice() {
+        [Stmt::Class { name, methods }] => {
+            assert_eq!(name.lexeme, "Breakfast");
+
+            match methods.as_slice() {
+                [
+                    Stmt::Function {
+                        name: cook_name,
+                        params: cook_params,
+                        body: cook_body,
+                    },
+                    Stmt::Function {
+                        name: serve_name,
+                        params: serve_params,
+                        body: serve_body,
+                    },
+                ] => {
+                    assert_eq!(cook_name.lexeme, "cook");
+                    assert!(cook_params.is_empty());
+                    assert_eq!(serve_name.lexeme, "serve");
+                    assert_eq!(
+                        serve_params
+                            .iter()
+                            .map(|param| param.lexeme.as_str())
+                            .collect::<Vec<_>>(),
+                        vec!["who"]
+                    );
+
+                    match cook_body.as_slice() {
+                        [Stmt::Print { expression }] => {
+                            assert_eq!(AstPrinter.print(expression), "Eggs");
+                        }
+                        _ => panic!("expected a single print statement in the first method body"),
+                    }
+
+                    match serve_body.as_slice() {
+                        [Stmt::Print { expression }] => {
+                            assert_eq!(AstPrinter.print(expression), "who");
+                        }
+                        _ => panic!("expected a single print statement in the second method body"),
+                    }
+                }
+                _ => panic!("expected two function-shaped method declarations"),
+            }
+        }
+        _ => panic!("expected a single class declaration"),
+    }
+}
+
+#[test]
 fn parses_return_statement_with_value_inside_function() {
     let statements = parse_statements("fun identity(value) { return value; }");
 
@@ -620,6 +675,21 @@ fn synchronizes_to_function_declaration_after_error() {
             assert!(body.is_empty());
         }
         _ => panic!("expected the parser to recover to the next function declaration"),
+    }
+}
+
+#[test]
+fn synchronizes_to_class_declaration_after_error() {
+    let tokens = Scanner::new("print 1 + ; class Breakfast {}").scan_tokens();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse();
+
+    match statements.as_slice() {
+        [Stmt::Class { name, methods }] => {
+            assert_eq!(name.lexeme, "Breakfast");
+            assert!(methods.is_empty());
+        }
+        _ => panic!("expected the parser to recover to the next class declaration"),
     }
 }
 

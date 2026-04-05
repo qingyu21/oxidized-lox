@@ -12,12 +12,18 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct LoxClass {
+    name: String,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) enum Value {
     String(String),
     Number(f64),
     Bool(bool),
     Nil,
     Callable(Rc<dyn LoxCallable>),
+    Class(Rc<LoxClass>),
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +41,12 @@ impl RuntimeError {
     }
 }
 
+impl LoxClass {
+    pub(crate) fn new(name: String) -> Self {
+        Self { name }
+    }
+}
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -43,6 +55,7 @@ impl PartialEq for Value {
             (Value::Bool(left), Value::Bool(right)) => left == right,
             (Value::Nil, Value::Nil) => true,
             (Value::Callable(left), Value::Callable(right)) => Rc::ptr_eq(left, right),
+            (Value::Class(left), Value::Class(right)) => Rc::ptr_eq(left, right),
             _ => false,
         }
     }
@@ -67,6 +80,13 @@ impl fmt::Display for Value {
             Value::Bool(value) => write!(f, "{value}"),
             Value::Nil => write!(f, "nil"),
             Value::Callable(callable) => write!(f, "{callable}"),
+            Value::Class(class) => write!(f, "{class}"),
         }
+    }
+}
+
+impl fmt::Display for LoxClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
     }
 }

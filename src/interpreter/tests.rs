@@ -161,6 +161,15 @@ fn displays_user_defined_function_values_with_their_name() {
 }
 
 #[test]
+fn displays_class_values_with_their_name() {
+    let value = interpret_script_result(
+        "class DevonshireCream { serveOn() { return \"Scones\"; } } DevonshireCream",
+    );
+
+    assert_eq!(format!("{value}"), "DevonshireCream");
+}
+
+#[test]
 fn returns_explicit_values_from_user_defined_functions() {
     assert_eq!(
         interpret_script_result("fun identity(value) { return value; } identity(42)"),

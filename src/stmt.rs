@@ -6,6 +6,12 @@ pub enum Stmt {
         statements: Vec<Stmt>,
     },
     Break,
+    Class {
+        name: Token,
+        // Methods currently reuse function declaration nodes so later class
+        // chapters can keep building on the existing function AST shape.
+        methods: Vec<Stmt>,
+    },
     Expression {
         expression: Expr,
     },
@@ -45,6 +51,11 @@ impl Stmt {
     // Construct a break statement that exits the nearest enclosing loop.
     pub fn break_stmt() -> Self {
         Stmt::Break
+    }
+
+    // Construct a class declaration with its name and parsed method declarations.
+    pub fn class(name: Token, methods: Vec<Stmt>) -> Self {
+        Stmt::Class { name, methods }
     }
 
     // Construct a statement that evaluates an expression for its side effects.

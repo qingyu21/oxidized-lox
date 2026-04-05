@@ -16,6 +16,7 @@ enum BindingKind {
     Variable,
     Parameter,
     Function,
+    Class,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +66,13 @@ impl<'a> Resolver<'a> {
                 self.finish_scope(result)
             }
             Stmt::Break => Ok(()),
+            Stmt::Class { name, methods: _ } => {
+                // Class names behave like declarations in the surrounding
+                // scope. Method resolution comes in a later class section.
+                self.declare(name, BindingKind::Class)?;
+                self.define(name);
+                Ok(())
+            }
             Stmt::Expression { expression } => self.resolve_expression_node(expression),
             Stmt::Function { name, params, body } => {
                 self.declare(name, BindingKind::Function)?;

@@ -43,12 +43,15 @@ Implemented today:
 - a resolver pass for lexical scope binding and static name checks such as
   local self-initializer errors, duplicate local declarations, and unused
   local variables
+- class declarations parsed/resolved/executed as first-draft runtime class
+  objects
 - a tree-walk interpreter with a small REPL
 - one native callable, `clock()`
 
 Later book stages still missing:
 
-- classes
+- class instances, fields, method lookup/binding, `this`, and `super`
+- inheritance
 - bytecode VM stages from later in the book
 
 ## Running

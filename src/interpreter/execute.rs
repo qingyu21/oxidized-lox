@@ -1,7 +1,9 @@
+use std::rc::Rc;
+
 use crate::{
     environment::{Environment, EnvironmentRef},
     expr::Expr,
-    runtime::{RuntimeError, Value},
+    runtime::{LoxClass, RuntimeError, Value},
     stmt::Stmt,
     token::Token,
 };
@@ -28,6 +30,7 @@ impl Interpreter {
                 self.execute_block(statements, block_environment)
             }
             Stmt::Break => Ok(ControlFlow::Break),
+            Stmt::Class { name, methods } => self.execute_class_declaration(name, methods),
             Stmt::Expression { expression } => {
                 self.evaluate(expression)?;
                 Ok(ControlFlow::None)
@@ -85,6 +88,24 @@ impl Interpreter {
         self.current_environment()
             .borrow_mut()
             .define(name.lexeme.clone(), function);
+        Ok(ControlFlow::None)
+    }
+
+    fn execute_class_declaration(
+        &self,
+        name: &Token,
+        _methods: &[Stmt],
+    ) -> Result<ControlFlow, RuntimeError> {
+        // Bind the class name before creating the runtime class object so
+        // later class chapters can support self-references from methods.
+        self.current_environment()
+            .borrow_mut()
+            .define(name.lexeme.clone(), Value::Nil);
+
+        let klass = Value::Class(Rc::new(LoxClass::new(name.lexeme.clone())));
+        self.current_environment()
+            .borrow_mut()
+            .assign(name, klass)?;
         Ok(ControlFlow::None)
     }
 

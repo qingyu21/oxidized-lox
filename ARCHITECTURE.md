@@ -170,7 +170,8 @@ flowchart TD
 `Value`
 
 - Runtime value produced by evaluation.
-- Current variants are `String`, `Number`, `Bool`, `Nil`, and callable values.
+- Current variants are `String`, `Number`, `Bool`, `Nil`, callable values, and
+  first-draft class objects.
 - This is the value type stored in environments and returned by expression
   evaluation.
 - Lives in `src/runtime.rs` so environments and interpreter submodules can
@@ -189,6 +190,12 @@ flowchart TD
 - Runtime object created when a `fun` declaration executes.
 - Captures the surrounding environment so declared functions can keep using the
   scope they were defined in.
+
+`LoxClass`
+
+- Minimal runtime object created when a `class` declaration executes.
+- Currently stores only the class name; method lookup, instances, `this`, and
+  inheritance are left for later class chapters.
 
 `RuntimeError`
 

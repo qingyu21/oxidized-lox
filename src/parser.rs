@@ -61,8 +61,12 @@ impl Parser {
         Some(expr)
     }
 
-    // declaration -> funDecl | varDecl | statement ;
+    // declaration -> classDecl | funDecl | varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::Class]) {
+            return self.class_declaration();
+        }
+
         // TODO(function-expr): If Lox gains anonymous function expressions
         // like `fun (...) { ... }`, this branch will need one-token lookahead.
         // `fun` followed by an identifier stays a declaration, while `fun`
@@ -77,6 +81,22 @@ impl Parser {
         }
 
         self.statement()
+    }
+
+    // classDecl -> "class" IDENTIFIER "{" function* "}" ;
+    fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self
+            .consume(TokenType::Identifier, "Expect class name.")?
+            .clone();
+        self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
+
+        let mut methods = Vec::new();
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            methods.push(self.function("method")?);
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
+        Ok(Stmt::class(name, methods))
     }
 
     // funDecl -> "fun" function ;
@@ -205,6 +225,7 @@ impl Parser {
         matches!(
             self.peek().type_,
             TokenType::Break
+                | TokenType::Class
                 | TokenType::Fun
                 | TokenType::Var
                 | TokenType::For
