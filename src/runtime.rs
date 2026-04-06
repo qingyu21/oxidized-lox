@@ -28,6 +28,12 @@ pub(crate) struct LoxClass {
 
 #[derive(Debug, Clone)]
 pub(crate) struct LoxInstance {
+    // TODO(memory): Plain instances are fine to drop when their last strong
+    // reference goes away, but cyclic object graphs are not. Examples include
+    // `instance.self = instance`, mutually-referential instances, or storing a
+    // bound method back onto the instance so the closure keeps `this` alive.
+    // A tracing GC, or a carefully chosen set of Weak edges, is needed to
+    // reclaim those cycles in long-lived interpreter sessions.
     klass: Rc<LoxClass>,
     fields: RefCell<HashMap<String, Value>>,
 }

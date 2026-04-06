@@ -39,6 +39,10 @@ pub struct Interpreter {
     // TODO(ch11-challenge4): This still stores only scope distance. The
     // Chapter 11 challenge to assign per-scope local indexes and access locals
     // by slot instead of name has not been implemented in this interpreter.
+    // TODO(memory): The REPL keeps a single Interpreter alive for the whole
+    // process, but this cache is never cleared between runs. Repeated REPL
+    // inputs therefore grow the map monotonically even after old ASTs and
+    // tokens are otherwise unreachable.
     // TODO(ch13-challenge3): No extra self-chosen language feature from
     // Chapter 13 challenge 3 has been implemented yet. Any such feature will
     // likely require coordinated parser, resolver, runtime, and test updates.
