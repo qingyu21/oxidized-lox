@@ -1,0 +1,134 @@
+// Merge sort on a persistent cons list.
+// Demonstrates recursive data structures, inheritance, and divide-and-conquer.
+
+class List {
+  prepend(value) {
+    return Cons(value, this);
+  }
+
+  reverse() {
+    return this.reverseInto(Empty());
+  }
+
+  sort() {
+    return mergeSort(this);
+  }
+}
+
+class SplitResult {
+  init(left, right) {
+    this.left = left;
+    this.right = right;
+  }
+}
+
+class Empty < List {
+  isEmpty() {
+    return true;
+  }
+
+  length() {
+    return 0;
+  }
+
+  reverseInto(acc) {
+    return acc;
+  }
+
+  merge(other) {
+    return other;
+  }
+
+  splitAlternating() {
+    return SplitResult(Empty(), Empty());
+  }
+
+  stringify() {
+    return "[]";
+  }
+
+  stringifyTail() {
+    return "]";
+  }
+}
+
+class Cons < List {
+  init(head, tail) {
+    this.head = head;
+    this.tail = tail;
+  }
+
+  isEmpty() {
+    return false;
+  }
+
+  length() {
+    return 1 + this.tail.length();
+  }
+
+  reverseInto(acc) {
+    return this.tail.reverseInto(acc.prepend(this.head));
+  }
+
+  merge(other) {
+    if (other.isEmpty()) return this;
+
+    if (this.head <= other.head) {
+      return Cons(this.head, this.tail.merge(other));
+    }
+
+    return Cons(other.head, this.merge(other.tail));
+  }
+
+  // Split the list into two near-equal halves by alternating elements.
+  // This preserves order within each half without needing indexes.
+  splitAlternating() {
+    var parts = this.tail.splitAlternating();
+    return SplitResult(Cons(this.head, parts.right), parts.left);
+  }
+
+  stringify() {
+    return "[" + this.head + this.tail.stringifyTail();
+  }
+
+  stringifyTail() {
+    return ", " + this.head + this.tail.stringifyTail();
+  }
+}
+
+fun mergeSort(list) {
+  if (list.isEmpty()) return list;
+  if (list.tail.isEmpty()) return list;
+
+  var parts = list.splitAlternating();
+  var left = mergeSort(parts.left);
+  var right = mergeSort(parts.right);
+  return left.merge(right);
+}
+
+fun sampleList() {
+  var list = Empty();
+
+  // We build with prepend, then reverse once so the printed input order
+  // matches the order the numbers appear below.
+  list = list.prepend(4);
+  list = list.prepend(6);
+  list = list.prepend(1);
+  list = list.prepend(3);
+  list = list.prepend(8);
+  list = list.prepend(5);
+  list = list.prepend(1);
+  list = list.prepend(9);
+  list = list.prepend(2);
+  list = list.prepend(7);
+
+  return list.reverse();
+}
+
+var values = sampleList();
+var sorted = values.sort();
+
+print "input       = " + values.stringify();
+print "sorted      = " + sorted.stringify();
+print "length      = " + sorted.length();
+print "sorted twice = " + sorted.sort().stringify();

@@ -1,0 +1,116 @@
+// A binary search tree with a pruning range-sum query.
+// Demonstrates classes, inheritance, recursion, and method-driven algorithms.
+
+fun max(a, b) {
+  if (a > b) return a;
+  return b;
+}
+
+fun joinInOrder(left, value, right) {
+  var middle = "" + value;
+
+  if (left == "") {
+    if (right == "") return middle;
+    return middle + " " + right;
+  }
+
+  if (right == "") return left + " " + middle;
+  return left + " " + middle + " " + right;
+}
+
+class Tree {}
+
+class EmptyTree < Tree {
+  insert(value) {
+    return Node(value, EmptyTree(), EmptyTree());
+  }
+
+  contains(value) {
+    return false;
+  }
+
+  size() {
+    return 0;
+  }
+
+  height() {
+    return 0;
+  }
+
+  rangeSum(low, high) {
+    return 0;
+  }
+
+  inorder() {
+    return "";
+  }
+}
+
+class Node < Tree {
+  init(value, left, right) {
+    this.value = value;
+    this.left = left;
+    this.right = right;
+  }
+
+  insert(value) {
+    if (value < this.value) {
+      this.left = this.left.insert(value);
+    } else if (value > this.value) {
+      this.right = this.right.insert(value);
+    }
+
+    return this;
+  }
+
+  contains(value) {
+    if (value == this.value) return true;
+    if (value < this.value) return this.left.contains(value);
+    return this.right.contains(value);
+  }
+
+  size() {
+    return 1 + this.left.size() + this.right.size();
+  }
+
+  height() {
+    return 1 + max(this.left.height(), this.right.height());
+  }
+
+  rangeSum(low, high) {
+    if (this.value < low) return this.right.rangeSum(low, high);
+    if (this.value > high) return this.left.rangeSum(low, high);
+
+    return this.value + this.left.rangeSum(low, high) + this.right.rangeSum(low, high);
+  }
+
+  inorder() {
+    return joinInOrder(this.left.inorder(), this.value, this.right.inorder());
+  }
+}
+
+fun buildDemoTree() {
+  var tree = EmptyTree();
+
+  tree = tree.insert(8);
+  tree = tree.insert(3);
+  tree = tree.insert(10);
+  tree = tree.insert(1);
+  tree = tree.insert(6);
+  tree = tree.insert(14);
+  tree = tree.insert(4);
+  tree = tree.insert(7);
+  tree = tree.insert(13);
+  tree = tree.insert(6); // Duplicate: ignored.
+
+  return tree;
+}
+
+var tree = buildDemoTree();
+
+print "in-order    = " + tree.inorder();
+print "size        = " + tree.size();
+print "height      = " + tree.height();
+print "contains 7  = " + tree.contains(7);
+print "contains 2  = " + tree.contains(2);
+print "sum[4, 13]  = " + tree.rangeSum(4, 13);

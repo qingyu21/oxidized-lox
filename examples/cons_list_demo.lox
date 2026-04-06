@@ -1,0 +1,119 @@
+// A persistent cons list built out of two classes.
+// Demonstrates classes, inheritance, recursion, loops, higher-order
+// functions, and closures.
+
+class List {
+  prepend(value) {
+    return Cons(value, this);
+  }
+
+  reverse() {
+    return this.reverseInto(Empty());
+  }
+}
+
+class Empty < List {
+  length() {
+    return 0;
+  }
+
+  append(other) {
+    return other;
+  }
+
+  reverseInto(acc) {
+    return acc;
+  }
+
+  map(transform) {
+    return this;
+  }
+
+  fold(seed, step) {
+    return seed;
+  }
+
+  stringify() {
+    return "[]";
+  }
+
+  stringifyTail() {
+    return "]";
+  }
+}
+
+class Cons < List {
+  init(head, tail) {
+    this.head = head;
+    this.tail = tail;
+  }
+
+  length() {
+    return 1 + this.tail.length();
+  }
+
+  append(other) {
+    return Cons(this.head, this.tail.append(other));
+  }
+
+  reverseInto(acc) {
+    return this.tail.reverseInto(acc.prepend(this.head));
+  }
+
+  map(transform) {
+    return Cons(transform(this.head), this.tail.map(transform));
+  }
+
+  fold(seed, step) {
+    return this.tail.fold(step(seed, this.head), step);
+  }
+
+  stringify() {
+    return "[" + this.head + this.tail.stringifyTail();
+  }
+
+  stringifyTail() {
+    return ", " + this.head + this.tail.stringifyTail();
+  }
+}
+
+fun range(start, end) {
+  var list = Empty();
+  var current = end;
+
+  while (current >= start) {
+    list = list.prepend(current);
+    current = current - 1;
+  }
+
+  return list;
+}
+
+fun add(acc, value) {
+  return acc + value;
+}
+
+fun multiply(acc, value) {
+  return acc * value;
+}
+
+fun makeAffine(scale, bias) {
+  fun apply(x) {
+    return x * scale + bias;
+  }
+
+  return apply;
+}
+
+var numbers = range(1, 6);
+var reversed = numbers.reverse();
+var mirrored = numbers.append(reversed);
+var transformed = numbers.map(makeAffine(2, 1));
+
+print "numbers     = " + numbers.stringify();
+print "reversed    = " + reversed.stringify();
+print "mirrored    = " + mirrored.stringify();
+print "transformed = " + transformed.stringify();
+print "length      = " + mirrored.length();
+print "sum         = " + numbers.fold(0, add);
+print "product     = " + numbers.fold(1, multiply);

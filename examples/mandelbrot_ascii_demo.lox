@@ -1,0 +1,49 @@
+// ASCII Mandelbrot set.
+// Demonstrates nested loops, numeric iteration, and coordinate-to-character rendering.
+
+fun shade(iterations, maxIterations) {
+  if (iterations == maxIterations) return "@";
+
+  var ratio = iterations / maxIterations;
+
+  if (ratio < 0.05) return " ";
+  if (ratio < 0.10) return ".";
+  if (ratio < 0.18) return ":";
+  if (ratio < 0.28) return "-";
+  if (ratio < 0.40) return "=";
+  if (ratio < 0.55) return "+";
+  if (ratio < 0.72) return "*";
+  if (ratio < 0.88) return "#";
+  return "%";
+}
+
+fun mandelbrotChar(real0, imag0, maxIterations) {
+  var real = 0;
+  var imag = 0;
+  var iterations = 0;
+
+  while (iterations < maxIterations and real * real + imag * imag <= 4) {
+    var nextReal = real * real - imag * imag + real0;
+    imag = 2 * real * imag + imag0;
+    real = nextReal;
+    iterations = iterations + 1;
+  }
+
+  return shade(iterations, maxIterations);
+}
+
+var width = 92;
+var height = 32;
+var maxIterations = 40;
+
+for (var y = 0; y < height; y = y + 1) {
+  var line = "";
+  var imag0 = 1.2 - y * (2.4 / (height - 1));
+
+  for (var x = 0; x < width; x = x + 1) {
+    var real0 = -2.3 + x * (3.2 / (width - 1));
+    line = line + mandelbrotChar(real0, imag0, maxIterations);
+  }
+
+  print line;
+}

@@ -1,0 +1,75 @@
+// Rule 30 cellular automaton rendered as ASCII.
+// Demonstrates recursive linked structures plus iterative evolution.
+
+class Cells {
+  prepend(alive) {
+    return Cell(alive, this);
+  }
+}
+
+class EmptyCells < Cells {
+  isEmpty() {
+    return true;
+  }
+
+  firstOrFalse() {
+    return false;
+  }
+
+  nextGeneration(leftNeighbor) {
+    return this;
+  }
+
+  render() {
+    return "";
+  }
+}
+
+class Cell < Cells {
+  init(alive, tail) {
+    this.alive = alive;
+    this.tail = tail;
+  }
+
+  isEmpty() {
+    return false;
+  }
+
+  firstOrFalse() {
+    return this.alive;
+  }
+
+  nextGeneration(leftNeighbor) {
+    var nextAlive = rule30(leftNeighbor, this.alive, this.tail.firstOrFalse());
+    return Cell(nextAlive, this.tail.nextGeneration(this.alive));
+  }
+
+  render() {
+    if (this.alive) return "#" + this.tail.render();
+    return " " + this.tail.render();
+  }
+}
+
+fun rule30(left, center, right) {
+  return left != (center or right);
+}
+
+fun centeredRow(width) {
+  var row = EmptyCells();
+  var liveIndex = (width - 1) / 2;
+
+  for (var index = width - 1; index >= 0; index = index - 1) {
+    row = row.prepend(index == liveIndex);
+  }
+
+  return row;
+}
+
+var width = 63;
+var generations = 32;
+var row = centeredRow(width);
+
+for (var generation = 0; generation < generations; generation = generation + 1) {
+  print row.render();
+  row = row.nextGeneration(false);
+}

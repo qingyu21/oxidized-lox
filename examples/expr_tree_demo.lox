@@ -1,0 +1,200 @@
+// A tiny symbolic algebra system for expressions in one variable.
+// Demonstrates recursive trees, inheritance, `super`, evaluation,
+// simplification, and symbolic differentiation.
+
+class Expr {
+  isConstant() {
+    return false;
+  }
+
+  constantValue() {
+    return nil;
+  }
+
+  isZero() {
+    return false;
+  }
+
+  isOne() {
+    return false;
+  }
+}
+
+class Constant < Expr {
+  init(value) {
+    this.value = value;
+  }
+
+  pretty() {
+    return "" + this.value;
+  }
+
+  evalAt(x) {
+    return this.value;
+  }
+
+  derive() {
+    return Constant(0);
+  }
+
+  simplify() {
+    return this;
+  }
+
+  isConstant() {
+    return true;
+  }
+
+  constantValue() {
+    return this.value;
+  }
+
+  isZero() {
+    return this.value == 0;
+  }
+
+  isOne() {
+    return this.value == 1;
+  }
+
+  depth() {
+    return 1;
+  }
+
+  nodeCount() {
+    return 1;
+  }
+}
+
+class Variable < Expr {
+  pretty() {
+    return "x";
+  }
+
+  evalAt(x) {
+    return x;
+  }
+
+  derive() {
+    return Constant(1);
+  }
+
+  simplify() {
+    return this;
+  }
+
+  depth() {
+    return 1;
+  }
+
+  nodeCount() {
+    return 1;
+  }
+}
+
+class BinaryExpr < Expr {
+  init(left, right) {
+    this.left = left;
+    this.right = right;
+  }
+
+  prettyWith(operator) {
+    return "(" + operator + " " + this.left.pretty() + " " + this.right.pretty() + ")";
+  }
+
+  depth() {
+    var leftDepth = this.left.depth();
+    var rightDepth = this.right.depth();
+
+    if (leftDepth > rightDepth) return 1 + leftDepth;
+    return 1 + rightDepth;
+  }
+
+  nodeCount() {
+    return 1 + this.left.nodeCount() + this.right.nodeCount();
+  }
+}
+
+class Add < BinaryExpr {
+  pretty() {
+    return super.prettyWith("+");
+  }
+
+  evalAt(x) {
+    return this.left.evalAt(x) + this.right.evalAt(x);
+  }
+
+  derive() {
+    return Add(this.left.derive(), this.right.derive());
+  }
+
+  simplify() {
+    var left = this.left.simplify();
+    var right = this.right.simplify();
+
+    if (left.isZero()) return right;
+    if (right.isZero()) return left;
+
+    if (left.isConstant() and right.isConstant()) {
+      return Constant(left.constantValue() + right.constantValue());
+    }
+
+    return Add(left, right);
+  }
+}
+
+class Multiply < BinaryExpr {
+  pretty() {
+    return super.prettyWith("*");
+  }
+
+  evalAt(x) {
+    return this.left.evalAt(x) * this.right.evalAt(x);
+  }
+
+  derive() {
+    return Add(
+      Multiply(this.left.derive(), this.right),
+      Multiply(this.left, this.right.derive())
+    );
+  }
+
+  simplify() {
+    var left = this.left.simplify();
+    var right = this.right.simplify();
+
+    if (left.isZero() or right.isZero()) return Constant(0);
+    if (left.isOne()) return right;
+    if (right.isOne()) return left;
+
+    if (left.isConstant() and right.isConstant()) {
+      return Constant(left.constantValue() * right.constantValue());
+    }
+
+    return Multiply(left, right);
+  }
+}
+
+fun square(expr) {
+  return Multiply(expr, expr);
+}
+
+fun polynomial() {
+  var x = Variable();
+  return Add(
+    Add(square(x), Multiply(Constant(3), x)),
+    Constant(5)
+  );
+}
+
+var expr = polynomial();
+var derivative = expr.derive();
+var simplified = derivative.simplify();
+
+print "expr        = " + expr.pretty();
+print "value @ 4   = " + expr.evalAt(4);
+print "nodes       = " + expr.nodeCount();
+print "depth       = " + expr.depth();
+print "derivative  = " + derivative.pretty();
+print "simplified  = " + simplified.pretty();
+print "slope @ 4   = " + simplified.evalAt(4);

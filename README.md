@@ -77,6 +77,19 @@ Try the block-scope example:
 cargo run -- examples/block_scope_demo.lox
 ```
 
+More example scripts live in `examples/`, including:
+
+- `fibonacci_for_demo.lox` and `fibonacci_recursive_demo.lox` for iterative and recursive control flow
+- `cons_list_demo.lox`, `merge_sort_list_demo.lox`, and `bst_demo.lox` for recursive data structures and algorithms
+- `expr_tree_demo.lox` for symbolic expression trees, evaluation, and simplification
+- `mandelbrot_ascii_demo.lox`, `rule30_demo.lox`, `sierpinski_carpet_demo.lox`, and `hilbert_curve_demo.lox` for ASCII pattern generation
+
+For example:
+
+```bash
+cargo run -- examples/mandelbrot_ascii_demo.lox
+```
+
 Start the REPL:
 
 ```bash

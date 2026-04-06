@@ -1,0 +1,36 @@
+// Sierpinski carpet rendered directly from recursive coordinate tests.
+// Demonstrates recursion, divide-and-conquer, and pixel-style ASCII output.
+
+fun localCoordinate(value, third) {
+  if (value < third) return value;
+  if (value < third + third) return value - third;
+  return value - third - third;
+}
+
+fun isFilled(x, y, size) {
+  if (size == 1) return true;
+
+  var third = size / 3;
+
+  if (x >= third and x < third + third and y >= third and y < third + third) {
+    return false;
+  }
+
+  return isFilled(localCoordinate(x, third), localCoordinate(y, third), third);
+}
+
+var size = 27;
+
+for (var y = 0; y < size; y = y + 1) {
+  var line = "";
+
+  for (var x = 0; x < size; x = x + 1) {
+    if (isFilled(x, y, size)) {
+      line = line + "##";
+    } else {
+      line = line + "  ";
+    }
+  }
+
+  print line;
+}

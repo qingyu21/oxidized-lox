@@ -1,0 +1,153 @@
+// A Hilbert curve drawn with a tiny turtle and a linked-list point set.
+// Demonstrates recursion, stateful objects, and geometric self-similarity.
+
+class Marks {
+  add(x, y) {
+    return Mark(x, y, this);
+  }
+}
+
+class NoMarks < Marks {
+  contains(x, y) {
+    return false;
+  }
+}
+
+class Mark < Marks {
+  init(x, y, next) {
+    this.x = x;
+    this.y = y;
+    this.next = next;
+  }
+
+  contains(x, y) {
+    if (this.x == x and this.y == y) return true;
+    return this.next.contains(x, y);
+  }
+}
+
+class Canvas {
+  init(width, height) {
+    this.width = width;
+    this.height = height;
+    this.marks = NoMarks();
+  }
+
+  mark(x, y) {
+    if (!this.marks.contains(x, y)) {
+      this.marks = this.marks.add(x, y);
+    }
+  }
+
+  render() {
+    for (var y = this.height - 1; y >= 0; y = y - 1) {
+      var line = "";
+
+      for (var x = 0; x < this.width; x = x + 1) {
+        if (this.marks.contains(x, y)) {
+          line = line + "#";
+        } else {
+          line = line + " ";
+        }
+      }
+
+      print line;
+    }
+  }
+}
+
+class Turtle {
+  init(canvas, x, y) {
+    this.canvas = canvas;
+    this.x = x;
+    this.y = y;
+    this.direction = 0; // 0=east, 1=north, 2=west, 3=south
+    this.canvas.mark(this.x, this.y);
+  }
+
+  turnLeft() {
+    this.direction = this.direction + 1;
+    if (this.direction == 4) this.direction = 0;
+  }
+
+  turnRight() {
+    if (this.direction == 0) {
+      this.direction = 3;
+    } else {
+      this.direction = this.direction - 1;
+    }
+  }
+
+  turn(angle) {
+    if (angle > 0) {
+      this.turnLeft();
+    } else {
+      this.turnRight();
+    }
+  }
+
+  forward(steps) {
+    var dx = 0;
+    var dy = 0;
+
+    if (this.direction == 0) {
+      dx = 1;
+    } else if (this.direction == 1) {
+      dy = 1;
+    } else if (this.direction == 2) {
+      dx = -1;
+    } else {
+      dy = -1;
+    }
+
+    for (var step = 0; step < steps; step = step + 1) {
+      this.x = this.x + dx;
+      this.y = this.y + dy;
+      this.canvas.mark(this.x, this.y);
+    }
+  }
+}
+
+fun hilbert(turtle, level, angle) {
+  if (level == 0) return;
+
+  turtle.turn(angle);
+  hilbert(turtle, level - 1, -angle);
+
+  turtle.forward(2);
+  turtle.turn(-angle);
+  hilbert(turtle, level - 1, angle);
+
+  turtle.forward(2);
+  hilbert(turtle, level - 1, angle);
+
+  turtle.turn(-angle);
+  turtle.forward(2);
+  hilbert(turtle, level - 1, -angle);
+
+  turtle.turn(angle);
+}
+
+fun powerOfTwo(exponent) {
+  var value = 1;
+
+  for (var i = 0; i < exponent; i = i + 1) {
+    value = value * 2;
+  }
+
+  return value;
+}
+
+fun gridSize(order) {
+  return powerOfTwo(order) * 2 - 1;
+}
+
+// Order 3 keeps the demo visually rich while staying within the tree-walk
+// interpreter's stack limits for the linked-list point lookup used here.
+var order = 3;
+var size = gridSize(order);
+var canvas = Canvas(size, size);
+var turtle = Turtle(canvas, 0, 0);
+
+hilbert(turtle, order, 90);
+canvas.render();
