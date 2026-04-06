@@ -37,6 +37,7 @@ impl AstPrinter {
                     self.print(value)
                 )
             }
+            Expr::Super { method, .. } => format!("(super {})", method.lexeme),
             Expr::Conditional {
                 condition,
                 then_branch,

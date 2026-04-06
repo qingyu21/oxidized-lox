@@ -17,6 +17,7 @@ enum BindingKind {
     Parameter,
     Function,
     Class,
+    Super,
     This,
 }
 
@@ -29,6 +30,9 @@ enum ClassType {
     None,
     // We are resolving a class body, so methods may refer to `this`.
     Class,
+    // We are resolving a subclass body, so methods may refer to both `this`
+    // and `super`.
+    Subclass,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,6 +179,19 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression_node(value)?;
                 self.resolve_expression_node(object)
             }
+            Expr::Super { keyword, .. } => {
+                if self.current_class == ClassType::None {
+                    return Err(self.error(keyword, "Can't use 'super' outside of a class."));
+                }
+                if self.current_class != ClassType::Subclass {
+                    return Err(
+                        self.error(keyword, "Can't use 'super' in a class with no superclass.")
+                    );
+                }
+
+                self.resolve_local(keyword, true);
+                Ok(())
+            }
             Expr::This { keyword } => {
                 if self.current_class == ClassType::None {
                     return Err(self.error(keyword, "Can't use 'this' outside of a class."));
@@ -221,7 +238,11 @@ impl<'a> Resolver<'a> {
         // Class methods then reuse the existing function-body resolver so
         // their local bindings are prepared before run time.
         let enclosing_class = self.current_class;
-        self.current_class = ClassType::Class;
+        self.current_class = if superclass.is_some() {
+            ClassType::Subclass
+        } else {
+            ClassType::Class
+        };
         let result = self.resolve_class_declaration(name, superclass, methods);
 
         self.current_class = enclosing_class;
@@ -239,11 +260,22 @@ impl<'a> Resolver<'a> {
 
         self.resolve_declared_superclass(name, superclass)?;
 
+        if superclass.is_some() {
+            self.begin_scope();
+            self.define_super(name.line);
+        }
+
         self.begin_scope();
         self.define_this(name.line);
 
         let result = self.resolve_class_methods(methods);
-        self.finish_scope(result)
+        let result = self.finish_scope(result);
+
+        if superclass.is_some() {
+            self.finish_scope(result)
+        } else {
+            result
+        }
     }
 
     fn resolve_declared_superclass(
@@ -327,6 +359,23 @@ impl<'a> Resolver<'a> {
             BindingInfo {
                 token,
                 kind: BindingKind::This,
+                defined: true,
+                used: false,
+            },
+        );
+    }
+
+    fn define_super(&mut self, line: u32) {
+        let Some(scope) = self.scopes.last_mut() else {
+            return;
+        };
+
+        let token = Token::new(TokenType::Super, "super".to_string(), None, line);
+        scope.insert(
+            "super".to_string(),
+            BindingInfo {
+                token,
+                kind: BindingKind::Super,
                 defined: true,
                 used: false,
             },

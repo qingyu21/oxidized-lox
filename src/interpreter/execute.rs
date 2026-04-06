@@ -131,9 +131,21 @@ impl Interpreter {
             .borrow_mut()
             .define(name.lexeme.clone(), Value::Nil);
 
+        // Subclass methods capture an extra environment where `super` points
+        // at the declared superclass. Methods on classes without a superclass
+        // keep closing over the surrounding environment directly.
+        let method_closure = if let Some(superclass) = &superclass {
+            let environment = Environment::new_enclosed_ref(self.current_environment());
+            environment
+                .borrow_mut()
+                .define("super".to_string(), Value::Class(superclass.clone()));
+            environment
+        } else {
+            self.current_environment()
+        };
+
         // Each parsed method becomes a runtime function closed over the
         // environment where the class declaration executes.
-        let closure = self.current_environment();
         let mut method_table = HashMap::new();
         for method in methods {
             let Stmt::Function {
@@ -149,7 +161,7 @@ impl Interpreter {
                 method_name,
                 params,
                 body,
-                closure.clone(),
+                method_closure.clone(),
                 method_name.lexeme == "init",
             );
             method_table.insert(method_name.lexeme.clone(), function);

@@ -398,6 +398,26 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_super_outside_a_class_as_a_resolution_error() {
+        with_clean_error_state(|| {
+            run("super.notEvenInAClass();");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_marks_super_in_a_class_without_a_superclass_as_a_resolution_error() {
+        with_clean_error_state(|| {
+            run("class Eclair { cook() { super.cook(); } }");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn run_marks_returning_a_value_from_an_initializer_as_a_resolution_error() {
         with_clean_error_state(|| {
             run("class Foo { init() { return \"something else\"; } }");

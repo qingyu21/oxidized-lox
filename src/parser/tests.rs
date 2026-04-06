@@ -152,6 +152,11 @@ fn parses_this_expression_statement() {
 }
 
 #[test]
+fn parses_super_expression_statement() {
+    assert_eq!(parse_expression_to_string("super.cook;"), "(super cook)");
+}
+
+#[test]
 fn parses_call_with_higher_precedence_than_unary() {
     assert_eq!(parse_expression_to_string("-clock();"), "(- (call clock))");
 }

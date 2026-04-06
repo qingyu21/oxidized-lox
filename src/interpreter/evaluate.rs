@@ -31,6 +31,7 @@ impl Interpreter {
                 name,
                 value,
             } => self.evaluate_set(object, name, value),
+            Expr::Super { keyword, method } => self.evaluate_super(keyword, method),
             Expr::Variable { name } => self.look_up_variable(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Conditional {
@@ -94,6 +95,48 @@ impl Interpreter {
                 "Only instances have fields.",
             ))
         }
+    }
+
+    fn evaluate_super(&self, keyword: &Token, method_name: &Token) -> Result<Value, RuntimeError> {
+        // Resolver records `super` as a local binding, so start by finding
+        // the captured superclass for the enclosing subclass declaration.
+        let ResolvedBinding::Local(distance) = self.resolved_binding(keyword) else {
+            return Err(RuntimeError::new(
+                keyword.clone(),
+                "Undefined variable 'super'.",
+            ));
+        };
+
+        let environment = self.current_environment();
+        let superclass = match Environment::get_at(&environment, distance, keyword)? {
+            Value::Class(superclass) => superclass,
+            _ => unreachable!("resolver should bind 'super' to a class value"),
+        };
+
+        // The environment that binds `this` sits immediately inside the one
+        // that binds `super`, so one fewer hop recovers the current receiver.
+        let this_keyword = Token::new(TokenType::This, "this".to_string(), None, keyword.line);
+        let object = match Environment::get_at(
+            &environment,
+            distance
+                .checked_sub(1)
+                .expect("resolver should place 'this' inside the 'super' scope"),
+            &this_keyword,
+        )? {
+            Value::Instance(object) => object,
+            _ => unreachable!("methods using 'super' should always have a bound 'this'"),
+        };
+
+        // Look up the method starting at the superclass, then bind it back to
+        // the current instance before returning it to the caller.
+        let Some(method) = superclass.find_method(&method_name.lexeme) else {
+            return Err(RuntimeError::new(
+                method_name.clone(),
+                format!("Undefined property '{}'.", method_name.lexeme),
+            ));
+        };
+
+        Ok(Value::Callable(method.bind(object)))
     }
 
     // Read a variable using the resolver's precomputed lexical distance when

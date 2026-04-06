@@ -205,6 +205,57 @@ fn subclass_instances_inherit_superclass_methods() {
 }
 
 #[test]
+fn subclasses_can_call_superclass_methods_with_super() {
+    assert_eq!(
+        interpret_script_result(
+            "class Doughnut {
+               cook() {
+                 return \"Fry until golden brown.\";
+               }
+             }
+
+             class BostonCream < Doughnut {
+               cook() {
+                 return super.cook() + \" Pipe full of custard and coat with chocolate.\";
+               }
+             }
+
+             BostonCream().cook()"
+        ),
+        Value::String(
+            "Fry until golden brown. Pipe full of custard and coat with chocolate.".to_string()
+        )
+    );
+}
+
+#[test]
+fn super_lookup_starts_from_the_enclosing_class_superclass() {
+    assert_eq!(
+        interpret_script_result(
+            "class A {
+               method() {
+                 return \"A method\";
+               }
+             }
+
+             class B < A {
+               method() {
+                 return \"B method\";
+               }
+
+               test() {
+                 return super.method();
+               }
+             }
+
+             class C < B {}
+             C().test()"
+        ),
+        Value::String("A method".to_string())
+    );
+}
+
+#[test]
 fn subclass_declaration_requires_a_class_superclass() {
     let statements = parse_statements(
         "var NotAClass = \"I am totally not a class\";

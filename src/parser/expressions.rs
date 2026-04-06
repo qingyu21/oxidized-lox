@@ -221,7 +221,8 @@ impl Parser {
         Ok(Expr::call(callee, paren, arguments))
     }
 
-    // primary -> "true" | "false" | "nil" | "this" | NUMBER | STRING | "(" expression ")" | IDENTIFIER ;
+    // primary -> "true" | "false" | "nil" | "this" | NUMBER | STRING |
+    //            "(" expression ")" | "super" "." IDENTIFIER | IDENTIFIER ;
     pub(super) fn primary(&mut self) -> Result<Expr, ParseError> {
         if let Some(right_operand) = self.missing_left_operand_rule() {
             return self.missing_left_operand(right_operand);
@@ -256,6 +257,15 @@ impl Parser {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::grouping(expr));
+        }
+
+        if self.match_token(&[TokenType::Super]) {
+            let keyword = self.previous().clone();
+            self.consume(TokenType::Dot, "Expect '.' after 'super'.")?;
+            let method = self
+                .consume(TokenType::Identifier, "Expect superclass method name.")?
+                .clone();
+            return Ok(Expr::super_(keyword, method));
         }
 
         if self.match_token(&[TokenType::This]) {

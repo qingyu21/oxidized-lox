@@ -45,6 +45,10 @@ pub enum Expr {
         name: Token,
         value: Box<Expr>,
     },
+    Super {
+        keyword: Token,
+        method: Token,
+    },
     This {
         keyword: Token,
     },
@@ -128,6 +132,11 @@ impl Expr {
             name,
             value: Box::new(value),
         }
+    }
+
+    // Construct a `super.method` expression used inside subclasses.
+    pub fn super_(keyword: Token, method: Token) -> Self {
+        Expr::Super { keyword, method }
     }
 
     // Construct a `this` expression used inside methods.
