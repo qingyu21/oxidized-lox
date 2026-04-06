@@ -92,49 +92,11 @@ impl<'a> Resolver<'a> {
                 self.finish_scope(result)
             }
             Stmt::Break => Ok(()),
-            Stmt::Class { name, methods } => {
-                // Class names behave like declarations in the surrounding
-                // scope. Class methods then reuse the existing function-body
-                // resolver so their local bindings are prepared before run time.
-                let enclosing_class = self.current_class;
-                self.current_class = ClassType::Class;
-
-                self.declare(name, BindingKind::Class)?;
-                self.define(name);
-
-                self.begin_scope();
-                self.define_this(name.line);
-
-                // Use an immediately-invoked closure here so `?` stops only the
-                // method-resolution pass. That lets us always unwind the
-                // implicit `this` scope and restore `current_class` before
-                // returning from the outer resolver method.
-                let result = (|| {
-                    for method in methods {
-                        let Stmt::Function {
-                            name: method_name,
-                            params,
-                            body,
-                        } = method
-                        else {
-                            unreachable!(
-                                "parser should only store function-shaped methods in classes"
-                            );
-                        };
-                        let function_type = if method_name.lexeme == "init" {
-                            FunctionType::Initializer
-                        } else {
-                            FunctionType::Method
-                        };
-                        self.resolve_function(params, body, function_type)?;
-                    }
-                    Ok(())
-                })();
-
-                let result = self.finish_scope(result);
-                self.current_class = enclosing_class;
-                result
-            }
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            } => self.resolve_class_statement(name, superclass.as_ref(), methods),
             Stmt::Expression { expression } => self.resolve_expression_node(expression),
             Stmt::Function { name, params, body } => {
                 self.declare(name, BindingKind::Function)?;
@@ -247,6 +209,85 @@ impl<'a> Resolver<'a> {
             }
             Expr::Unary { right, .. } => self.resolve_expression_node(right),
         }
+    }
+
+    fn resolve_class_statement(
+        &mut self,
+        name: &Token,
+        superclass: Option<&Expr>,
+        methods: &[Stmt],
+    ) -> Result<(), ResolveError> {
+        // Class names behave like declarations in the surrounding scope.
+        // Class methods then reuse the existing function-body resolver so
+        // their local bindings are prepared before run time.
+        let enclosing_class = self.current_class;
+        self.current_class = ClassType::Class;
+        let result = self.resolve_class_declaration(name, superclass, methods);
+
+        self.current_class = enclosing_class;
+        result
+    }
+
+    fn resolve_class_declaration(
+        &mut self,
+        name: &Token,
+        superclass: Option<&Expr>,
+        methods: &[Stmt],
+    ) -> Result<(), ResolveError> {
+        self.declare(name, BindingKind::Class)?;
+        self.define(name);
+
+        self.resolve_declared_superclass(name, superclass)?;
+
+        self.begin_scope();
+        self.define_this(name.line);
+
+        let result = self.resolve_class_methods(methods);
+        self.finish_scope(result)
+    }
+
+    fn resolve_declared_superclass(
+        &mut self,
+        name: &Token,
+        superclass: Option<&Expr>,
+    ) -> Result<(), ResolveError> {
+        let Some(superclass) = superclass else {
+            return Ok(());
+        };
+
+        let Expr::Variable {
+            name: superclass_name,
+        } = superclass
+        else {
+            unreachable!("parser should only build variable-shaped superclasses");
+        };
+
+        if name.lexeme == superclass_name.lexeme {
+            return Err(self.error(superclass_name, "A class can't inherit from itself."));
+        }
+
+        self.resolve_expression_node(superclass)
+    }
+
+    fn resolve_class_methods(&mut self, methods: &[Stmt]) -> Result<(), ResolveError> {
+        for method in methods {
+            let Stmt::Function {
+                name: method_name,
+                params,
+                body,
+            } = method
+            else {
+                unreachable!("parser should only store function-shaped methods in classes");
+            };
+            let function_type = if method_name.lexeme == "init" {
+                FunctionType::Initializer
+            } else {
+                FunctionType::Method
+            };
+            self.resolve_function(params, body, function_type)?;
+        }
+
+        Ok(())
     }
 
     // Resolve a function body in its own scope, with each parameter behaving

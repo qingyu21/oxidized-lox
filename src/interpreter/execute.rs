@@ -33,7 +33,11 @@ impl Interpreter {
                 self.execute_block(statements, block_environment)
             }
             Stmt::Break => Ok(ControlFlow::Break),
-            Stmt::Class { name, methods } => self.execute_class_declaration(name, methods),
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            } => self.execute_class_declaration(name, superclass.as_ref(), methods),
             Stmt::Expression { expression } => {
                 self.evaluate(expression)?;
                 Ok(ControlFlow::None)
@@ -97,8 +101,30 @@ impl Interpreter {
     fn execute_class_declaration(
         &self,
         name: &Token,
+        superclass_expr: Option<&Expr>,
         methods: &[Stmt],
     ) -> Result<ControlFlow, RuntimeError> {
+        let superclass = if let Some(superclass_expr) = superclass_expr {
+            let Expr::Variable {
+                name: superclass_name,
+            } = superclass_expr
+            else {
+                unreachable!("parser should only build variable-shaped superclasses");
+            };
+
+            match self.evaluate(superclass_expr)? {
+                Value::Class(superclass) => Some(superclass),
+                _ => {
+                    return Err(RuntimeError::new(
+                        superclass_name.clone(),
+                        "Superclass must be a class.",
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+
         // Bind the class name before creating the runtime class object so
         // later class chapters can support self-references from methods.
         self.current_environment()
@@ -131,7 +157,11 @@ impl Interpreter {
 
         // The runtime class object stores behavior in its method table, then
         // replaces the temporary nil binding we inserted above.
-        let klass = Value::Class(Rc::new(LoxClass::new(name.lexeme.clone(), method_table)));
+        let klass = Value::Class(Rc::new(LoxClass::new(
+            name.lexeme.clone(),
+            superclass,
+            method_table,
+        )));
         self.current_environment()
             .borrow_mut()
             .assign(name, klass)?;

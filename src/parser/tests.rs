@@ -202,8 +202,15 @@ fn parses_class_declaration_with_methods() {
     );
 
     match statements.as_slice() {
-        [Stmt::Class { name, methods }] => {
+        [
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            },
+        ] => {
             assert_eq!(name.lexeme, "Breakfast");
+            assert!(superclass.is_none());
 
             match methods.as_slice() {
                 [
@@ -247,6 +254,32 @@ fn parses_class_declaration_with_methods() {
             }
         }
         _ => panic!("expected a single class declaration"),
+    }
+}
+
+#[test]
+fn parses_class_declaration_with_superclass() {
+    let statements = parse_statements("class BostonCream < Doughnut {}");
+
+    match statements.as_slice() {
+        [
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            },
+        ] => {
+            assert_eq!(name.lexeme, "BostonCream");
+            assert!(methods.is_empty());
+
+            match superclass {
+                Some(crate::expr::Expr::Variable { name }) => {
+                    assert_eq!(name.lexeme, "Doughnut");
+                }
+                _ => panic!("expected superclass to be stored as a variable expression"),
+            }
+        }
+        _ => panic!("expected a single subclass declaration"),
     }
 }
 
@@ -727,8 +760,15 @@ fn synchronizes_to_class_declaration_after_error() {
     let statements = parser.parse();
 
     match statements.as_slice() {
-        [Stmt::Class { name, methods }] => {
+        [
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            },
+        ] => {
             assert_eq!(name.lexeme, "Breakfast");
+            assert!(superclass.is_none());
             assert!(methods.is_empty());
         }
         _ => panic!("expected the parser to recover to the next class declaration"),

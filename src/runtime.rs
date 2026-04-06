@@ -17,6 +17,10 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 #[derive(Debug, Clone)]
 pub(crate) struct LoxClass {
     name: String,
+    // Stored now so subclass declarations carry their runtime superclass
+    // reference before inherited method lookup is added in the next step.
+    #[allow(dead_code)]
+    superclass: Option<Rc<LoxClass>>,
     methods: HashMap<String, Rc<LoxFunction>>,
 }
 
@@ -53,8 +57,16 @@ impl RuntimeError {
 }
 
 impl LoxClass {
-    pub(crate) fn new(name: String, methods: HashMap<String, Rc<LoxFunction>>) -> Self {
-        Self { name, methods }
+    pub(crate) fn new(
+        name: String,
+        superclass: Option<Rc<LoxClass>>,
+        methods: HashMap<String, Rc<LoxFunction>>,
+    ) -> Self {
+        Self {
+            name,
+            superclass,
+            methods,
+        }
     }
 
     fn instantiate(class: Rc<LoxClass>) -> Rc<LoxInstance> {

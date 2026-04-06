@@ -8,6 +8,7 @@ pub enum Stmt {
     Break,
     Class {
         name: Token,
+        superclass: Option<Expr>,
         // Methods currently reuse function declaration nodes so later class
         // chapters can keep building on the existing function AST shape.
         methods: Vec<Stmt>,
@@ -54,8 +55,12 @@ impl Stmt {
     }
 
     // Construct a class declaration with its name and parsed method declarations.
-    pub fn class(name: Token, methods: Vec<Stmt>) -> Self {
-        Stmt::Class { name, methods }
+    pub fn class(name: Token, superclass: Option<Expr>, methods: Vec<Stmt>) -> Self {
+        Stmt::Class {
+            name,
+            superclass,
+            methods,
+        }
     }
 
     // Construct a statement that evaluates an expression for its side effects.

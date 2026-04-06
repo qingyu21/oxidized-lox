@@ -177,6 +177,35 @@ fn calling_a_class_creates_an_instance() {
 }
 
 #[test]
+fn subclass_declaration_executes_when_superclass_is_a_class() {
+    let value = interpret_script_result(
+        "class Doughnut {}
+         class BostonCream < Doughnut {}
+         BostonCream",
+    );
+
+    assert_eq!(format!("{value}"), "BostonCream");
+}
+
+#[test]
+fn subclass_declaration_requires_a_class_superclass() {
+    let statements = parse_statements(
+        "var NotAClass = \"I am totally not a class\";
+         class Subclass < NotAClass {}",
+    );
+    let interpreter = Interpreter::new();
+    resolve_statements(&interpreter, &statements);
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let error = interpreter
+        .execute(&statements[1])
+        .expect_err("subclass declarations should reject non-class superclasses");
+
+    assert_eq!(error.message, "Superclass must be a class.");
+}
+
+#[test]
 fn class_calls_have_zero_arity_before_initializers_exist() {
     let statements = parse_statements("class Bagel {} Bagel(1);");
     let interpreter = Interpreter::new();

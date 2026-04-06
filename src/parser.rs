@@ -83,11 +83,19 @@ impl Parser {
         self.statement()
     }
 
-    // classDecl -> "class" IDENTIFIER "{" function* "}" ;
+    // classDecl -> "class" IDENTIFIER ( "<" IDENTIFIER )? "{" function* "}" ;
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self
             .consume(TokenType::Identifier, "Expect class name.")?
             .clone();
+        let superclass = if self.match_token(&[TokenType::Less]) {
+            let name = self
+                .consume(TokenType::Identifier, "Expect superclass name.")?
+                .clone();
+            Some(Expr::variable(name))
+        } else {
+            None
+        };
         self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods = Vec::new();
@@ -96,7 +104,7 @@ impl Parser {
         }
 
         self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
-        Ok(Stmt::class(name, methods))
+        Ok(Stmt::class(name, superclass, methods))
     }
 
     // funDecl -> "fun" function ;
