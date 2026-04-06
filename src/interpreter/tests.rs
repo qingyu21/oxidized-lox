@@ -188,6 +188,23 @@ fn subclass_declaration_executes_when_superclass_is_a_class() {
 }
 
 #[test]
+fn subclass_instances_inherit_superclass_methods() {
+    assert_eq!(
+        interpret_script_result(
+            "class Doughnut {
+               cook() {
+                 return \"Fry until golden brown.\";
+               }
+             }
+
+             class BostonCream < Doughnut {}
+             BostonCream().cook()"
+        ),
+        Value::String("Fry until golden brown.".to_string())
+    );
+}
+
+#[test]
 fn subclass_declaration_requires_a_class_superclass() {
     let statements = parse_statements(
         "var NotAClass = \"I am totally not a class\";

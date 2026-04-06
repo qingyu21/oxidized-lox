@@ -17,9 +17,8 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 #[derive(Debug, Clone)]
 pub(crate) struct LoxClass {
     name: String,
-    // Stored now so subclass declarations carry their runtime superclass
-    // reference before inherited method lookup is added in the next step.
-    #[allow(dead_code)]
+    // Subclasses follow this chain when a method is not found on the class
+    // itself, which gives instances inherited behavior.
     superclass: Option<Rc<LoxClass>>,
     methods: HashMap<String, Rc<LoxFunction>>,
 }
@@ -74,7 +73,10 @@ impl LoxClass {
     }
 
     pub(crate) fn find_method(&self, name: &str) -> Option<Rc<LoxFunction>> {
-        self.methods.get(name).cloned()
+        self.methods
+            .get(name)
+            .cloned()
+            .or_else(|| self.superclass.as_ref()?.find_method(name))
     }
 }
 
