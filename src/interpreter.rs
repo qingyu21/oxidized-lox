@@ -39,6 +39,9 @@ pub struct Interpreter {
     // TODO(ch11-challenge4): This still stores only scope distance. The
     // Chapter 11 challenge to assign per-scope local indexes and access locals
     // by slot instead of name has not been implemented in this interpreter.
+    // TODO(ch13-challenge3): No extra self-chosen language feature from
+    // Chapter 13 challenge 3 has been implemented yet. Any such feature will
+    // likely require coordinated parser, resolver, runtime, and test updates.
     locals: RefCell<HashMap<u64, ResolvedBinding>>,
 }
 

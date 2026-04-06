@@ -14,6 +14,9 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 // TODO(ch12-challenge1): Static methods are not implemented yet. The larger
 // metaclass-style solution would need class objects to participate in property
 // lookup the way instances do, instead of only carrying an instance-method table.
+// TODO(ch13-challenge1): Class reuse still goes through a single superclass
+// link only. Alternative capability-sharing features like mixins, traits, or
+// multiple inheritance have not been implemented.
 #[derive(Debug, Clone)]
 pub(crate) struct LoxClass {
     name: String,
@@ -72,6 +75,10 @@ impl LoxClass {
         Rc::new(LoxInstance::new(class))
     }
 
+    // TODO(ch13-challenge2): Method lookup still prefers the lowest class in
+    // the inheritance chain and relies on `super` for upward dispatch. The
+    // BETA-style `inner` chaining model from Chapter 13 challenge 2 is not
+    // implemented.
     pub(crate) fn find_method(&self, name: &str) -> Option<Rc<LoxFunction>> {
         self.methods
             .get(name)
