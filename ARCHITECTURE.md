@@ -143,8 +143,8 @@ flowchart TD
   token, kind, definition state, and whether it was ever read.
 - Detects semantic errors such as reading a local variable inside its own
   initializer, redeclaring a local name in the same scope, using `this`
-  outside of a class, returning a value from an initializer, and leaving a
-  local variable unused.
+  outside of a class, using `super` outside of a subclass, returning a value
+  from an initializer, and leaving a local variable unused.
 - Records lexical distances in the interpreter so runtime lookup can jump
   straight to the correct environment.
 
@@ -152,11 +152,10 @@ flowchart TD
 
 - Expression AST nodes.
 - Represents syntax that evaluates to a value: literals, variables, unary and
-  binary operators, assignment, logical operators, `?:`, call expressions, and
-  instance property get/set expressions.
+  binary operators, assignment, logical operators, `?:`, call expressions,
+  `this`, `super`, and instance property get/set expressions.
 - Call expressions already evaluate through the interpreter's callable
-  abstraction, which will later be reused for user-defined functions and
-  classes.
+  abstraction shared by native functions, user-defined functions, and classes.
 
 `Stmt`
 
@@ -182,8 +181,8 @@ flowchart TD
 `LoxCallable`
 
 - Runtime trait implemented by anything Lox can invoke with `()`.
-- Defines the callable contract used by native functions today and by
-  user-defined functions and classes later on.
+- Defines the callable contract used by native functions, user-defined
+  functions, and classes.
 - Lives in `src/runtime.rs`, while concrete callable implementations live in
   `src/interpreter/callable.rs`.
 
@@ -193,16 +192,17 @@ flowchart TD
 - Captures the surrounding environment so declared functions can keep using the
   scope they were defined in.
 - Also represents bound methods and initializers, carrying the extra runtime
-  state needed for `this` and constructor-return semantics.
+  state needed for `this`, `super`, and constructor-return semantics.
 
 `LoxClass`
 
 - Runtime object created when a `class` declaration executes.
-- Stores the class name plus a method table mapping method names to
-  user-defined callable objects.
+- Stores the class name, an optional superclass reference, and a method table
+  mapping method names to user-defined callable objects.
 - Is itself callable, creating a new instance and then running `init(...)`
   when that initializer method is present.
-- Inheritance and `super` are left for later class chapters.
+- Method lookup walks up the superclass chain, which gives subclasses inherited
+  behavior and provides the runtime basis for `super`.
 
 `LoxInstance`
 
@@ -210,8 +210,10 @@ flowchart TD
 - Stores its class reference plus an open `HashMap<String, Value>` of fields,
   matching the book's "instances are bags of state" model.
 - Property reads first check instance fields and then fall back to class
-  methods, binding `this` to the original receiver when a method is retrieved,
-  while writes always target instance fields.
+  methods, binding `this` to the original receiver when a method is retrieved.
+- Because class lookup walks superclasses too, inherited methods are exposed
+  through the same property-read path.
+- Property writes always target instance fields.
 
 `RuntimeError`
 
@@ -248,8 +250,13 @@ flowchart TD
   expression, then operating on `LoxInstance` field storage.
 - Executes class declarations by lowering parsed methods into a runtime method
   table stored on `LoxClass`.
+- When a class has a superclass, creates an extra closure environment so
+  methods capture `super` alongside the later method-specific `this` binding.
 - Calls classes through the same callable abstraction used for functions, so
   class calls can allocate instances and forward arguments into `init(...)`.
+- Evaluates `super.method` expressions by reading the captured superclass and
+  the current receiver from the environment chain, then rebinding the resolved
+  method to that receiver.
 - Seeds the global environment with the native `clock()` function.
 - Turns function declarations into `LoxFunction` runtime values and binds them
   into the current environment.

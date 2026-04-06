@@ -2,8 +2,9 @@
 
 A Rust implementation of the Lox language from *Crafting Interpreters*.
 
-This repository currently contains a tree-walk interpreter for a growing subset
-of Lox.
+This repository currently contains the tree-walk interpreter path of Lox,
+including classes, inheritance, and `super`, while a few optional chapter
+challenges remain intentionally deferred.
 
 ## Overview
 
@@ -46,13 +47,14 @@ Implemented today:
 - class declarations, instance methods, bound methods, `this`, callable class
   objects, `init` initializers / constructors, and open instances with field
   storage plus property get/set
+- single inheritance, inherited method lookup, and `super` method access with
+  static resolver checks for invalid `super` uses
 - a tree-walk interpreter with a small REPL
 - one native callable, `clock()`
 
 Later book stages still missing:
 
-- `super`
-- inheritance
+- optional chapter challenge features such as static methods and getters
 - bytecode VM stages from later in the book
 
 ## Running
@@ -137,21 +139,21 @@ cargo fmt
   bytecode VM from later parts of the book.
 - The REPL evaluates one input line at a time and does not yet buffer
   incomplete multi-line statements.
-- The language implementation is still a subset of full Lox and does not yet
-  support `super`, inheritance, or the later VM stages.
+- Optional class-system challenge features such as static methods and getter
+  methods are still TODO.
 
 ## Roadmap
 
 Near-term goals:
 
-- continue into the inheritance and `super` chapter work
 - continue expanding parser and interpreter test coverage
 - keep the code structure aligned with the book while documenting Rust-specific
   implementation choices
+- decide whether to tackle selected chapter challenge features before moving
+  on from the tree-walk interpreter
 
 Longer-term goals:
 
-- keep extending class support through inheritance and `super`
 - explore the later bytecode VM stages
 
 ## References
