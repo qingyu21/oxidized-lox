@@ -1,6 +1,6 @@
 # Architecture
 
-This file is a compact map of the current interpreter: the main data flow, the
+This file is a compact map of the `tree-walk` crate: the main data flow, the
 core types, and the boundaries between frontend, semantic-analysis, and runtime
 code.
 
@@ -47,7 +47,8 @@ textbook-style compiler layout.
 - `src/interpreter/` and `src/runtime/` cover execution and runtime objects,
   which are clearly beyond the frontend.
 - `src/lox.rs` coordinates the end-to-end pipeline for scripts and the REPL,
-  so it stays outside those stage-specific directories.
+  while `src/lib.rs` and `src/main.rs` provide the crate and CLI entry
+  points outside those stage-specific directories.
 
 If you prefer a more theoretical mental model, you can read the current layout
 like this:
@@ -55,7 +56,8 @@ like this:
 - frontend: `src/frontend/`
 - semantic analysis: `src/resolver/`
 - execution/runtime: `src/interpreter/`, `src/runtime/`, `src/environment.rs`
-- application orchestration: `src/lox.rs`, `src/main.rs`, `src/diagnostics.rs`
+- application orchestration: `src/lib.rs`, `src/main.rs`, `src/lox.rs`,
+  `src/diagnostics.rs`
 
 ## Core Type Graph
 

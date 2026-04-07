@@ -22,7 +22,7 @@ thread_local! {
     static INTERPRETER: RefCell<Interpreter> = RefCell::new(Interpreter::new());
 }
 
-pub(crate) fn run_file(path: &str) -> io::Result<()> {
+pub fn run_file(path: &str) -> io::Result<()> {
     let source = fs::read_to_string(path)?;
     clear_error();
     clear_runtime_error();
@@ -39,7 +39,7 @@ pub(crate) fn run_file(path: &str) -> io::Result<()> {
     Ok(())
 }
 
-pub(crate) fn run_prompt() -> io::Result<()> {
+pub fn run_prompt() -> io::Result<()> {
     let stdin = io::stdin();
 
     loop {

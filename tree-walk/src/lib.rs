@@ -1,5 +1,3 @@
-use std::{env, io, process};
-
 #[cfg(test)]
 mod ast_printer;
 mod diagnostics;
@@ -16,17 +14,4 @@ mod test_support;
 // working even though the concrete files now live under `src/frontend/`.
 pub(crate) use frontend::{expr, parser, scanner, stmt, token};
 
-fn main() -> io::Result<()> {
-    let args = env::args().skip(1).collect::<Vec<String>>();
-
-    match args.as_slice() {
-        [] => lox::run_prompt()?,
-        [script] => lox::run_file(script)?,
-        _ => {
-            eprintln!("Usage: oxidized-lox [script]");
-            process::exit(64);
-        }
-    }
-
-    Ok(())
-}
+pub use lox::{run_file, run_prompt};

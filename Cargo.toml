@@ -1,7 +1,6 @@
-[package]
-name = "oxidized-lox"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = ["tree-walk", "bytecode-vm"]
+resolver = "3"
 
-[dependencies]
+[workspace.dependencies]
 thiserror = "2"
