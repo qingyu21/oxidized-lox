@@ -1,9 +1,9 @@
 use crate::expr::Expr;
 
-pub struct AstPrinter;
+pub(crate) struct AstPrinter;
 
 impl AstPrinter {
-    pub fn print(&self, expr: &Expr) -> String {
+    pub(crate) fn print(&self, expr: &Expr) -> String {
         match expr {
             Expr::Assign { name, value } => format!("(= {} {})", name.lexeme, self.print(value)),
             Expr::Binary {

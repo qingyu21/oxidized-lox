@@ -24,7 +24,7 @@ static KEYWORDS: LazyLock<HashMap<&'static str, TokenType>> = LazyLock::new(|| {
     keywords
 });
 
-pub struct Scanner {
+pub(crate) struct Scanner {
     // TODO(perf): Borrow `&str` here instead of owning a `String` to avoid
     // copying the entire source text when constructing the scanner.
     source: String,
@@ -39,7 +39,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new(source: &str) -> Self {
+    pub(crate) fn new(source: &str) -> Self {
         Self {
             source: source.to_string(),
             tokens: Vec::new(),
@@ -49,7 +49,7 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Token> {
+    pub(crate) fn scan_tokens(mut self) -> Vec<Token> {
         while !self.is_at_end() {
             // Mark the start of the next lexeme before scanning it.
             self.start = self.current;

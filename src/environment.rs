@@ -3,38 +3,38 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::runtime::{RuntimeError, Value};
 use crate::token::Token;
 
-pub type EnvironmentRef = Rc<RefCell<Environment>>;
+pub(crate) type EnvironmentRef = Rc<RefCell<Environment>>;
 
 #[derive(Default)]
-pub struct Environment {
+pub(crate) struct Environment {
     enclosing: Option<EnvironmentRef>,
     values: HashMap<String, Value>,
 }
 
 impl Environment {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     // Helpers for constructing shared handles to the global environment and
     // nested child environments used by block scope.
-    pub fn new_ref() -> EnvironmentRef {
+    pub(crate) fn new_ref() -> EnvironmentRef {
         Rc::new(RefCell::new(Self::new()))
     }
 
-    pub fn from_enclosing(enclosing: EnvironmentRef) -> Self {
+    pub(crate) fn from_enclosing(enclosing: EnvironmentRef) -> Self {
         Self {
             enclosing: Some(enclosing),
             values: HashMap::new(),
         }
     }
 
-    pub fn new_enclosed_ref(enclosing: EnvironmentRef) -> EnvironmentRef {
+    pub(crate) fn new_enclosed_ref(enclosing: EnvironmentRef) -> EnvironmentRef {
         Rc::new(RefCell::new(Self::from_enclosing(enclosing)))
     }
 
     // Bind a value to a name in the current environment.
-    pub fn define(&mut self, name: String, value: Value) {
+    pub(crate) fn define(&mut self, name: String, value: Value) {
         // TODO(perf): Environment keys currently clone each variable name into
         // an owned `String`. String interning or symbol IDs would avoid
         // repeating that allocation across declarations and lookups.
@@ -42,7 +42,7 @@ impl Environment {
     }
 
     // Update the value stored for an existing variable.
-    pub fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
+    pub(crate) fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
         if let Some(slot) = self.values.get_mut(&name.lexeme) {
             *slot = value;
             Ok(())
@@ -57,7 +57,7 @@ impl Environment {
     }
 
     // Look up the current value stored for a variable name.
-    pub fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
+    pub(crate) fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
         if let Some(value) = self.values.get(&name.lexeme) {
             // TODO(perf): Returning an owned `Value` clones strings and would
             // also clone any future heap-backed objects. Shared runtime
@@ -75,7 +75,7 @@ impl Environment {
 
     // Update a binding in the ancestor environment selected by the resolver's
     // precomputed lexical distance.
-    pub fn assign_at(
+    pub(crate) fn assign_at(
         environment: &EnvironmentRef,
         distance: usize,
         name: &Token,
@@ -97,7 +97,7 @@ impl Environment {
 
     // Read a binding from the ancestor environment selected by the resolver's
     // precomputed lexical distance.
-    pub fn get_at(
+    pub(crate) fn get_at(
         environment: &EnvironmentRef,
         distance: usize,
         name: &Token,

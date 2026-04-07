@@ -1,7 +1,7 @@
 use crate::token::{Literal, Token};
 
 #[derive(Debug, Clone)]
-pub enum Expr {
+pub(crate) enum Expr {
     Assign {
         // TODO(perf): Storing the full token is convenient, but it carries
         // owned lexeme/literal data. A leaner AST could store only the token
@@ -71,7 +71,7 @@ pub enum Expr {
 
 impl Expr {
     // Construct an assignment expression that updates an existing binding.
-    pub fn assign(name: Token, value: Expr) -> Self {
+    pub(crate) fn assign(name: Token, value: Expr) -> Self {
         Expr::Assign {
             name,
             value: Box::new(value),
@@ -79,7 +79,7 @@ impl Expr {
     }
 
     // Construct a binary expression with left and right operands.
-    pub fn binary(left: Expr, operator: Token, right: Expr) -> Self {
+    pub(crate) fn binary(left: Expr, operator: Token, right: Expr) -> Self {
         Expr::Binary {
             left: Box::new(left),
             operator,
@@ -88,7 +88,7 @@ impl Expr {
     }
 
     // Construct a function call expression with a callee and zero or more arguments.
-    pub fn call(callee: Expr, paren: Token, arguments: Vec<Expr>) -> Self {
+    pub(crate) fn call(callee: Expr, paren: Token, arguments: Vec<Expr>) -> Self {
         Expr::Call {
             callee: Box::new(callee),
             paren,
@@ -97,7 +97,7 @@ impl Expr {
     }
 
     // Construct a property read expression like `object.name`.
-    pub fn get(object: Expr, name: Token) -> Self {
+    pub(crate) fn get(object: Expr, name: Token) -> Self {
         Expr::Get {
             object: Box::new(object),
             name,
@@ -105,19 +105,19 @@ impl Expr {
     }
 
     // Construct a grouping expression that preserves explicit parentheses.
-    pub fn grouping(expression: Expr) -> Self {
+    pub(crate) fn grouping(expression: Expr) -> Self {
         Expr::Grouping {
             expression: Box::new(expression),
         }
     }
 
     // Construct a literal expression from an already-parsed literal value.
-    pub fn literal(value: Literal) -> Self {
+    pub(crate) fn literal(value: Literal) -> Self {
         Expr::Literal { value }
     }
 
     // Construct a logical expression that may short-circuit.
-    pub fn logical(left: Expr, operator: Token, right: Expr) -> Self {
+    pub(crate) fn logical(left: Expr, operator: Token, right: Expr) -> Self {
         Expr::Logical {
             left: Box::new(left),
             operator,
@@ -126,7 +126,7 @@ impl Expr {
     }
 
     // Construct a property assignment like `object.name = value`.
-    pub fn set(object: Expr, name: Token, value: Expr) -> Self {
+    pub(crate) fn set(object: Expr, name: Token, value: Expr) -> Self {
         Expr::Set {
             object: Box::new(object),
             name,
@@ -135,22 +135,22 @@ impl Expr {
     }
 
     // Construct a `super.method` expression used inside subclasses.
-    pub fn super_(keyword: Token, method: Token) -> Self {
+    pub(crate) fn super_(keyword: Token, method: Token) -> Self {
         Expr::Super { keyword, method }
     }
 
     // Construct a `this` expression used inside methods.
-    pub fn this(keyword: Token) -> Self {
+    pub(crate) fn this(keyword: Token) -> Self {
         Expr::This { keyword }
     }
 
     // Construct a variable expression that refers to a named binding.
-    pub fn variable(name: Token) -> Self {
+    pub(crate) fn variable(name: Token) -> Self {
         Expr::Variable { name }
     }
 
     // Construct a conditional expression with then/else branches.
-    pub fn conditional(condition: Expr, then_branch: Expr, else_branch: Expr) -> Self {
+    pub(crate) fn conditional(condition: Expr, then_branch: Expr, else_branch: Expr) -> Self {
         Expr::Conditional {
             condition: Box::new(condition),
             then_branch: Box::new(then_branch),
@@ -159,7 +159,7 @@ impl Expr {
     }
 
     // Construct a unary expression with one operand.
-    pub fn unary(operator: Token, right: Expr) -> Self {
+    pub(crate) fn unary(operator: Token, right: Expr) -> Self {
         Expr::Unary {
             operator,
             right: Box::new(right),

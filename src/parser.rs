@@ -11,7 +11,7 @@ struct ParseError;
 
 const MAX_ARITY: usize = 255;
 
-pub struct Parser {
+pub(crate) struct Parser {
     tokens: Vec<Token>,
     // Index of the next token to be parsed.
     current: usize,
@@ -24,7 +24,7 @@ pub struct Parser {
 type ParseRule = fn(&mut Parser) -> Result<Expr, ParseError>;
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub(crate) fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens,
             current: 0,
@@ -34,7 +34,7 @@ impl Parser {
     }
 
     // program -> declaration* EOF ;
-    pub fn parse(&mut self) -> Vec<Stmt> {
+    pub(crate) fn parse(&mut self) -> Vec<Stmt> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
@@ -50,7 +50,7 @@ impl Parser {
     }
 
     // Parse a single expression that must consume the entire input.
-    pub fn parse_expression_input(&mut self) -> Option<Expr> {
+    pub(crate) fn parse_expression_input(&mut self) -> Option<Expr> {
         let expr = self.expression().ok()?;
 
         if !self.is_at_end() {

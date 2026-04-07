@@ -6,7 +6,7 @@ use std::{
 static NEXT_TOKEN_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenType {
+pub(crate) enum TokenType {
     // Single-character tokens.
     LeftParen,
     RightParen,
@@ -60,7 +60,7 @@ pub enum TokenType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
+pub(crate) enum Literal {
     String(String),
     Number(f64),
     Bool(bool),
@@ -68,12 +68,12 @@ pub enum Literal {
 }
 
 #[derive(Debug, Clone)]
-pub struct Token {
-    pub id: u64,
-    pub type_: TokenType,
-    pub lexeme: String,
-    pub literal: Option<Literal>,
-    pub line: u32,
+pub(crate) struct Token {
+    pub(crate) id: u64,
+    pub(crate) type_: TokenType,
+    pub(crate) lexeme: String,
+    pub(crate) literal: Option<Literal>,
+    pub(crate) line: u32,
 }
 
 impl Display for TokenType {

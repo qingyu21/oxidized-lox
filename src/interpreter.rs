@@ -29,7 +29,7 @@ pub(crate) enum ResolvedBinding {
     Unresolved,
 }
 
-pub struct Interpreter {
+pub(crate) struct Interpreter {
     // Fixed handle to the outermost global scope so resolved global lookups
     // do not depend on whatever the current environment happens to be.
     globals: EnvironmentRef,
@@ -50,7 +50,7 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let globals = Environment::new_ref();
         install_native_globals(&globals);
 
@@ -61,7 +61,7 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&self, statements: &[Stmt]) {
+    pub(crate) fn interpret(&self, statements: &[Stmt]) {
         match self.execute_all(statements) {
             Ok(ControlFlow::None) => {}
             Ok(ControlFlow::Break) => {
@@ -74,7 +74,7 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret_expression(&self, expr: &Expr) {
+    pub(crate) fn interpret_expression(&self, expr: &Expr) {
         match self.evaluate(expr) {
             Ok(value) => println!("{value}"),
             Err(error) => lox::runtime_error(&error.token, &error.message),
