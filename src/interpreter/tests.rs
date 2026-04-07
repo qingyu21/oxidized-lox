@@ -256,6 +256,32 @@ fn super_lookup_starts_from_the_enclosing_class_superclass() {
 }
 
 #[test]
+fn super_can_be_used_inside_local_functions_nested_in_methods() {
+    assert_eq!(
+        interpret_script_result(
+            "class A {
+               method() {
+                 return \"A method\";
+               }
+             }
+
+             class B < A {
+               method() {
+                 fun inner() {
+                   return super.method();
+                 }
+
+                 return inner();
+               }
+             }
+
+             B().method()"
+        ),
+        Value::String("A method".to_string())
+    );
+}
+
+#[test]
 fn subclass_declaration_requires_a_class_superclass() {
     let statements = parse_statements(
         "var NotAClass = \"I am totally not a class\";
@@ -438,6 +464,30 @@ fn callbacks_returned_from_methods_keep_access_to_this() {
              callback()"
         ),
         Value::String("widget".to_string())
+    );
+}
+
+#[test]
+fn nested_class_declarations_restore_the_enclosing_this_context() {
+    assert_eq!(
+        interpret_script_result(
+            "class Outer {
+               method() {
+                 class Inner {
+                   method() {
+                     return this.value;
+                   }
+                 }
+
+                 return this.value;
+               }
+             }
+
+             var outer = Outer();
+             outer.value = \"outer\";
+             outer.method()"
+        ),
+        Value::String("outer".to_string())
     );
 }
 
@@ -822,6 +872,30 @@ fn comma_still_evaluates_left_operand() {
 fn reports_runtime_error_for_non_numeric_comparison() {
     let error = evaluate_result("\"a\" < \"b\"")
         .expect_err("string comparison should currently be rejected");
+    assert_eq!(error.message, "Operands must be numbers.");
+}
+
+#[test]
+fn reports_runtime_error_for_non_numeric_unary_minus() {
+    let error =
+        evaluate_result("-\"lox\"").expect_err("unary minus should reject non-number operands");
+    assert_eq!(error.message, "Operand must be a number.");
+}
+
+#[test]
+fn reports_runtime_error_for_plus_without_numbers_or_strings() {
+    let error = evaluate_result("true + false")
+        .expect_err("plus should reject operands when neither side is a string or number");
+    assert_eq!(
+        error.message,
+        "Operands must be two numbers or at least one string."
+    );
+}
+
+#[test]
+fn reports_runtime_error_for_non_numeric_minus() {
+    let error =
+        evaluate_result("\"lox\" - 1").expect_err("minus should reject non-number operands");
     assert_eq!(error.message, "Operands must be numbers.");
 }
 

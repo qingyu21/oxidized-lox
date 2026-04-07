@@ -251,6 +251,36 @@ mod tests {
     }
 
     #[test]
+    fn run_marks_unterminated_string_as_a_syntax_error() {
+        with_clean_error_state(|| {
+            run("\"unterminated");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_marks_unterminated_block_comment_as_a_syntax_error() {
+        with_clean_error_state(|| {
+            run("/* unterminated");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
+    fn run_marks_unexpected_characters_as_a_syntax_error() {
+        with_clean_error_state(|| {
+            run("@");
+
+            assert!(had_error());
+            assert!(!had_runtime_error());
+        });
+    }
+
+    #[test]
     fn runtime_error_sets_only_runtime_flag() {
         with_clean_error_state(|| {
             runtime_error(&token(TokenType::Slash, "/", 7), "Division by zero.");
@@ -502,6 +532,30 @@ mod tests {
     fn semicolon_terminated_inputs_are_not_treated_as_bare_repl_expressions() {
         let tokens = Scanner::new("1 + 2;").scan_tokens();
         assert!(!should_eval_repl_expression(&tokens));
+    }
+
+    #[test]
+    fn statement_started_inputs_are_not_treated_as_bare_repl_expressions() {
+        let cases = [
+            "print 1",
+            "var beverage = \"tea\"",
+            "{ print 1; }",
+            "if (true) print 1;",
+            "while (true) break;",
+            "for (;;) break;",
+            "break",
+            "fun greet() {}",
+            "class Bagel {}",
+            "return 1",
+        ];
+
+        for source in cases {
+            let tokens = Scanner::new(source).scan_tokens();
+            assert!(
+                !should_eval_repl_expression(&tokens),
+                "expected `{source}` to be treated as a statement"
+            );
+        }
     }
 
     fn with_clean_error_state(test: impl FnOnce()) {

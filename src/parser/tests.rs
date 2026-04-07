@@ -495,6 +495,83 @@ fn parses_for_statement_without_clauses_as_infinite_while() {
 }
 
 #[test]
+fn parses_for_statement_without_condition_as_true_while() {
+    let statements = parse_statements("for (var i = 0;; i = i + 1) print i;");
+
+    match statements.as_slice() {
+        [
+            Stmt::Block {
+                statements: outer_statements,
+            },
+        ] => match outer_statements.as_slice() {
+            [
+                Stmt::Var {
+                    name,
+                    initializer: Some(initializer),
+                },
+                Stmt::While { condition, body },
+            ] => {
+                assert_eq!(name.lexeme, "i");
+                assert_eq!(AstPrinter.print(initializer), "0");
+                assert_eq!(AstPrinter.print(condition), "true");
+
+                match body.as_ref() {
+                    Stmt::Block { statements } => match statements.as_slice() {
+                        [
+                            Stmt::Print { expression },
+                            Stmt::Expression {
+                                expression: increment,
+                            },
+                        ] => {
+                            assert_eq!(AstPrinter.print(expression), "i");
+                            assert_eq!(AstPrinter.print(increment), "(= i (+ i 1))");
+                        }
+                        _ => panic!(
+                            "expected the while body to contain the original body plus increment"
+                        ),
+                    },
+                    _ => panic!("expected the desugared while body to be a block"),
+                }
+            }
+            _ => panic!("expected initializer plus while loop in the outer block"),
+        },
+        _ => panic!("expected the for loop to desugar to a single block statement"),
+    }
+}
+
+#[test]
+fn parses_for_statement_without_increment_preserving_the_original_body() {
+    let statements = parse_statements("for (var i = 0; i < 3;) print i;");
+
+    match statements.as_slice() {
+        [
+            Stmt::Block {
+                statements: outer_statements,
+            },
+        ] => match outer_statements.as_slice() {
+            [
+                Stmt::Var {
+                    name,
+                    initializer: Some(initializer),
+                },
+                Stmt::While { condition, body },
+            ] => {
+                assert_eq!(name.lexeme, "i");
+                assert_eq!(AstPrinter.print(initializer), "0");
+                assert_eq!(AstPrinter.print(condition), "(< i 3)");
+
+                match body.as_ref() {
+                    Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "i"),
+                    _ => panic!("expected the original loop body to be preserved without wrapping"),
+                }
+            }
+            _ => panic!("expected initializer plus while loop in the outer block"),
+        },
+        _ => panic!("expected the for loop to desugar to a single block statement"),
+    }
+}
+
+#[test]
 fn dangling_else_binds_to_the_nearest_if() {
     let statements = parse_statements("if (first) if (second) print 1; else print 2;");
 
