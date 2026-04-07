@@ -2,6 +2,7 @@ use std::{env, io, process};
 
 #[cfg(test)]
 mod ast_printer;
+mod diagnostics;
 mod environment;
 mod expr;
 mod interpreter;
@@ -11,6 +12,8 @@ mod resolver;
 mod runtime;
 mod scanner;
 mod stmt;
+#[cfg(test)]
+mod test_support;
 mod token;
 
 fn main() -> io::Result<()> {

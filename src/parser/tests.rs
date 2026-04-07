@@ -1,7 +1,6 @@
-use super::Parser;
 use crate::ast_printer::AstPrinter;
-use crate::scanner::Scanner;
 use crate::stmt::Stmt;
+use crate::test_support::{parse_statements, parser_for};
 
 #[test]
 fn parses_binary_precedence() {
@@ -179,17 +178,18 @@ fn parses_function_declaration_with_parameters_and_body() {
     let statements = parse_statements("fun greet(first, last) { print first + last; }");
 
     match statements.as_slice() {
-        [Stmt::Function { name, params, body }] => {
-            assert_eq!(name.lexeme, "greet");
+        [Stmt::Function(function)] => {
+            assert_eq!(function.name.lexeme, "greet");
             assert_eq!(
-                params
+                function
+                    .params
                     .iter()
                     .map(|param| param.lexeme.as_str())
                     .collect::<Vec<_>>(),
                 vec!["first", "last"]
             );
 
-            match body.as_slice() {
+            match function.body.as_slice() {
                 [Stmt::Print { expression }] => {
                     assert_eq!(AstPrinter.print(expression), "(+ first last)");
                 }
@@ -218,37 +218,27 @@ fn parses_class_declaration_with_methods() {
             assert!(superclass.is_none());
 
             match methods.as_slice() {
-                [
-                    Stmt::Function {
-                        name: cook_name,
-                        params: cook_params,
-                        body: cook_body,
-                    },
-                    Stmt::Function {
-                        name: serve_name,
-                        params: serve_params,
-                        body: serve_body,
-                    },
-                ] => {
-                    assert_eq!(cook_name.lexeme, "cook");
-                    assert!(cook_params.is_empty());
-                    assert_eq!(serve_name.lexeme, "serve");
+                [cook, serve] => {
+                    assert_eq!(cook.name.lexeme, "cook");
+                    assert!(cook.params.is_empty());
+                    assert_eq!(serve.name.lexeme, "serve");
                     assert_eq!(
-                        serve_params
+                        serve
+                            .params
                             .iter()
                             .map(|param| param.lexeme.as_str())
                             .collect::<Vec<_>>(),
                         vec!["who"]
                     );
 
-                    match cook_body.as_slice() {
+                    match cook.body.as_slice() {
                         [Stmt::Print { expression }] => {
                             assert_eq!(AstPrinter.print(expression), "Eggs");
                         }
                         _ => panic!("expected a single print statement in the first method body"),
                     }
 
-                    match serve_body.as_slice() {
+                    match serve.body.as_slice() {
                         [Stmt::Print { expression }] => {
                             assert_eq!(AstPrinter.print(expression), "who");
                         }
@@ -293,7 +283,7 @@ fn parses_return_statement_with_value_inside_function() {
     let statements = parse_statements("fun identity(value) { return value; }");
 
     match statements.as_slice() {
-        [Stmt::Function { body, .. }] => match body.as_slice() {
+        [Stmt::Function(function)] => match function.body.as_slice() {
             [
                 Stmt::Return {
                     keyword,
@@ -314,7 +304,7 @@ fn parses_bare_return_statement_inside_function() {
     let statements = parse_statements("fun done() { return; }");
 
     match statements.as_slice() {
-        [Stmt::Function { body, .. }] => match body.as_slice() {
+        [Stmt::Function(function)] => match function.body.as_slice() {
             [
                 Stmt::Return {
                     keyword,
@@ -709,8 +699,7 @@ fn discards_logical_expression_after_missing_left_operand() {
 
 #[test]
 fn synchronizes_to_next_statement_after_error() {
-    let tokens = Scanner::new("print 1 + ; print 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 + ; print 2;");
     let statements = parser.parse();
 
     let expr = match statements.as_slice() {
@@ -723,8 +712,7 @@ fn synchronizes_to_next_statement_after_error() {
 
 #[test]
 fn synchronizes_to_var_declaration_after_error() {
-    let tokens = Scanner::new("print 1 + ; var beverage = \"tea\";").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 + ; var beverage = \"tea\";");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -743,8 +731,7 @@ fn synchronizes_to_var_declaration_after_error() {
 
 #[test]
 fn reports_break_outside_loop_and_recovers() {
-    let tokens = Scanner::new("break; print 1;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("break; print 1;");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -755,8 +742,7 @@ fn reports_break_outside_loop_and_recovers() {
 
 #[test]
 fn reports_return_outside_function_and_recovers() {
-    let tokens = Scanner::new("return 1; print 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("return 1; print 2;");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -767,8 +753,7 @@ fn reports_return_outside_function_and_recovers() {
 
 #[test]
 fn synchronizes_to_while_statement_after_error() {
-    let tokens = Scanner::new("print 1 + ; while (true) print 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 + ; while (true) print 2;");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -785,8 +770,7 @@ fn synchronizes_to_while_statement_after_error() {
 
 #[test]
 fn synchronizes_to_break_statement_inside_a_loop_block() {
-    let tokens = Scanner::new("while (true) { print 1 + ; break; }").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("while (true) { print 1 + ; break; }");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -803,8 +787,7 @@ fn synchronizes_to_break_statement_inside_a_loop_block() {
 
 #[test]
 fn synchronizes_to_for_statement_after_error() {
-    let tokens = Scanner::new("print 1 + ; for (;;) print 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 + ; for (;;) print 2;");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -821,15 +804,14 @@ fn synchronizes_to_for_statement_after_error() {
 
 #[test]
 fn synchronizes_to_function_declaration_after_error() {
-    let tokens = Scanner::new("print 1 + ; fun noop() {}").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 + ; fun noop() {}");
     let statements = parser.parse();
 
     match statements.as_slice() {
-        [Stmt::Function { name, params, body }] => {
-            assert_eq!(name.lexeme, "noop");
-            assert!(params.is_empty());
-            assert!(body.is_empty());
+        [Stmt::Function(function)] => {
+            assert_eq!(function.name.lexeme, "noop");
+            assert!(function.params.is_empty());
+            assert!(function.body.is_empty());
         }
         _ => panic!("expected the parser to recover to the next function declaration"),
     }
@@ -837,8 +819,7 @@ fn synchronizes_to_function_declaration_after_error() {
 
 #[test]
 fn synchronizes_to_class_declaration_after_error() {
-    let tokens = Scanner::new("print 1 + ; class Breakfast {}").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 + ; class Breakfast {}");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -859,8 +840,7 @@ fn synchronizes_to_class_declaration_after_error() {
 
 #[test]
 fn reports_invalid_assignment_target_and_recovers() {
-    let tokens = Scanner::new("a + b = c; print 1;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("a + b = c; print 1;");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -879,8 +859,7 @@ fn reports_invalid_assignment_target_and_recovers() {
 
 #[test]
 fn keeps_valid_statements_before_and_after_an_invalid_one() {
-    let tokens = Scanner::new("print 1; print ; print 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1; print ; print 2;");
     let statements = parser.parse();
 
     let printed = statements
@@ -896,8 +875,7 @@ fn keeps_valid_statements_before_and_after_an_invalid_one() {
 
 #[test]
 fn synchronizes_to_next_print_after_missing_semicolon() {
-    let tokens = Scanner::new("print 1 print 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 print 2;");
     let statements = parser.parse();
 
     let printed = statements
@@ -913,8 +891,7 @@ fn synchronizes_to_next_print_after_missing_semicolon() {
 
 #[test]
 fn synchronizes_after_missing_right_paren() {
-    let tokens = Scanner::new("print (1 + 2; print 3;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print (1 + 2; print 3;");
     let statements = parser.parse();
 
     let printed = statements
@@ -930,8 +907,7 @@ fn synchronizes_after_missing_right_paren() {
 
 #[test]
 fn synchronizes_to_next_expression_statement_after_missing_semicolon() {
-    let tokens = Scanner::new("print 1 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("print 1 2;");
     let statements = parser.parse();
 
     let expr = match statements.as_slice() {
@@ -981,8 +957,7 @@ fn synchronizes_to_minus_started_expression_statement() {
 
 #[test]
 fn synchronizes_within_block_without_skipping_the_closing_brace() {
-    let tokens = Scanner::new("{ print 1 + ; } print 2;").scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for("{ print 1 + ; } print 2;");
     let statements = parser.parse();
 
     match statements.as_slice() {
@@ -1020,8 +995,7 @@ fn parse_print_to_string(source: &str) -> String {
 }
 
 fn assert_parse_error_consumes_to_end(source: &str) {
-    let tokens = Scanner::new(source).scan_tokens();
-    let mut parser = Parser::new(tokens);
+    let mut parser = parser_for(source);
     let _ = parser.parse();
     assert!(parser.is_at_end());
 }
@@ -1033,10 +1007,4 @@ fn recover_to_expression_statement_string(source: &str) -> String {
         [Stmt::Expression { expression }] => AstPrinter.print(expression),
         _ => panic!("expected recovery to a single expression statement"),
     }
-}
-
-fn parse_statements(source: &str) -> Vec<Stmt> {
-    let tokens = Scanner::new(source).scan_tokens();
-    let mut parser = Parser::new(tokens);
-    parser.parse()
 }

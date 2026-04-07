@@ -1,66 +1,40 @@
 use super::*;
+use crate::diagnostics::{
+    clear_error, clear_runtime_error, had_error, had_runtime_error, runtime_error,
+};
+use crate::test_support::scan_tokens;
 use std::sync::{LazyLock, Mutex};
 
 static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 #[test]
 fn run_marks_syntax_errors_without_runtime_errors() {
-    with_clean_error_state(|| {
-        run("print ;");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("print ;");
 }
 
 #[test]
 fn run_marks_runtime_errors_without_syntax_errors() {
-    with_clean_error_state(|| {
-        run("1 / 0;");
-
-        assert!(!had_error());
-        assert!(had_runtime_error());
-    });
+    assert_run_runtime_error("1 / 0;");
 }
 
 #[test]
 fn run_stops_before_execution_after_parse_error() {
-    with_clean_error_state(|| {
-        run("print ; 1 / 0;");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("print ; 1 / 0;");
 }
 
 #[test]
 fn run_marks_unterminated_string_as_a_syntax_error() {
-    with_clean_error_state(|| {
-        run("\"unterminated");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("\"unterminated");
 }
 
 #[test]
 fn run_marks_unterminated_block_comment_as_a_syntax_error() {
-    with_clean_error_state(|| {
-        run("/* unterminated");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("/* unterminated");
 }
 
 #[test]
 fn run_marks_unexpected_characters_as_a_syntax_error() {
-    with_clean_error_state(|| {
-        run("@");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("@");
 }
 
 #[test]
@@ -68,252 +42,150 @@ fn runtime_error_sets_only_runtime_flag() {
     with_clean_error_state(|| {
         runtime_error(&token(TokenType::Slash, "/", 7), "Division by zero.");
 
-        assert!(!had_error());
-        assert!(had_runtime_error());
+        assert_flags(false, true);
     });
 }
 
 #[test]
 fn repl_style_runs_share_the_same_interpreter_state() {
     with_clean_error_state(|| {
-        run("var beverage = \"tea\";");
-        clear_error();
-        clear_runtime_error();
+        run_and_reset_flags("var beverage = \"tea\";");
 
         run("beverage;");
 
-        assert!(!had_error());
-        assert!(!had_runtime_error());
+        assert_flags(false, false);
     });
 }
 
 #[test]
 fn repl_evaluates_bare_expressions() {
-    with_clean_error_state(|| {
-        run_repl("1 / 0");
-
-        assert!(!had_error());
-        assert!(had_runtime_error());
-    });
+    assert_repl_runtime_error("1 / 0");
 }
 
 #[test]
 fn repl_still_executes_semicolon_terminated_statements() {
     with_clean_error_state(|| {
-        run_repl("var beverage = \"tea\";");
-        clear_error();
-        clear_runtime_error();
+        run_repl_and_reset_flags("var beverage = \"tea\";");
 
         run_repl("beverage");
 
-        assert!(!had_error());
-        assert!(!had_runtime_error());
+        assert_flags(false, false);
     });
 }
 
 #[test]
 fn repl_keeps_expression_statements_as_statements() {
-    with_clean_error_state(|| {
-        run_repl("1 / 0;");
-
-        assert!(!had_error());
-        assert!(had_runtime_error());
-    });
+    assert_repl_runtime_error("1 / 0;");
 }
 
 #[test]
 fn run_marks_too_many_call_arguments_as_a_syntax_error() {
-    with_clean_error_state(|| {
-        let arguments = std::iter::repeat_n("1", 256).collect::<Vec<_>>().join(", ");
-        let source = format!("clock({arguments});");
-
-        run(&source);
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    let arguments = std::iter::repeat_n("1", 256).collect::<Vec<_>>().join(", ");
+    let source = format!("clock({arguments});");
+    assert_run_static_error(&source);
 }
 
 #[test]
 fn run_marks_too_many_function_parameters_as_a_syntax_error() {
-    with_clean_error_state(|| {
-        let params = (0..256)
-            .map(|index| format!("p{index}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let source = format!("fun tooMany({params}) {{}}");
-
-        run(&source);
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    let params = (0..256)
+        .map(|index| format!("p{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!("fun tooMany({params}) {{}}");
+    assert_run_static_error(&source);
 }
 
 #[test]
 fn run_marks_top_level_return_as_a_syntax_error() {
-    with_clean_error_state(|| {
-        run("return 1;");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("return 1;");
 }
 
 #[test]
 fn run_marks_local_self_initializer_as_a_syntax_error() {
-    with_clean_error_state(|| {
-        run("{ var a = a; }");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("{ var a = a; }");
 }
 
 #[test]
 fn duplicate_local_variable_in_same_scope_is_a_resolver_error() {
-    with_clean_error_state(|| {
-        run("{ var a = 1; var a = 2; }");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("{ var a = 1; var a = 2; }");
 }
 
 #[test]
 fn duplicate_function_parameter_name_is_a_resolver_error() {
-    with_clean_error_state(|| {
-        run("fun bad(a, a) {}");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("fun bad(a, a) {}");
 }
 
 #[test]
 fn run_marks_this_outside_a_class_as_a_resolution_error() {
-    with_clean_error_state(|| {
-        run("print this;");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("print this;");
 }
 
 #[test]
 fn run_marks_this_inside_a_non_method_function_as_a_resolution_error() {
-    with_clean_error_state(|| {
-        run("fun notAMethod() { print this; }");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("fun notAMethod() { print this; }");
 }
 
 #[test]
 fn run_marks_super_outside_a_class_as_a_resolution_error() {
-    with_clean_error_state(|| {
-        run("super.notEvenInAClass();");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("super.notEvenInAClass();");
 }
 
 #[test]
 fn run_marks_super_in_a_class_without_a_superclass_as_a_resolution_error() {
-    with_clean_error_state(|| {
-        run("class Eclair { cook() { super.cook(); } }");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("class Eclair { cook() { super.cook(); } }");
 }
 
 #[test]
 fn run_marks_returning_a_value_from_an_initializer_as_a_resolution_error() {
-    with_clean_error_state(|| {
-        run("class Foo { init() { return \"something else\"; } }");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("class Foo { init() { return \"something else\"; } }");
 }
 
 #[test]
 fn run_marks_inheriting_from_self_as_a_resolution_error() {
-    with_clean_error_state(|| {
-        run("class Oops < Oops {}");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("class Oops < Oops {}");
 }
 
 #[test]
 fn run_marks_unused_local_variable_as_a_resolution_error() {
-    with_clean_error_state(|| {
-        run("{ var beverage = \"tea\"; }");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("{ var beverage = \"tea\"; }");
 }
 
 #[test]
 fn run_allows_used_local_variables() {
-    with_clean_error_state(|| {
-        run("{ var beverage = \"tea\"; print beverage; }");
-
-        assert!(!had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_success("{ var beverage = \"tea\"; print beverage; }");
 }
 
 #[test]
 fn run_treats_closure_reads_as_using_the_enclosing_local() {
-    with_clean_error_state(|| {
-        run("fun outer() {
-               var beverage = \"tea\";
-               fun inner() {
-                 print beverage;
-               }
-             }");
-
-        assert!(!had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_success(
+        "fun outer() {
+           var beverage = \"tea\";
+           fun inner() {
+             print beverage;
+           }
+         }",
+    );
 }
 
 #[test]
 fn run_does_not_report_unused_function_parameters() {
-    with_clean_error_state(|| {
-        run("fun show(beverage) {}");
-
-        assert!(!had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_success("fun show(beverage) {}");
 }
 
 #[test]
 fn run_still_marks_assignment_only_locals_as_unused() {
-    with_clean_error_state(|| {
-        run("{ var count = 1; count = 2; }");
-
-        assert!(had_error());
-        assert!(!had_runtime_error());
-    });
+    assert_run_static_error("{ var count = 1; count = 2; }");
 }
 
 #[test]
 fn bare_expressions_are_detected_in_the_repl() {
-    let tokens = Scanner::new("1 + 2").scan_tokens();
+    let tokens = scan_tokens("1 + 2");
     assert!(should_eval_repl_expression(&tokens));
 }
 
 #[test]
 fn semicolon_terminated_inputs_are_not_treated_as_bare_repl_expressions() {
-    let tokens = Scanner::new("1 + 2;").scan_tokens();
+    let tokens = scan_tokens("1 + 2;");
     assert!(!should_eval_repl_expression(&tokens));
 }
 
@@ -333,7 +205,7 @@ fn statement_started_inputs_are_not_treated_as_bare_repl_expressions() {
     ];
 
     for source in cases {
-        let tokens = Scanner::new(source).scan_tokens();
+        let tokens = scan_tokens(source);
         assert!(
             !should_eval_repl_expression(&tokens),
             "expected `{source}` to be treated as a statement"
@@ -360,4 +232,51 @@ fn reset_interpreter() {
     INTERPRETER.with(|interpreter| {
         *interpreter.borrow_mut() = Interpreter::new();
     });
+}
+
+fn assert_run_success(source: &str) {
+    assert_run_flags(source, false, false);
+}
+
+fn assert_run_static_error(source: &str) {
+    assert_run_flags(source, true, false);
+}
+
+fn assert_run_runtime_error(source: &str) {
+    assert_run_flags(source, false, true);
+}
+
+fn assert_run_flags(source: &str, error: bool, runtime_error: bool) {
+    with_clean_error_state(|| {
+        run(source);
+        assert_flags(error, runtime_error);
+    });
+}
+
+fn assert_repl_runtime_error(source: &str) {
+    assert_repl_flags(source, false, true);
+}
+
+fn assert_repl_flags(source: &str, error: bool, runtime_error: bool) {
+    with_clean_error_state(|| {
+        run_repl(source);
+        assert_flags(error, runtime_error);
+    });
+}
+
+fn assert_flags(error: bool, runtime_error: bool) {
+    assert_eq!(had_error(), error);
+    assert_eq!(had_runtime_error(), runtime_error);
+}
+
+fn run_and_reset_flags(source: &str) {
+    run(source);
+    clear_error();
+    clear_runtime_error();
+}
+
+fn run_repl_and_reset_flags(source: &str) {
+    run_repl(source);
+    clear_error();
+    clear_runtime_error();
 }

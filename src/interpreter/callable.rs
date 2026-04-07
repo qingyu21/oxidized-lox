@@ -80,6 +80,10 @@ impl LoxFunction {
             .borrow_mut()
             .define("this".to_string(), Value::Instance(instance));
 
+        // TODO(perf): Binding a method currently clones the function name,
+        // parameter list, and full body AST every time a bound method value is
+        // created. Split immutable function code from the closure wrapper so
+        // bound methods can share the parsed definition instead of copying it.
         Rc::new(LoxFunction::new(
             self.name.clone(),
             self.params.clone(),

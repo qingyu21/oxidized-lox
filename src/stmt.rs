@@ -1,5 +1,13 @@
 use crate::expr::Expr;
 use crate::token::Token;
+
+#[derive(Debug, Clone)]
+pub(crate) struct FunctionDecl {
+    pub(crate) name: Token,
+    pub(crate) params: Vec<Token>,
+    pub(crate) body: Vec<Stmt>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum Stmt {
     Block {
@@ -9,18 +17,12 @@ pub(crate) enum Stmt {
     Class {
         name: Token,
         superclass: Option<Expr>,
-        // Methods currently reuse function declaration nodes so later class
-        // chapters can keep building on the existing function AST shape.
-        methods: Vec<Stmt>,
+        methods: Vec<FunctionDecl>,
     },
     Expression {
         expression: Expr,
     },
-    Function {
-        name: Token,
-        params: Vec<Token>,
-        body: Vec<Stmt>,
-    },
+    Function(FunctionDecl),
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
@@ -43,6 +45,14 @@ pub(crate) enum Stmt {
     },
 }
 
+impl FunctionDecl {
+    // Construct a function or method declaration with its name, parameters,
+    // and body statements.
+    pub(crate) fn new(name: Token, params: Vec<Token>, body: Vec<Stmt>) -> Self {
+        Self { name, params, body }
+    }
+}
+
 impl Stmt {
     // Construct a block statement with its nested declarations and statements.
     pub(crate) fn block(statements: Vec<Stmt>) -> Self {
@@ -55,7 +65,7 @@ impl Stmt {
     }
 
     // Construct a class declaration with its name and parsed method declarations.
-    pub(crate) fn class(name: Token, superclass: Option<Expr>, methods: Vec<Stmt>) -> Self {
+    pub(crate) fn class(name: Token, superclass: Option<Expr>, methods: Vec<FunctionDecl>) -> Self {
         Stmt::Class {
             name,
             superclass,
@@ -69,8 +79,8 @@ impl Stmt {
     }
 
     // Construct a function declaration with its name, parameters, and body.
-    pub(crate) fn function(name: Token, params: Vec<Token>, body: Vec<Stmt>) -> Self {
-        Stmt::Function { name, params, body }
+    pub(crate) fn function(declaration: FunctionDecl) -> Self {
+        Stmt::Function(declaration)
     }
 
     // Construct an if statement with an optional else branch.

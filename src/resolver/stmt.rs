@@ -1,5 +1,9 @@
 use super::{BindingKind, ClassType, FunctionType, ResolveError, Resolver};
-use crate::{expr::Expr, stmt::Stmt, token::Token};
+use crate::{
+    expr::Expr,
+    stmt::{FunctionDecl, Stmt},
+    token::Token,
+};
 
 impl<'a> Resolver<'a> {
     // Public entry point for resolving a parsed statement list before execution.
@@ -27,10 +31,10 @@ impl<'a> Resolver<'a> {
                 methods,
             } => self.resolve_class_statement(name, superclass.as_ref(), methods),
             Stmt::Expression { expression } => self.resolve_expression_node(expression),
-            Stmt::Function { name, params, body } => {
-                self.declare(name, BindingKind::Function)?;
-                self.define(name);
-                self.resolve_function(params, body, FunctionType::Function)
+            Stmt::Function(function) => {
+                self.declare(&function.name, BindingKind::Function)?;
+                self.define(&function.name);
+                self.resolve_function(function, FunctionType::Function)
             }
             Stmt::If {
                 condition,
@@ -75,7 +79,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         name: &Token,
         superclass: Option<&Expr>,
-        methods: &[Stmt],
+        methods: &[FunctionDecl],
     ) -> Result<(), ResolveError> {
         // Class names behave like declarations in the surrounding scope.
         // Class methods then reuse the existing function-body resolver so
@@ -96,7 +100,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         name: &Token,
         superclass: Option<&Expr>,
-        methods: &[Stmt],
+        methods: &[FunctionDecl],
     ) -> Result<(), ResolveError> {
         self.declare(name, BindingKind::Class)?;
         self.define(name);
@@ -144,22 +148,14 @@ impl<'a> Resolver<'a> {
         self.resolve_expression_node(superclass)
     }
 
-    fn resolve_class_methods(&mut self, methods: &[Stmt]) -> Result<(), ResolveError> {
+    fn resolve_class_methods(&mut self, methods: &[FunctionDecl]) -> Result<(), ResolveError> {
         for method in methods {
-            let Stmt::Function {
-                name: method_name,
-                params,
-                body,
-            } = method
-            else {
-                unreachable!("parser should only store function-shaped methods in classes");
-            };
-            let function_type = if method_name.lexeme == "init" {
+            let function_type = if method.name.lexeme == "init" {
                 FunctionType::Initializer
             } else {
                 FunctionType::Method
             };
-            self.resolve_function(params, body, function_type)?;
+            self.resolve_function(method, function_type)?;
         }
 
         Ok(())
@@ -169,8 +165,7 @@ impl<'a> Resolver<'a> {
     // like a local variable declared at the start of that body.
     fn resolve_function(
         &mut self,
-        params: &[Token],
-        body: &[Stmt],
+        function: &FunctionDecl,
         function_type: FunctionType,
     ) -> Result<(), ResolveError> {
         let enclosing_function = self.current_function;
@@ -178,12 +173,12 @@ impl<'a> Resolver<'a> {
         self.begin_scope();
 
         let result = (|| {
-            for param in params {
+            for param in &function.params {
                 self.declare(param, BindingKind::Parameter)?;
                 self.define(param);
             }
 
-            self.resolve_statements(body)
+            self.resolve_statements(&function.body)
         })();
 
         let result = self.finish_scope(result);

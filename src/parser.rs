@@ -1,6 +1,6 @@
+use crate::diagnostics;
 use crate::expr::Expr;
-use crate::lox;
-use crate::stmt::Stmt;
+use crate::stmt::{FunctionDecl, Stmt};
 use crate::token::{Token, TokenType};
 
 mod expressions;
@@ -73,7 +73,7 @@ impl Parser {
         // followed by `(` should fall through to expression parsing so
         // statement forms like `fun () {};` are treated as expression statements.
         if self.match_token(&[TokenType::Fun]) {
-            return self.function("function");
+            return Ok(Stmt::function(self.function_declaration("function")?));
         }
 
         if self.match_token(&[TokenType::Var]) {
@@ -100,7 +100,7 @@ impl Parser {
 
         let mut methods = Vec::new();
         while !self.check(TokenType::RightBrace) && !self.is_at_end() {
-            methods.push(self.function("method")?);
+            methods.push(self.function_declaration("method")?);
         }
 
         self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
@@ -109,7 +109,7 @@ impl Parser {
 
     // funDecl -> "fun" function ;
     // function -> IDENTIFIER "(" parameters? ")" block ;
-    fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
+    fn function_declaration(&mut self, kind: &str) -> Result<FunctionDecl, ParseError> {
         // Parse the declared name and the opening parenthesis before the
         // parameter list.
         let name = self
@@ -149,7 +149,7 @@ impl Parser {
             &format!("Expect '{{' before {kind} body."),
         )?;
         let body = self.in_function(Self::block)?;
-        Ok(Stmt::function(name, params, body))
+        Ok(FunctionDecl::new(name, params, body))
     }
 
     // varDecl -> "var" IDENTIFIER ( "=" expression )? ";" ;
@@ -181,7 +181,7 @@ impl Parser {
     }
 
     fn error(&self, token: &Token, message: &str) -> ParseError {
-        lox::token_error(token, message);
+        diagnostics::token_error(token, message);
         ParseError
     }
 
@@ -220,7 +220,7 @@ impl Parser {
                 return;
             }
 
-            if self.can_start_declaration() {
+            if self.can_resume_after_error() {
                 return;
             }
 
@@ -228,8 +228,9 @@ impl Parser {
         }
     }
 
-    // Return whether the current token can begin a declaration in the current grammar.
-    fn can_start_declaration(&self) -> bool {
+    // Return whether the current token is a plausible place to resume parsing
+    // after panic-mode error recovery.
+    fn can_resume_after_error(&self) -> bool {
         matches!(
             self.peek().type_,
             TokenType::Break

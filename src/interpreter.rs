@@ -7,7 +7,7 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::{
     environment::{Environment, EnvironmentRef},
     expr::Expr,
-    lox,
+    runtime::{RuntimeError, Value},
     stmt::Stmt,
     token::Token,
 };
@@ -19,7 +19,7 @@ use self::callable::install_native_globals;
 enum ControlFlow {
     None,
     Break,
-    Return(crate::runtime::Value),
+    Return(Value),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,24 +61,24 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn interpret(&self, statements: &[Stmt]) {
+    // Execute a parsed statement list and return the first runtime error, if any.
+    // The outer driver decides how to surface that error to users.
+    pub(crate) fn interpret(&self, statements: &[Stmt]) -> Result<(), RuntimeError> {
         match self.execute_all(statements) {
-            Ok(ControlFlow::None) => {}
+            Ok(ControlFlow::None) => Ok(()),
             Ok(ControlFlow::Break) => {
                 unreachable!("parser should reject break statements outside loops");
             }
             Ok(ControlFlow::Return(_)) => {
                 unreachable!("parser should reject return statements outside functions");
             }
-            Err(error) => lox::runtime_error(&error.token, &error.message),
+            Err(error) => Err(error),
         }
     }
 
-    pub(crate) fn interpret_expression(&self, expr: &Expr) {
-        match self.evaluate(expr) {
-            Ok(value) => println!("{value}"),
-            Err(error) => lox::runtime_error(&error.token, &error.message),
-        }
+    // Evaluate a single expression and return its runtime value to the caller.
+    pub(crate) fn interpret_expression(&self, expr: &Expr) -> Result<Value, RuntimeError> {
+        self.evaluate(expr)
     }
 
     // Record the resolver's binding decision for a variable-use token so

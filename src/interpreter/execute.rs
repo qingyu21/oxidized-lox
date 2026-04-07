@@ -4,7 +4,7 @@ use crate::{
     environment::{Environment, EnvironmentRef},
     expr::Expr,
     runtime::{LoxClass, RuntimeError, Value},
-    stmt::Stmt,
+    stmt::{FunctionDecl, Stmt},
     token::Token,
 };
 
@@ -42,9 +42,7 @@ impl Interpreter {
                 self.evaluate(expression)?;
                 Ok(ControlFlow::None)
             }
-            Stmt::Function { name, params, body } => {
-                self.execute_function_declaration(name, params, body)
-            }
+            Stmt::Function(function) => self.execute_function_declaration(function),
             Stmt::If {
                 condition,
                 then_branch,
@@ -85,16 +83,19 @@ impl Interpreter {
 
     fn execute_function_declaration(
         &self,
-        name: &Token,
-        params: &[Token],
-        body: &[Stmt],
+        function: &FunctionDecl,
     ) -> Result<ControlFlow, RuntimeError> {
         // Function declarations are executable statements: evaluating one
         // creates a callable runtime value and binds it in the current scope.
-        let function = make_function(name, params, body, self.current_environment());
+        let value = make_function(
+            &function.name,
+            &function.params,
+            &function.body,
+            self.current_environment(),
+        );
         self.current_environment()
             .borrow_mut()
-            .define(name.lexeme.clone(), function);
+            .define(function.name.lexeme.clone(), value);
         Ok(ControlFlow::None)
     }
 
@@ -102,7 +103,7 @@ impl Interpreter {
         &self,
         name: &Token,
         superclass_expr: Option<&Expr>,
-        methods: &[Stmt],
+        methods: &[FunctionDecl],
     ) -> Result<ControlFlow, RuntimeError> {
         let superclass = if let Some(superclass_expr) = superclass_expr {
             let Expr::Variable {
@@ -148,23 +149,14 @@ impl Interpreter {
         // environment where the class declaration executes.
         let mut method_table = HashMap::new();
         for method in methods {
-            let Stmt::Function {
-                name: method_name,
-                params,
-                body,
-            } = method
-            else {
-                unreachable!("parser should only store function-shaped methods in classes");
-            };
-
             let function = make_function_ref(
-                method_name,
-                params,
-                body,
+                &method.name,
+                &method.params,
+                &method.body,
                 method_closure.clone(),
-                method_name.lexeme == "init",
+                method.name.lexeme == "init",
             );
-            method_table.insert(method_name.lexeme.clone(), function);
+            method_table.insert(method.name.lexeme.clone(), function);
         }
 
         // The runtime class object stores behavior in its method table, then

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use super::{BindingInfo, BindingKind, ResolveError, Resolver};
 use crate::{
+    diagnostics,
     interpreter::ResolvedBinding,
-    lox,
     token::{Token, TokenType},
 };
 
@@ -142,7 +142,7 @@ impl<'a> Resolver<'a> {
     // Report a resolver error through the shared Lox error reporter and stop
     // the current resolution walk.
     pub(super) fn error(&self, token: &Token, message: &str) -> ResolveError {
-        lox::token_error(token, message);
+        diagnostics::token_error(token, message);
         ResolveError
     }
 }

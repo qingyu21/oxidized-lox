@@ -1,4 +1,4 @@
-use crate::lox;
+use crate::diagnostics;
 use crate::token::{Literal, Token, TokenType};
 use std::{collections::HashMap, sync::LazyLock};
 
@@ -103,7 +103,7 @@ impl Scanner {
                 } else if Self::is_alpha(c) {
                     self.identifier();
                 } else {
-                    lox::error(self.line, "Unexpected character.");
+                    diagnostics::error(self.line, "Unexpected character.");
                 }
             }
         }
@@ -135,7 +135,7 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            lox::error(self.line, "Unterminated string.");
+            diagnostics::error(self.line, "Unterminated string.");
             return;
         }
 
@@ -195,7 +195,7 @@ impl Scanner {
             }
         }
 
-        lox::error(self.line, "Unterminated block comment.");
+        diagnostics::error(self.line, "Unterminated block comment.");
     }
 
     // Scan operators like `!`/`!=` or `=`/`==` where the current character

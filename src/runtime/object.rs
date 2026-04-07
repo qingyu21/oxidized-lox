@@ -1,0 +1,138 @@
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+
+use crate::{
+    interpreter::{Interpreter, LoxFunction},
+    token::Token,
+};
+
+use super::{RuntimeError, Value};
+
+pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
+    fn arity(&self) -> usize;
+    fn call(&self, interpreter: &Interpreter, arguments: Vec<Value>)
+    -> Result<Value, RuntimeError>;
+}
+
+// TODO(ch12-challenge1): Static methods are not implemented yet. The larger
+// metaclass-style solution would need class objects to participate in property
+// lookup the way instances do, instead of only carrying an instance-method table.
+// TODO(ch13-challenge1): Class reuse still goes through a single superclass
+// link only. Alternative capability-sharing features like mixins, traits, or
+// multiple inheritance have not been implemented.
+#[derive(Debug, Clone)]
+pub(crate) struct LoxClass {
+    name: String,
+    // Subclasses follow this chain when a method is not found on the class
+    // itself, which gives instances inherited behavior.
+    superclass: Option<Rc<LoxClass>>,
+    methods: HashMap<String, Rc<LoxFunction>>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct LoxInstance {
+    // TODO(memory): Plain instances are fine to drop when their last strong
+    // reference goes away, but cyclic object graphs are not. Examples include
+    // `instance.self = instance`, mutually-referential instances, or storing a
+    // bound method back onto the instance so the closure keeps `this` alive.
+    // A tracing GC, or a carefully chosen set of Weak edges, is needed to
+    // reclaim those cycles in long-lived interpreter sessions.
+    klass: Rc<LoxClass>,
+    fields: RefCell<HashMap<String, Value>>,
+}
+
+impl LoxClass {
+    pub(crate) fn new(
+        name: String,
+        superclass: Option<Rc<LoxClass>>,
+        methods: HashMap<String, Rc<LoxFunction>>,
+    ) -> Self {
+        Self {
+            name,
+            superclass,
+            methods,
+        }
+    }
+
+    fn instantiate(class: Rc<LoxClass>) -> Rc<LoxInstance> {
+        Rc::new(LoxInstance::new(class))
+    }
+
+    // TODO(ch13-challenge2): Method lookup still prefers the lowest class in
+    // the inheritance chain and relies on `super` for upward dispatch. The
+    // BETA-style `inner` chaining model from Chapter 13 challenge 2 is not
+    // implemented.
+    pub(crate) fn find_method(&self, name: &str) -> Option<Rc<LoxFunction>> {
+        self.methods
+            .get(name)
+            .cloned()
+            .or_else(|| self.superclass.as_ref()?.find_method(name))
+    }
+}
+
+impl LoxInstance {
+    fn new(klass: Rc<LoxClass>) -> Self {
+        Self {
+            klass,
+            fields: RefCell::new(HashMap::new()),
+        }
+    }
+
+    // TODO(ch12-challenge2): Getter methods are not implemented yet. Property
+    // reads currently return stored fields or bound methods, but they do not
+    // execute user-defined getter bodies declared without parameter lists.
+    pub(crate) fn get(self: &Rc<Self>, name: &Token) -> Result<Value, RuntimeError> {
+        if let Some(value) = self.fields.borrow().get(&name.lexeme).cloned() {
+            Ok(value)
+        } else if let Some(method) = self.klass.find_method(&name.lexeme) {
+            Ok(Value::Callable(method.bind(self.clone())))
+        } else {
+            Err(RuntimeError::new(
+                name.clone(),
+                format!("Undefined property '{}'.", name.lexeme),
+            ))
+        }
+    }
+
+    pub(crate) fn set(&self, name: &Token, value: Value) {
+        self.fields.borrow_mut().insert(name.lexeme.clone(), value);
+    }
+}
+
+impl LoxCallable for LoxClass {
+    fn arity(&self) -> usize {
+        self.find_method("init")
+            .map_or(0, |initializer| initializer.arity())
+    }
+
+    fn call(
+        &self,
+        interpreter: &Interpreter,
+        arguments: Vec<Value>,
+    ) -> Result<Value, RuntimeError> {
+        // TODO(perf): Instantiating a class currently clones the entire class
+        // object, including its method table. Instances should keep sharing
+        // the original `Rc<LoxClass>` instead of rebuilding an owned copy on
+        // each construction.
+        let instance = Self::instantiate(Rc::new(self.clone()));
+
+        if let Some(initializer) = self.find_method("init") {
+            initializer
+                .bind(instance.clone())
+                .call(interpreter, arguments)?;
+        }
+
+        Ok(Value::Instance(instance))
+    }
+}
+
+impl fmt::Display for LoxClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl fmt::Display for LoxInstance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} instance", self.klass.name)
+    }
+}

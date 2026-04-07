@@ -1,8 +1,11 @@
 use crate::{
+    diagnostics::{clear_error, clear_runtime_error, had_error, had_runtime_error, runtime_error},
+    expr::Expr,
     interpreter::Interpreter,
     parser::Parser,
     resolver::Resolver,
     scanner::Scanner,
+    stmt::Stmt,
     token::{Token, TokenType},
 };
 use std::{
@@ -10,11 +13,10 @@ use std::{
     fs,
     io::{self, Write},
     process,
-    sync::atomic::{AtomicBool, Ordering},
 };
 
-static HAD_ERROR: AtomicBool = AtomicBool::new(false);
-static HAD_RUNTIME_ERROR: AtomicBool = AtomicBool::new(false);
+const EX_DATAERR: i32 = 65;
+const EX_SOFTWARE: i32 = 70;
 
 thread_local! {
     static INTERPRETER: RefCell<Interpreter> = RefCell::new(Interpreter::new());
@@ -27,11 +29,11 @@ pub(crate) fn run_file(path: &str) -> io::Result<()> {
     run(&source);
 
     if had_error() {
-        process::exit(65);
+        process::exit(EX_DATAERR);
     }
 
     if had_runtime_error() {
-        process::exit(70);
+        process::exit(EX_SOFTWARE);
     }
 
     Ok(())
@@ -65,8 +67,8 @@ fn run(source: &str) {
     // TODO(perf): This pipeline materializes both the full token stream and
     // the full AST before evaluation. A bytecode VM or arena-backed frontend
     // could cut allocation and traversal overhead later on.
-    let tokens = Scanner::new(source).scan_tokens();
-    run_tokens(tokens);
+    let tokens = scan_tokens(source);
+    run_program_tokens(tokens);
 }
 
 // REPL input may be either a full statement or a bare expression whose value
@@ -75,57 +77,94 @@ fn run_repl(source: &str) {
     // TODO(perf): This pipeline materializes both the full token stream and
     // the full AST before evaluation. A bytecode VM or arena-backed frontend
     // could cut allocation and traversal overhead later on.
-    let tokens = Scanner::new(source).scan_tokens();
+    let tokens = scan_tokens(source);
 
-    if is_empty_input(&tokens) {
-        return;
-    }
-
-    if should_eval_repl_expression(&tokens) {
-        let mut parser = Parser::new(tokens);
-        let Some(expr) = parser.parse_expression_input() else {
-            return;
-        };
-
-        // Stop if there was a syntax error.
-        if had_error() {
-            return;
-        }
-
-        INTERPRETER.with(|interpreter| {
-            let interpreter = interpreter.borrow();
-            let mut resolver = Resolver::new(&interpreter);
-            if resolver.resolve_expression(&expr).is_err() || had_error() {
+    match classify_repl_input(&tokens) {
+        ReplInput::Empty => {}
+        ReplInput::Expression => {
+            let Some(expr) = parse_repl_expression(tokens) else {
                 return;
-            }
-
-            interpreter.interpret_expression(&expr);
-        });
-        return;
+            };
+            resolve_and_interpret_expression(&expr);
+        }
+        ReplInput::Program => run_program_tokens(tokens),
     }
-
-    run_tokens(tokens);
 }
 
-fn run_tokens(tokens: Vec<Token>) {
+fn scan_tokens(source: &str) -> Vec<Token> {
+    Scanner::new(source).scan_tokens()
+}
+
+fn run_program_tokens(tokens: Vec<Token>) {
+    let Some(statements) = parse_program(tokens) else {
+        return;
+    };
+
+    resolve_and_interpret_statements(&statements);
+}
+
+fn parse_program(tokens: Vec<Token>) -> Option<Vec<Stmt>> {
     let mut parser = Parser::new(tokens);
     let statements = parser.parse();
 
-    // Stop if there was a syntax error.
-    if had_error() {
-        return;
+    if stop_after_error() {
+        None
+    } else {
+        Some(statements)
     }
+}
 
-    // The tree-walk pipeline is scanner -> parser -> resolver -> interpreter.
-    INTERPRETER.with(|interpreter| {
-        let interpreter = interpreter.borrow();
-        let mut resolver = Resolver::new(&interpreter);
-        if resolver.resolve_statements(&statements).is_err() || had_error() {
+fn parse_repl_expression(tokens: Vec<Token>) -> Option<Expr> {
+    let mut parser = Parser::new(tokens);
+    let expr = parser.parse_expression_input()?;
+
+    if stop_after_error() { None } else { Some(expr) }
+}
+
+fn resolve_and_interpret_statements(statements: &[Stmt]) {
+    with_interpreter(|interpreter| {
+        if !resolve_statements(interpreter, statements) {
             return;
         }
 
-        interpreter.interpret(&statements);
+        if let Err(error) = interpreter.interpret(statements) {
+            runtime_error(&error.token, &error.message);
+        }
     });
+}
+
+fn resolve_and_interpret_expression(expr: &Expr) {
+    with_interpreter(|interpreter| {
+        if !resolve_expression(interpreter, expr) {
+            return;
+        }
+
+        match interpreter.interpret_expression(expr) {
+            Ok(value) => println!("{value}"),
+            Err(error) => runtime_error(&error.token, &error.message),
+        }
+    });
+}
+
+fn with_interpreter<R>(f: impl FnOnce(&Interpreter) -> R) -> R {
+    INTERPRETER.with(|interpreter| {
+        let interpreter = interpreter.borrow();
+        f(&interpreter)
+    })
+}
+
+fn resolve_statements(interpreter: &Interpreter, statements: &[Stmt]) -> bool {
+    let mut resolver = Resolver::new(interpreter);
+    resolver.resolve_statements(statements).is_ok() && !had_error()
+}
+
+fn resolve_expression(interpreter: &Interpreter, expr: &Expr) -> bool {
+    let mut resolver = Resolver::new(interpreter);
+    resolver.resolve_expression(expr).is_ok() && !had_error()
+}
+
+fn stop_after_error() -> bool {
+    had_error()
 }
 
 fn is_empty_input(tokens: &[Token]) -> bool {
@@ -136,6 +175,22 @@ fn is_empty_input(tokens: &[Token]) -> bool {
             ..
         }]
     )
+}
+
+enum ReplInput {
+    Empty,
+    Expression,
+    Program,
+}
+
+fn classify_repl_input(tokens: &[Token]) -> ReplInput {
+    if is_empty_input(tokens) {
+        ReplInput::Empty
+    } else if should_eval_repl_expression(tokens) {
+        ReplInput::Expression
+    } else {
+        ReplInput::Program
+    }
 }
 
 // Use a small token-based heuristic so the REPL can accept bare expressions
@@ -171,46 +226,6 @@ fn ends_with_semicolon(tokens: &[Token]) -> bool {
         tokens.iter().rev().nth(1).map(|token| token.type_),
         Some(TokenType::Semicolon)
     )
-}
-
-pub(crate) fn error(line: u32, message: &str) {
-    report(line, "", message);
-}
-
-pub(crate) fn token_error(token: &Token, message: &str) {
-    let where_ = if token.type_ == TokenType::Eof {
-        " at end".to_string()
-    } else {
-        format!(" at '{}'", token.lexeme)
-    };
-
-    report(token.line, &where_, message);
-}
-
-pub(crate) fn runtime_error(token: &Token, message: &str) {
-    eprintln!("{message}\n[line {}]", token.line);
-    HAD_RUNTIME_ERROR.store(true, Ordering::Relaxed);
-}
-
-fn had_error() -> bool {
-    HAD_ERROR.load(Ordering::Relaxed)
-}
-
-fn had_runtime_error() -> bool {
-    HAD_RUNTIME_ERROR.load(Ordering::Relaxed)
-}
-
-fn clear_error() {
-    HAD_ERROR.store(false, Ordering::Relaxed);
-}
-
-fn clear_runtime_error() {
-    HAD_RUNTIME_ERROR.store(false, Ordering::Relaxed);
-}
-
-fn report(line: u32, where_: &str, message: &str) {
-    eprintln!("[line {line}] Error{where_}: {message}");
-    HAD_ERROR.store(true, Ordering::Relaxed);
 }
 
 #[cfg(test)]

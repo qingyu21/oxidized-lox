@@ -1,10 +1,8 @@
 use super::Interpreter;
 use crate::expr::Expr;
-use crate::parser::Parser;
-use crate::resolver::Resolver;
 use crate::runtime::{RuntimeError, Value};
-use crate::scanner::Scanner;
 use crate::stmt::Stmt;
+use crate::test_support::{parse_statements, resolve_statements};
 use crate::token::{Literal, Token, TokenType};
 
 #[test]
@@ -1092,12 +1090,6 @@ fn interpret(source: &str) -> Value {
     evaluate_result(source).expect("interpreter should successfully evaluate the test input")
 }
 
-fn parse_statements(source: &str) -> Vec<Stmt> {
-    let tokens = Scanner::new(source).scan_tokens();
-    let mut parser = Parser::new(tokens);
-    parser.parse()
-}
-
 fn interpret_script_result(source: &str) -> Value {
     let source = format!("{source};");
     let statements = parse_statements(&source);
@@ -1140,11 +1132,4 @@ fn invalid_statement(line: u32) -> Stmt {
         operator: Token::new(TokenType::Print, "print".to_string(), None, line),
         right: Box::new(Expr::literal(Literal::Number(2.0))),
     })
-}
-
-fn resolve_statements(interpreter: &Interpreter, statements: &[Stmt]) {
-    let mut resolver = Resolver::new(interpreter);
-    resolver
-        .resolve_statements(statements)
-        .expect("test input should resolve successfully");
 }
