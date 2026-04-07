@@ -111,7 +111,7 @@ REPL notes:
 Run the test suite:
 
 ```bash
-cargo test -- --test-threads=1
+cargo test
 ```
 
 Run lints with warnings treated as errors:
@@ -140,13 +140,18 @@ cargo fmt
 - `src/resolver/expr.rs`: expression-side static scope resolution and lexical binding checks
 - `src/resolver/stmt.rs`: statement-side static scope resolution, including class and function handling
 - `src/resolver/scope.rs`: resolver scope-stack helpers, binding bookkeeping, and shared diagnostics
-- `src/runtime.rs`: shared runtime types such as `Value`, `RuntimeError`, and the callable trait
+- `src/runtime.rs`: small re-export hub for runtime-facing types
+- `src/runtime/value.rs`: runtime `Value` representation and conversions from literals
+- `src/runtime/object.rs`: runtime callable/class/instance objects and method lookup
+- `src/runtime/error.rs`: runtime error payloads
 - `src/interpreter.rs`: interpreter entry points, environment handles, and resolver binding cache
 - `src/interpreter/execute.rs`: statement execution and control-flow propagation
 - `src/interpreter/evaluate.rs`: expression evaluation and runtime operator semantics
 - `src/interpreter/callable.rs`: native/user-defined callable runtime objects
 - `src/environment.rs`: lexical scope chain and variable storage
 - `src/lox.rs`: top-level run modes, REPL flow, and error reporting
+- `src/diagnostics.rs`: shared syntax/runtime diagnostic flags and reporting helpers
+- `src/test_support.rs`: shared parser/resolver helpers for unit tests
 
 ## Key Distinctions
 

@@ -137,13 +137,15 @@ flowchart TD
 
 - Lightweight marker type used inside the parser to unwind after a syntax
   failure.
-- User-facing parse diagnostics are reported through `lox.rs`.
+- User-facing parse diagnostics are emitted through `diagnostics.rs`, while
+  `lox.rs` decides when the pipeline should stop after those flags are set.
 
 `ResolveError`
 
 - Lightweight marker type used inside the resolver to stop after a static
   binding error.
-- User-facing resolver diagnostics are also reported through `lox.rs`.
+- User-facing resolver diagnostics are also emitted through `diagnostics.rs`,
+  with `lox.rs` coordinating whether execution continues.
 
 `Parser`
 
@@ -204,15 +206,17 @@ flowchart TD
   class and instance objects.
 - This is the value type stored in environments and returned by expression
   evaluation.
-- Lives in `src/runtime.rs` so environments and interpreter submodules can
-  share it without depending on one large interpreter file.
+- Is defined in `src/runtime/value.rs` and re-exported through
+  `src/runtime.rs` so environments and interpreter submodules can share it
+  without depending on the runtime file layout.
 
 `LoxCallable`
 
 - Runtime trait implemented by anything Lox can invoke with `()`.
 - Defines the callable contract used by native functions, user-defined
   functions, and classes.
-- Lives in `src/runtime.rs`, while concrete callable implementations live in
+- Is defined in `src/runtime/object.rs` and re-exported through
+  `src/runtime.rs`, while concrete callable implementations live in
   `src/interpreter/callable.rs`.
 
 `LoxFunction`
@@ -249,7 +253,8 @@ flowchart TD
 - Error raised during execution rather than parsing.
 - Carries both a message and the relevant `Token` for source-location
   reporting.
-- Lives in `src/runtime.rs` for the same reason as `Value`.
+- Is defined in `src/runtime/error.rs` and re-exported through `src/runtime.rs`
+  for the same reason as `Value`.
 
 `EnvironmentRef`
 
@@ -329,8 +334,8 @@ flowchart TD
 
 - `run_file()` handles script execution
 - `run_prompt()` handles the REPL
-- `run_tokens()` feeds parsed statements through the resolver and then into the
-  interpreter
+- `run_program_tokens()` feeds parsed statements through the resolver and then
+  into the interpreter
 - error flags and reporting helpers keep parse/runtime failures separated
 
 The REPL reuses the same interpreter instance across inputs, so state such as
