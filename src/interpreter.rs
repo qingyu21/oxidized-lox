@@ -87,10 +87,14 @@ impl Interpreter {
         self.locals.borrow_mut().insert(name.id, binding);
     }
 
+    // Clone the shared environment handle so nested execution helpers can
+    // borrow it independently without keeping the RefCell borrow alive.
     fn current_environment(&self) -> EnvironmentRef {
         self.environment.borrow().clone()
     }
 
+    // Look up the resolver's cached decision for this variable use. A missing
+    // entry means resolution never recorded a binding for that token id.
     fn resolved_binding(&self, name: &Token) -> ResolvedBinding {
         self.locals
             .borrow()

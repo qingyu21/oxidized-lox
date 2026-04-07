@@ -3,6 +3,8 @@ use std::cell::Cell;
 use crate::token::{Token, TokenType};
 
 thread_local! {
+    // Diagnostics are tracked per thread so tests and future parallel entry
+    // points do not leak syntax/runtime flags into one another.
     static HAD_ERROR: Cell<bool> = const { Cell::new(false) };
     static HAD_RUNTIME_ERROR: Cell<bool> = const { Cell::new(false) };
 }

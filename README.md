@@ -27,6 +27,11 @@ flowchart LR
     Interpreter --> Result
 ```
 
+In the current source tree, the frontend-facing pieces now live under
+`src/frontend/`, while `resolver`, `interpreter`, and `runtime` remain
+separate top-level modules because they represent later semantic-analysis and
+execution stages instead of raw parsing.
+
 More detail is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Current Status
@@ -123,12 +128,14 @@ cargo fmt
 
 ## Source Map
 
-- `src/scanner.rs`: turns source text into `Vec<Token>`
-- `src/parser.rs`: parser entry points, declarations, token helpers, and error recovery
-- `src/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, `break`, and `return`
-- `src/parser/expressions.rs`: expression parsing and precedence handling, including call and property access syntax
-- `src/expr.rs`: expression AST definitions
-- `src/stmt.rs`: statement AST definitions, including function declarations and `return`
+- `src/frontend.rs`: small aggregation module for frontend-only pieces
+- `src/frontend/scanner.rs`: turns source text into `Vec<Token>`
+- `src/frontend/parser.rs`: parser entry points, declarations, token helpers, and error recovery
+- `src/frontend/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, `break`, and `return`
+- `src/frontend/parser/expressions.rs`: expression parsing and precedence handling, including call and property access syntax
+- `src/frontend/expr.rs`: expression AST definitions
+- `src/frontend/stmt.rs`: statement AST definitions, including function declarations and `return`
+- `src/frontend/token.rs`: token and literal data types
 - `src/resolver.rs`: resolver entry point and shared resolver state
 - `src/resolver/expr.rs`: expression-side static scope resolution and lexical binding checks
 - `src/resolver/stmt.rs`: statement-side static scope resolution, including class and function handling
@@ -140,7 +147,6 @@ cargo fmt
 - `src/interpreter/callable.rs`: native/user-defined callable runtime objects
 - `src/environment.rs`: lexical scope chain and variable storage
 - `src/lox.rs`: top-level run modes, REPL flow, and error reporting
-- `src/token.rs`: token and literal data types
 
 ## Key Distinctions
 

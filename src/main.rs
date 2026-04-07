@@ -4,17 +4,17 @@ use std::{env, io, process};
 mod ast_printer;
 mod diagnostics;
 mod environment;
-mod expr;
+mod frontend;
 mod interpreter;
 mod lox;
-mod parser;
 mod resolver;
 mod runtime;
-mod scanner;
-mod stmt;
 #[cfg(test)]
 mod test_support;
-mod token;
+
+// Keep the historical `crate::expr`, `crate::parser`, and similar paths
+// working even though the concrete files now live under `src/frontend/`.
+pub(crate) use frontend::{expr, parser, scanner, stmt, token};
 
 fn main() -> io::Result<()> {
     let args = env::args().skip(1).collect::<Vec<String>>();

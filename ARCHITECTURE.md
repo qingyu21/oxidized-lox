@@ -1,7 +1,8 @@
 # Architecture
 
 This file is a compact map of the current interpreter: the main data flow, the
-core types, and the boundaries between frontend and runtime code.
+core types, and the boundaries between frontend, semantic-analysis, and runtime
+code.
 
 ## End-to-End Flow
 
@@ -32,6 +33,29 @@ The same pipeline is reused in both modes:
 - script mode: source text is parsed into `Vec<Stmt>`, resolved, and executed
 - REPL bare-expression mode: source text is parsed into one `Expr`, resolved,
   and evaluated directly
+
+## Directory Layout vs. Theory
+
+The project uses a slightly more practical directory split than a fully
+textbook-style compiler layout.
+
+- `src/frontend/` holds the scanner, parser, tokens, and AST types. This is
+  the narrow frontend: it turns source text into syntax trees.
+- `src/resolver/` is kept separate even though name binding is often taught as
+  part of a broader frontend. In this codebase it already feels like a distinct
+  semantic-analysis pass layered on top of the parsed AST.
+- `src/interpreter/` and `src/runtime/` cover execution and runtime objects,
+  which are clearly beyond the frontend.
+- `src/lox.rs` coordinates the end-to-end pipeline for scripts and the REPL,
+  so it stays outside those stage-specific directories.
+
+If you prefer a more theoretical mental model, you can read the current layout
+like this:
+
+- frontend: `src/frontend/`
+- semantic analysis: `src/resolver/`
+- execution/runtime: `src/interpreter/`, `src/runtime/`, `src/environment.rs`
+- application orchestration: `src/lox.rs`, `src/main.rs`, `src/diagnostics.rs`
 
 ## Core Type Graph
 
@@ -80,7 +104,7 @@ flowchart TD
 
 ## Type Roles
 
-### Frontend
+### Frontend and Semantic Analysis
 
 `TokenType`
 
@@ -141,6 +165,8 @@ flowchart TD
 - Is split into a small root module plus `expr.rs`, `stmt.rs`, and `scope.rs`,
   so expression resolution, statement resolution, and lexical-scope helpers
   stay separated as the binding logic grows.
+- Semantically it sits just after parsing: it does not execute code, but it is
+  no longer part of raw syntax construction either.
 - Tracks local lexical scopes with a stack of
   `HashMap<String, BindingInfo>`, where each entry remembers the binding's
   token, kind, definition state, and whether it was ever read.
