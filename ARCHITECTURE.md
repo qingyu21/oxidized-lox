@@ -138,6 +138,9 @@ flowchart TD
 `Resolver`
 
 - Walks the parsed AST before interpretation and performs static name binding.
+- Is split into a small root module plus `expr.rs`, `stmt.rs`, and `scope.rs`,
+  so expression resolution, statement resolution, and lexical-scope helpers
+  stay separated as the binding logic grows.
 - Tracks local lexical scopes with a stack of
   `HashMap<String, BindingInfo>`, where each entry remembers the binding's
   token, kind, definition state, and whether it was ever read.

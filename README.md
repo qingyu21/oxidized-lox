@@ -112,7 +112,7 @@ cargo test -- --test-threads=1
 Run lints with warnings treated as errors:
 
 ```bash
-cargo clippy -- -D warnings
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
 Format the codebase:
@@ -129,7 +129,10 @@ cargo fmt
 - `src/parser/expressions.rs`: expression parsing and precedence handling, including call and property access syntax
 - `src/expr.rs`: expression AST definitions
 - `src/stmt.rs`: statement AST definitions, including function declarations and `return`
-- `src/resolver.rs`: static scope resolution and lexical binding analysis
+- `src/resolver.rs`: resolver entry point and shared resolver state
+- `src/resolver/expr.rs`: expression-side static scope resolution and lexical binding checks
+- `src/resolver/stmt.rs`: statement-side static scope resolution, including class and function handling
+- `src/resolver/scope.rs`: resolver scope-stack helpers, binding bookkeeping, and shared diagnostics
 - `src/runtime.rs`: shared runtime types such as `Value`, `RuntimeError`, and the callable trait
 - `src/interpreter.rs`: interpreter entry points, environment handles, and resolver binding cache
 - `src/interpreter/execute.rs`: statement execution and control-flow propagation
