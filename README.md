@@ -34,6 +34,19 @@ execution stages instead of raw parsing.
 
 More detail is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+## Current Milestone
+
+This repository currently captures the tree-walk interpreter milestone from
+Chapters 4 through 13 of *Crafting Interpreters*, translated into Rust.
+
+- implemented: scanning, parsing, AST construction, lexical resolution,
+  functions, closures, classes, inheritance, `this`, and `super`
+- intentionally deferred: selected chapter challenge features that would grow
+  the language beyond the main chapter path
+- not started yet: the bytecode VM from the second half of the book
+- next planned milestone: a separate bytecode VM implementation that can live
+  alongside this tree-walk interpreter
+
 ## Current Status
 
 Implemented today:
@@ -59,7 +72,8 @@ Implemented today:
 
 Later book stages still missing:
 
-- optional chapter challenge features such as static methods and getters
+- optional chapter challenge features such as static methods, getters, and
+  later extension challenges
 - bytecode VM stages from later in the book
 
 ## Running
@@ -114,6 +128,9 @@ Run the test suite:
 cargo test
 ```
 
+A minimal GitHub Actions workflow runs formatting, tests, and clippy on pushes
+and pull requests.
+
 Run lints with warnings treated as errors:
 
 ```bash
@@ -166,8 +183,10 @@ cargo fmt
   bytecode VM from later parts of the book.
 - The REPL evaluates one input line at a time and does not yet buffer
   incomplete multi-line statements.
-- Optional class-system challenge features such as static methods and getter
-  methods are still TODO.
+- Optional chapter challenge features such as static methods, getters, and the
+  Chapter 13 extension challenges are still TODO.
+- Runtime object cycles are not reclaimed yet because this interpreter does
+  not implement a tracing garbage collector.
 
 ## Roadmap
 
