@@ -39,10 +39,6 @@ pub(crate) struct Interpreter {
     // TODO(ch11-challenge4): This still stores only scope distance. The
     // Chapter 11 challenge to assign per-scope local indexes and access locals
     // by slot instead of name has not been implemented in this interpreter.
-    // TODO(memory): The REPL keeps a single Interpreter alive for the whole
-    // process, but this cache is never cleared between runs. Repeated REPL
-    // inputs therefore grow the map monotonically even after old ASTs and
-    // tokens are otherwise unreachable.
     // TODO(ch13-challenge3): No extra self-chosen language feature from
     // Chapter 13 challenge 3 has been implemented yet. Any such feature will
     // likely require coordinated parser, resolver, runtime, and test updates.
@@ -85,6 +81,12 @@ impl Interpreter {
     // runtime lookup can jump straight to the right environment.
     pub(crate) fn resolve(&self, name: &Token, binding: ResolvedBinding) {
         self.locals.borrow_mut().insert(name.id, binding);
+    }
+
+    // Each top-level driver pass repopulates this cache from scratch for the
+    // current AST, so old resolver entries can be dropped once execution ends.
+    pub(crate) fn clear_resolved_bindings(&self) {
+        self.locals.borrow_mut().clear();
     }
 
     // Clone the shared environment handle so nested execution helpers can

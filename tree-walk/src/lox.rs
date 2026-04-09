@@ -123,26 +123,30 @@ fn parse_repl_expression(tokens: Vec<Token>) -> Option<Expr> {
 
 fn resolve_and_interpret_statements(statements: &[Stmt]) {
     with_interpreter(|interpreter| {
-        if !resolve_statements(interpreter, statements) {
-            return;
-        }
+        interpreter.clear_resolved_bindings();
 
-        if let Err(error) = interpreter.interpret(statements) {
+        if resolve_statements(interpreter, statements)
+            && let Err(error) = interpreter.interpret(statements)
+        {
             runtime_error(&error.token, &error.message);
         }
+
+        interpreter.clear_resolved_bindings();
     });
 }
 
 fn resolve_and_interpret_expression(expr: &Expr) {
     with_interpreter(|interpreter| {
-        if !resolve_expression(interpreter, expr) {
-            return;
+        interpreter.clear_resolved_bindings();
+
+        if resolve_expression(interpreter, expr) {
+            match interpreter.interpret_expression(expr) {
+                Ok(value) => println!("{value}"),
+                Err(error) => runtime_error(&error.token, &error.message),
+            }
         }
 
-        match interpreter.interpret_expression(expr) {
-            Ok(value) => println!("{value}"),
-            Err(error) => runtime_error(&error.token, &error.message),
-        }
+        interpreter.clear_resolved_bindings();
     });
 }
 

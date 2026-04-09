@@ -5,6 +5,13 @@ use crate::stmt::Stmt;
 use crate::test_support::{parse_statements, resolve_statements};
 use crate::token::{Literal, Token, TokenType};
 
+#[cfg(test)]
+impl Interpreter {
+    pub(crate) fn resolved_bindings_len(&self) -> usize {
+        self.locals.borrow().len()
+    }
+}
+
 #[test]
 fn evaluates_numeric_expression() {
     assert_eq!(interpret("1 + 2 * 3"), Value::Number(7.0));

@@ -2,6 +2,7 @@ use super::*;
 use crate::diagnostics::{
     clear_error, clear_runtime_error, had_error, had_runtime_error, runtime_error,
 };
+use crate::interpreter::Interpreter;
 use crate::test_support::scan_tokens;
 use std::sync::{LazyLock, Mutex};
 
@@ -70,6 +71,17 @@ fn repl_still_executes_semicolon_terminated_statements() {
         run_repl("beverage");
 
         assert_flags(false, false);
+    });
+}
+
+#[test]
+fn repl_clears_resolved_bindings_after_each_input() {
+    with_clean_error_state(|| {
+        run_repl_and_reset_flags("var beverage = \"tea\";");
+        assert_eq!(with_interpreter(Interpreter::resolved_bindings_len), 0);
+
+        run_repl_and_reset_flags("beverage");
+        assert_eq!(with_interpreter(Interpreter::resolved_bindings_len), 0);
     });
 }
 
