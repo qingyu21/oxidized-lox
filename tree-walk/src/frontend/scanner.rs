@@ -85,7 +85,7 @@ impl Scanner {
             '/' => {
                 if self.match_char('/') {
                     // A comment goes until the end of the line.
-                    while !self.is_at_end() && self.peek() != '\n' {
+                    while !self.is_at_end() && self.peek() != Some('\n') {
                         self.advance();
                     }
                 } else if self.match_char('*') {
@@ -126,8 +126,8 @@ impl Scanner {
     }
 
     fn string(&mut self) {
-        while self.peek() != '"' && !self.is_at_end() {
-            if self.peek() == '\n' {
+        while self.peek() != Some('"') && !self.is_at_end() {
+            if self.peek() == Some('\n') {
                 self.line += 1;
             }
 
@@ -148,16 +148,16 @@ impl Scanner {
     }
 
     fn number(&mut self) {
-        while Self::is_digit(self.peek()) {
+        while self.peek().is_some_and(Self::is_digit) {
             self.advance();
         }
 
         // Look for a fractional part.
-        if self.peek() == '.' && Self::is_digit(self.peek_next()) {
+        if self.peek() == Some('.') && self.peek_next().is_some_and(Self::is_digit) {
             // Consume the ".".
             self.advance();
 
-            while Self::is_digit(self.peek()) {
+            while self.peek().is_some_and(Self::is_digit) {
                 self.advance();
             }
         }
@@ -170,7 +170,7 @@ impl Scanner {
     }
 
     fn identifier(&mut self) {
-        while Self::is_alpha_numeric(self.peek()) {
+        while self.peek().is_some_and(Self::is_alpha_numeric) {
             self.advance();
         }
 
@@ -183,10 +183,10 @@ impl Scanner {
         // Consume until the first terminating `*/`, updating line numbers
         // along the way. Nested block comments are not supported yet.
         while !self.is_at_end() {
-            if self.peek() == '\n' {
+            if self.peek() == Some('\n') {
                 self.line += 1;
                 self.advance();
-            } else if self.peek() == '*' && self.peek_next() == '/' {
+            } else if self.peek() == Some('*') && self.peek_next() == Some('/') {
                 self.advance();
                 self.advance();
                 return;
@@ -256,16 +256,14 @@ impl Scanner {
         true
     }
 
-    // TODO(rust-idiom): Returning `Option<char>` would model EOF more
-    // explicitly than using `'\0'` as a sentinel value.
-    fn peek(&self) -> char {
-        self.current_char().unwrap_or('\0')
+    // Return the current character without consuming it.
+    fn peek(&self) -> Option<char> {
+        self.current_char()
     }
 
-    // TODO(rust-idiom): Returning `Option<char>` would model the absence
-    // of a second lookahead character more explicitly than using `'\0'`.
-    fn peek_next(&self) -> char {
-        self.source[self.current..].chars().nth(1).unwrap_or('\0')
+    // Return the next lookahead character, if there is one.
+    fn peek_next(&self) -> Option<char> {
+        self.source[self.current..].chars().nth(1)
     }
 }
 
@@ -338,6 +336,20 @@ mod tests {
         assert_eq!(tokens[0].line, 2);
         assert_eq!(tokens[1].type_, TokenType::Eof);
         assert_eq!(tokens[1].line, 2);
+    }
+
+    #[test]
+    fn peek_returns_none_at_end_of_input() {
+        let scanner = Scanner::new("");
+
+        assert_eq!(scanner.peek(), None);
+    }
+
+    #[test]
+    fn peek_next_returns_none_without_a_second_character() {
+        let scanner = Scanner::new("a");
+
+        assert_eq!(scanner.peek_next(), None);
     }
 
     #[test]
