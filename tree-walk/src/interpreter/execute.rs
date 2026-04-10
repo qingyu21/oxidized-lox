@@ -173,7 +173,7 @@ impl Interpreter {
                 &method.params,
                 &method.body,
                 method_closure.clone(),
-                method.name.lexeme == "init",
+                method.name.lexeme.as_ref() == "init",
             );
             method_table.insert(method.name.lexeme.clone(), function);
         }

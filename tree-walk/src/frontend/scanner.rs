@@ -144,7 +144,7 @@ impl Scanner {
 
         // Trim the surrounding quotes.
         let value = self.source[self.start + 1..self.current - 1].to_string();
-        self.add_token_literal(TokenType::String, Some(Literal::String(value)));
+        self.add_token_literal(TokenType::String, Some(Literal::String(value.into())));
     }
 
     fn number(&mut self) {
@@ -280,11 +280,8 @@ mod tests {
         let tokens = scan("\"hello\"");
 
         assert_eq!(tokens[0].type_, TokenType::String);
-        assert_eq!(tokens[0].lexeme, "\"hello\"");
-        assert_eq!(
-            tokens[0].literal,
-            Some(Literal::String("hello".to_string()))
-        );
+        assert_eq!(tokens[0].lexeme.as_ref(), "\"hello\"");
+        assert_eq!(tokens[0].literal, Some(Literal::String("hello".into())));
         assert_eq!(tokens[1].type_, TokenType::Eof);
     }
 
@@ -293,7 +290,7 @@ mod tests {
         let tokens = scan("123.45");
 
         assert_eq!(tokens[0].type_, TokenType::Number);
-        assert_eq!(tokens[0].lexeme, "123.45");
+        assert_eq!(tokens[0].lexeme.as_ref(), "123.45");
 
         match &tokens[0].literal {
             Some(Literal::Number(value)) => assert_eq!(*value, 123.45),

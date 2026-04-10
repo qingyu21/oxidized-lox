@@ -150,7 +150,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_class_methods(&mut self, methods: &[FunctionDecl]) -> Result<(), ResolveError> {
         for method in methods {
-            let function_type = if method.name.lexeme == "init" {
+            let function_type = if method.name.lexeme.as_ref() == "init" {
                 FunctionType::Initializer
             } else {
                 FunctionType::Method

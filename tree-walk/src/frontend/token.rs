@@ -1,5 +1,6 @@
 use std::{
     fmt::{self, Display},
+    rc::Rc,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -61,7 +62,7 @@ pub(crate) enum TokenType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Literal {
-    String(String),
+    String(Rc<str>),
     Number(f64),
     Bool(bool),
     Nil,
@@ -71,7 +72,7 @@ pub(crate) enum Literal {
 pub(crate) struct Token {
     pub(crate) id: u64,
     pub(crate) type_: TokenType,
-    pub(crate) lexeme: String,
+    pub(crate) lexeme: Rc<str>,
     pub(crate) literal: Option<Literal>,
     pub(crate) line: u32,
 }
@@ -96,14 +97,14 @@ impl Display for Literal {
 impl Token {
     pub(crate) fn new(
         type_: TokenType,
-        lexeme: String,
+        lexeme: impl Into<Rc<str>>,
         literal: Option<Literal>,
         line: u32,
     ) -> Self {
         Token {
             id: NEXT_TOKEN_ID.fetch_add(1, Ordering::Relaxed),
             type_,
-            lexeme,
+            lexeme: lexeme.into(),
             literal,
             line,
         }

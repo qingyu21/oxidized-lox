@@ -265,7 +265,7 @@ fn repl_runs_multiline_if_blocks_once_the_block_is_closed() {
         assert_flags(false, false);
         assert_eq!(
             evaluate_repl_expression("beverage"),
-            Value::String("coffee".to_string())
+            Value::String("coffee".into())
         );
     });
 }
@@ -288,7 +288,7 @@ fn repl_runs_multiline_function_declarations_once_the_body_is_closed() {
         assert_flags(false, false);
         assert_eq!(
             evaluate_repl_expression("greet(\"lox\")"),
-            Value::String("hi, lox".to_string())
+            Value::String("hi, lox".into())
         );
     });
 }

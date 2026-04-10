@@ -115,7 +115,7 @@ fn parses_property_get_after_call() {
     match statements.as_slice() {
         [Stmt::Expression { expression }] => match expression {
             crate::expr::Expr::Get { object, name } => {
-                assert_eq!(name.lexeme, "flavor");
+                assert_eq!(name.lexeme.as_ref(), "flavor");
                 assert_eq!(AstPrinter.print(object), "(call Bagel)");
             }
             _ => panic!("expected a property get expression"),
@@ -135,7 +135,7 @@ fn parses_property_set_assignment() {
                 name,
                 value,
             } => {
-                assert_eq!(name.lexeme, "flavor");
+                assert_eq!(name.lexeme.as_ref(), "flavor");
                 assert_eq!(AstPrinter.print(object), "bagel");
                 assert_eq!(AstPrinter.print(value), "sesame");
             }
@@ -179,12 +179,12 @@ fn parses_function_declaration_with_parameters_and_body() {
 
     match statements.as_slice() {
         [Stmt::Function(function)] => {
-            assert_eq!(function.name.lexeme, "greet");
+            assert_eq!(function.name.lexeme.as_ref(), "greet");
             assert_eq!(
                 function
                     .params
                     .iter()
-                    .map(|param| param.lexeme.as_str())
+                    .map(|param| param.lexeme.as_ref())
                     .collect::<Vec<_>>(),
                 vec!["first", "last"]
             );
@@ -214,19 +214,19 @@ fn parses_class_declaration_with_methods() {
                 methods,
             },
         ] => {
-            assert_eq!(name.lexeme, "Breakfast");
+            assert_eq!(name.lexeme.as_ref(), "Breakfast");
             assert!(superclass.is_none());
 
             match methods.as_slice() {
                 [cook, serve] => {
-                    assert_eq!(cook.name.lexeme, "cook");
+                    assert_eq!(cook.name.lexeme.as_ref(), "cook");
                     assert!(cook.params.is_empty());
-                    assert_eq!(serve.name.lexeme, "serve");
+                    assert_eq!(serve.name.lexeme.as_ref(), "serve");
                     assert_eq!(
                         serve
                             .params
                             .iter()
-                            .map(|param| param.lexeme.as_str())
+                            .map(|param| param.lexeme.as_ref())
                             .collect::<Vec<_>>(),
                         vec!["who"]
                     );
@@ -264,12 +264,12 @@ fn parses_class_declaration_with_superclass() {
                 methods,
             },
         ] => {
-            assert_eq!(name.lexeme, "BostonCream");
+            assert_eq!(name.lexeme.as_ref(), "BostonCream");
             assert!(methods.is_empty());
 
             match superclass {
                 Some(crate::expr::Expr::Variable { name }) => {
-                    assert_eq!(name.lexeme, "Doughnut");
+                    assert_eq!(name.lexeme.as_ref(), "Doughnut");
                 }
                 _ => panic!("expected superclass to be stored as a variable expression"),
             }
@@ -290,7 +290,7 @@ fn parses_return_statement_with_value_inside_function() {
                     value: Some(value),
                 },
             ] => {
-                assert_eq!(keyword.lexeme, "return");
+                assert_eq!(keyword.lexeme.as_ref(), "return");
                 assert_eq!(AstPrinter.print(value), "value");
             }
             _ => panic!("expected a single valued return statement in the function body"),
@@ -311,7 +311,7 @@ fn parses_bare_return_statement_inside_function() {
                     value: None,
                 },
             ] => {
-                assert_eq!(keyword.lexeme, "return");
+                assert_eq!(keyword.lexeme.as_ref(), "return");
             }
             _ => panic!("expected a single bare return statement in the function body"),
         },
@@ -440,7 +440,7 @@ fn parses_for_statement_by_desugaring_to_block_and_while() {
                 },
                 Stmt::While { condition, body },
             ] => {
-                assert_eq!(name.lexeme, "i");
+                assert_eq!(name.lexeme.as_ref(), "i");
                 assert_eq!(AstPrinter.print(initializer), "0");
                 assert_eq!(AstPrinter.print(condition), "(< i 3)");
 
@@ -501,7 +501,7 @@ fn parses_for_statement_without_condition_as_true_while() {
                 },
                 Stmt::While { condition, body },
             ] => {
-                assert_eq!(name.lexeme, "i");
+                assert_eq!(name.lexeme.as_ref(), "i");
                 assert_eq!(AstPrinter.print(initializer), "0");
                 assert_eq!(AstPrinter.print(condition), "true");
 
@@ -546,7 +546,7 @@ fn parses_for_statement_without_increment_preserving_the_original_body() {
                 },
                 Stmt::While { condition, body },
             ] => {
-                assert_eq!(name.lexeme, "i");
+                assert_eq!(name.lexeme.as_ref(), "i");
                 assert_eq!(AstPrinter.print(initializer), "0");
                 assert_eq!(AstPrinter.print(condition), "(< i 3)");
 
@@ -614,7 +614,7 @@ fn parses_block_statement() {
                 },
                 Stmt::Print { expression },
             ] => {
-                assert_eq!(name.lexeme, "beverage");
+                assert_eq!(name.lexeme.as_ref(), "beverage");
                 assert_eq!(AstPrinter.print(initializer), "1");
                 assert_eq!(AstPrinter.print(expression), "beverage");
             }
@@ -635,7 +635,7 @@ fn parses_var_declaration_with_initializer() {
                 initializer: Some(initializer),
             },
         ] => {
-            assert_eq!(name.lexeme, "beverage");
+            assert_eq!(name.lexeme.as_ref(), "beverage");
             assert_eq!(AstPrinter.print(initializer), "(+ 1 2)");
         }
         _ => panic!("expected a single variable declaration with an initializer"),
@@ -653,7 +653,7 @@ fn parses_var_declaration_without_initializer() {
                 initializer: None,
             },
         ] => {
-            assert_eq!(name.lexeme, "beverage");
+            assert_eq!(name.lexeme.as_ref(), "beverage");
         }
         _ => panic!("expected a single variable declaration without an initializer"),
     }
@@ -722,7 +722,7 @@ fn synchronizes_to_var_declaration_after_error() {
                 initializer: Some(initializer),
             },
         ] => {
-            assert_eq!(name.lexeme, "beverage");
+            assert_eq!(name.lexeme.as_ref(), "beverage");
             assert_eq!(AstPrinter.print(initializer), "tea");
         }
         _ => panic!("expected the parser to recover to the next variable declaration"),
@@ -809,7 +809,7 @@ fn synchronizes_to_function_declaration_after_error() {
 
     match statements.as_slice() {
         [Stmt::Function(function)] => {
-            assert_eq!(function.name.lexeme, "noop");
+            assert_eq!(function.name.lexeme.as_ref(), "noop");
             assert!(function.params.is_empty());
             assert!(function.body.is_empty());
         }
@@ -830,7 +830,7 @@ fn synchronizes_to_class_declaration_after_error() {
                 methods,
             },
         ] => {
-            assert_eq!(name.lexeme, "Breakfast");
+            assert_eq!(name.lexeme.as_ref(), "Breakfast");
             assert!(superclass.is_none());
             assert!(methods.is_empty());
         }

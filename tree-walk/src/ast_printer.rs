@@ -50,8 +50,8 @@ impl AstPrinter {
                     else_branch.as_ref(),
                 ],
             ),
-            Expr::This { keyword } => keyword.lexeme.clone(),
-            Expr::Variable { name } => name.lexeme.clone(),
+            Expr::This { keyword } => keyword.lexeme.to_string(),
+            Expr::Variable { name } => name.lexeme.to_string(),
             Expr::Unary { operator, right } => {
                 self.parenthesize(&operator.lexeme, [right.as_ref()])
             }

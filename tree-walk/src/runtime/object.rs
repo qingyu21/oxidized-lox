@@ -21,11 +21,11 @@ pub(crate) trait LoxCallable: fmt::Debug + fmt::Display {
 // multiple inheritance have not been implemented.
 #[derive(Debug, Clone)]
 pub(crate) struct LoxClass {
-    name: String,
+    name: Rc<str>,
     // Subclasses follow this chain when a method is not found on the class
     // itself, which gives instances inherited behavior.
     superclass: Option<Rc<LoxClass>>,
-    methods: HashMap<String, Rc<LoxFunction>>,
+    methods: HashMap<Rc<str>, Rc<LoxFunction>>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,17 +44,17 @@ pub(crate) struct LoxInstance {
     // tracing GC, or a broader runtime-handle redesign that can preserve those
     // semantics while still breaking cycles internally.
     klass: Rc<LoxClass>,
-    fields: RefCell<HashMap<String, Value>>,
+    fields: RefCell<HashMap<Rc<str>, Value>>,
 }
 
 impl LoxClass {
     pub(crate) fn new(
-        name: String,
+        name: impl Into<Rc<str>>,
         superclass: Option<Rc<LoxClass>>,
-        methods: HashMap<String, Rc<LoxFunction>>,
+        methods: HashMap<Rc<str>, Rc<LoxFunction>>,
     ) -> Self {
         Self {
-            name,
+            name: name.into(),
             superclass,
             methods,
         }
@@ -109,9 +109,9 @@ impl LoxInstance {
     // reads currently return stored fields or bound methods, but they do not
     // execute user-defined getter bodies declared without parameter lists.
     pub(crate) fn get(self: &Rc<Self>, name: &Token) -> Result<Value, RuntimeError> {
-        if let Some(value) = self.fields.borrow().get(&name.lexeme).cloned() {
+        if let Some(value) = self.fields.borrow().get(name.lexeme.as_ref()).cloned() {
             Ok(value)
-        } else if let Some(method) = self.klass.find_method(&name.lexeme) {
+        } else if let Some(method) = self.klass.find_method(name.lexeme.as_ref()) {
             Ok(Value::Callable(method.bind(self.clone())))
         } else {
             Err(RuntimeError::new(

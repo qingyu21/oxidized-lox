@@ -17,9 +17,6 @@ impl Interpreter {
                 arguments,
             } => self.evaluate_call(callee, paren, arguments),
             Expr::Get { object, name } => self.evaluate_get(object, name),
-            // TODO(perf): Cloning string literals here allocates a fresh
-            // runtime string. A shared string representation could avoid
-            // copying literal text into `Value`.
             Expr::Literal { value } => Ok(value.clone().into()),
             Expr::Logical {
                 left,
@@ -299,9 +296,10 @@ impl Interpreter {
             (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
             (Value::String(_), _) | (_, Value::String(_)) => {
                 // TODO(perf): Repeated `+` concatenation allocates and copies
-                // into a new `String` each time. A rope or builder-style
-                // runtime string could reduce churn.
-                Ok(Value::String(format!("{left}{right}")))
+                // into a fresh result buffer each time. Shared string storage
+                // makes reads cheaper, but concatenation itself still pays for
+                // building the combined text.
+                Ok(Value::String(format!("{left}{right}").into()))
             }
             _ => Err(RuntimeError::new(
                 operator.clone(),

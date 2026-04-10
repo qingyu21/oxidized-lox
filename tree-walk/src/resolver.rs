@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{interpreter::Interpreter, token::Token};
 
@@ -53,7 +53,7 @@ pub(crate) struct Resolver<'a> {
     interpreter: &'a Interpreter,
     // Stack of lexical scopes being resolved. Each binding tracks whether it is
     // fully defined yet and whether it was ever read before the scope ended.
-    scopes: Vec<HashMap<String, BindingInfo>>,
+    scopes: Vec<HashMap<Rc<str>, BindingInfo>>,
     // Surrounding class context for the current resolver walk. This lets us
     // reject `this` outside classes and restore outer state for nested classes.
     current_class: ClassType,

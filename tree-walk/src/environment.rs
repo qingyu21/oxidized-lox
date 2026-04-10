@@ -8,7 +8,7 @@ pub(crate) type EnvironmentRef = Rc<RefCell<Environment>>;
 #[derive(Default)]
 pub(crate) struct Environment {
     enclosing: Option<EnvironmentRef>,
-    values: HashMap<String, Value>,
+    values: HashMap<Rc<str>, Value>,
 }
 
 impl Environment {
@@ -34,11 +34,8 @@ impl Environment {
     }
 
     // Bind a value to a name in the current environment.
-    pub(crate) fn define(&mut self, name: String, value: Value) {
-        // TODO(perf): Environment keys currently clone each variable name into
-        // an owned `String`. String interning or symbol IDs would avoid
-        // repeating that allocation across declarations and lookups.
-        self.values.insert(name, value);
+    pub(crate) fn define(&mut self, name: impl Into<Rc<str>>, value: Value) {
+        self.values.insert(name.into(), value);
     }
 
     // Update the value stored for an existing variable.
@@ -58,10 +55,7 @@ impl Environment {
 
     // Look up the current value stored for a variable name.
     pub(crate) fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
-        if let Some(value) = self.values.get(&name.lexeme) {
-            // TODO(perf): Returning an owned `Value` clones strings and would
-            // also clone any future heap-backed objects. Shared runtime
-            // handles would make variable reads cheaper.
+        if let Some(value) = self.values.get(name.lexeme.as_ref()) {
             Ok(value.clone())
         } else if let Some(enclosing) = &self.enclosing {
             enclosing.borrow().get(name)
@@ -84,7 +78,7 @@ impl Environment {
         let ancestor = Self::ancestor(environment, distance);
         let mut ancestor = ancestor.borrow_mut();
 
-        if let Some(slot) = ancestor.values.get_mut(&name.lexeme) {
+        if let Some(slot) = ancestor.values.get_mut(name.lexeme.as_ref()) {
             *slot = value;
             Ok(())
         } else {
@@ -105,7 +99,7 @@ impl Environment {
         let ancestor = Self::ancestor(environment, distance);
         let ancestor = ancestor.borrow();
 
-        if let Some(value) = ancestor.values.get(&name.lexeme) {
+        if let Some(value) = ancestor.values.get(name.lexeme.as_ref()) {
             Ok(value.clone())
         } else {
             Err(RuntimeError::new(
@@ -132,5 +126,41 @@ impl Environment {
         }
 
         environment
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::Environment;
+    use crate::{
+        runtime::Value,
+        token::{Token, TokenType},
+    };
+
+    #[test]
+    fn string_reads_share_the_same_backing_text() {
+        let mut environment = Environment::new();
+        environment.define("tea", Value::String("earl grey".into()));
+        let name = Token::new(TokenType::Identifier, "tea", None, 1);
+
+        let Value::String(first) = environment
+            .get(&name)
+            .expect("defined variable should be readable")
+        else {
+            panic!("expected the binding to contain a string");
+        };
+        let Value::String(second) = environment
+            .get(&name)
+            .expect("repeated reads should still succeed")
+        else {
+            panic!("expected the binding to contain a string");
+        };
+
+        assert!(
+            Rc::ptr_eq(&first, &second),
+            "environment reads should clone only the shared string handle"
+        );
     }
 }

@@ -13,9 +13,9 @@ impl<'a> Resolver<'a> {
             return;
         };
 
-        let token = Token::new(TokenType::This, "this".to_string(), None, line);
+        let token = Token::new(TokenType::This, "this", None, line);
         scope.insert(
-            "this".to_string(),
+            token.lexeme.clone(),
             BindingInfo {
                 token,
                 kind: BindingKind::This,
@@ -30,9 +30,9 @@ impl<'a> Resolver<'a> {
             return;
         };
 
-        let token = Token::new(TokenType::Super, "super".to_string(), None, line);
+        let token = Token::new(TokenType::Super, "super", None, line);
         scope.insert(
-            "super".to_string(),
+            token.lexeme.clone(),
             BindingInfo {
                 token,
                 kind: BindingKind::Super,
@@ -95,7 +95,7 @@ impl<'a> Resolver<'a> {
             return Ok(());
         };
 
-        if scope.contains_key(&name.lexeme) {
+        if scope.contains_key(name.lexeme.as_ref()) {
             return Err(self.error(name, "Already a variable with this name in this scope."));
         }
 
@@ -116,7 +116,7 @@ impl<'a> Resolver<'a> {
         if let Some(binding) = self
             .scopes
             .last_mut()
-            .and_then(|scope| scope.get_mut(&name.lexeme))
+            .and_then(|scope| scope.get_mut(name.lexeme.as_ref()))
         {
             binding.defined = true;
         }
@@ -126,7 +126,7 @@ impl<'a> Resolver<'a> {
     // distance to the interpreter for later fast runtime lookup.
     pub(super) fn resolve_local(&mut self, name: &Token, mark_used: bool) {
         for (distance, scope) in self.scopes.iter_mut().rev().enumerate() {
-            if let Some(binding) = scope.get_mut(&name.lexeme) {
+            if let Some(binding) = scope.get_mut(name.lexeme.as_ref()) {
                 if mark_used {
                     binding.used = true;
                 }

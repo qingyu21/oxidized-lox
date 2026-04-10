@@ -6,7 +6,7 @@ use super::{LoxCallable, LoxClass, LoxInstance};
 
 #[derive(Debug, Clone)]
 pub(crate) enum Value {
-    String(String),
+    String(Rc<str>),
     Number(f64),
     Bool(bool),
     Nil,
@@ -52,5 +52,31 @@ impl fmt::Display for Value {
             Value::Class(class) => write!(f, "{class}"),
             Value::Instance(instance) => write!(f, "{instance}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::Value;
+    use crate::token::Literal;
+
+    #[test]
+    fn converting_a_string_literal_into_a_value_reuses_the_same_backing_text() {
+        let literal = Literal::String("tea".into());
+        let shared = match &literal {
+            Literal::String(value) => value.clone(),
+            _ => unreachable!("test literal should be a string"),
+        };
+
+        let Value::String(value) = Value::from(literal.clone()) else {
+            panic!("string literal should convert into a string runtime value");
+        };
+
+        assert!(
+            Rc::ptr_eq(&shared, &value),
+            "string literal evaluation should reuse the shared string backing"
+        );
     }
 }

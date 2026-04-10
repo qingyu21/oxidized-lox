@@ -25,26 +25,17 @@ fn evaluates_numeric_expression() {
 
 #[test]
 fn concatenates_strings_with_plus() {
-    assert_eq!(
-        interpret("\"lox\" + \"!\""),
-        Value::String("lox!".to_string())
-    );
+    assert_eq!(interpret("\"lox\" + \"!\""), Value::String("lox!".into()));
 }
 
 #[test]
 fn concatenates_string_and_number_with_plus() {
-    assert_eq!(
-        interpret("\"scone\" + 4"),
-        Value::String("scone4".to_string())
-    );
+    assert_eq!(interpret("\"scone\" + 4"), Value::String("scone4".into()));
 }
 
 #[test]
 fn concatenates_number_and_string_with_plus() {
-    assert_eq!(
-        interpret("4 + \"scone\""),
-        Value::String("4scone".to_string())
-    );
+    assert_eq!(interpret("4 + \"scone\""), Value::String("4scone".into()));
 }
 
 #[test]
@@ -66,11 +57,8 @@ fn evaluates_conditional_expression() {
 
 #[test]
 fn evaluates_logical_or_and_and() {
-    assert_eq!(
-        interpret("nil or \"yes\""),
-        Value::String("yes".to_string())
-    );
-    assert_eq!(interpret("\"hi\" or 2"), Value::String("hi".to_string()));
+    assert_eq!(interpret("nil or \"yes\""), Value::String("yes".into()));
+    assert_eq!(interpret("\"hi\" or 2"), Value::String("hi".into()));
     assert_eq!(interpret("nil and \"yes\""), Value::Nil);
     assert_eq!(interpret("\"hi\" and 2"), Value::Number(2.0));
 }
@@ -211,7 +199,7 @@ fn subclass_instances_inherit_superclass_methods() {
              class BostonCream < Doughnut {}
              BostonCream().cook()"
         ),
-        Value::String("Fry until golden brown.".to_string())
+        Value::String("Fry until golden brown.".into())
     );
 }
 
@@ -234,7 +222,7 @@ fn subclasses_can_call_superclass_methods_with_super() {
              BostonCream().cook()"
         ),
         Value::String(
-            "Fry until golden brown. Pipe full of custard and coat with chocolate.".to_string()
+            "Fry until golden brown. Pipe full of custard and coat with chocolate.".into()
         )
     );
 }
@@ -262,7 +250,7 @@ fn super_lookup_starts_from_the_enclosing_class_superclass() {
              class C < B {}
              C().test()"
         ),
-        Value::String("A method".to_string())
+        Value::String("A method".into())
     );
 }
 
@@ -288,7 +276,7 @@ fn super_can_be_used_inside_local_functions_nested_in_methods() {
 
              B().method()"
         ),
-        Value::String("A method".to_string())
+        Value::String("A method".into())
     );
 }
 
@@ -340,7 +328,7 @@ fn calling_a_class_runs_its_initializer() {
 
              Bagel(\"sesame\").flavor"
         ),
-        Value::String("sesame".to_string())
+        Value::String("sesame".into())
     );
 }
 
@@ -391,7 +379,7 @@ fn methods_can_be_called_through_instances() {
 
              Bacon().eat()"
         ),
-        Value::String("Crunch crunch crunch!".to_string())
+        Value::String("Crunch crunch crunch!".into())
     );
 }
 
@@ -409,7 +397,7 @@ fn methods_can_access_instance_fields_through_this() {
              cake.flavor = \"German chocolate\";
              cake.taste()"
         ),
-        Value::String("German chocolate".to_string())
+        Value::String("German chocolate".into())
     );
 }
 
@@ -431,7 +419,7 @@ fn instance_fields_shadow_methods_and_can_store_functions() {
              box.function = notMethod;
              box.function(\"argument\")"
         ),
-        Value::String("called function with argument".to_string())
+        Value::String("called function with argument".into())
     );
 }
 
@@ -451,7 +439,7 @@ fn grabbed_methods_remember_the_instance_they_came_from() {
              var method = jane.sayName;
              method()"
         ),
-        Value::String("Jane".to_string())
+        Value::String("Jane".into())
     );
 }
 
@@ -474,7 +462,7 @@ fn callbacks_returned_from_methods_keep_access_to_this() {
              var callback = thing.getCallback();
              callback()"
         ),
-        Value::String("widget".to_string())
+        Value::String("widget".into())
     );
 }
 
@@ -498,7 +486,7 @@ fn nested_class_declarations_restore_the_enclosing_this_context() {
              outer.value = \"outer\";
              outer.method()"
         ),
-        Value::String("outer".to_string())
+        Value::String("outer".into())
     );
 }
 
@@ -511,7 +499,7 @@ fn instances_store_and_read_back_fields() {
              bagel.flavor = \"sesame\";
              bagel.flavor"
         ),
-        Value::String("sesame".to_string())
+        Value::String("sesame".into())
     );
 }
 
@@ -684,7 +672,7 @@ fn function_parameters_shadow_outer_bindings() {
 
              show(\"inner\")"
         ),
-        Value::String("inner".to_string())
+        Value::String("inner".into())
     );
 }
 
@@ -707,7 +695,7 @@ fn assignment_updates_the_resolved_enclosing_binding_not_a_global_of_the_same_na
              var localResult = set();
              localResult + \"|\" + a"
         ),
-        Value::String("changed|global".to_string())
+        Value::String("changed|global".into())
     );
 }
 
@@ -729,7 +717,7 @@ fn resolver_keeps_closure_bound_to_the_scope_visible_at_declaration_time() {
 
              showA()"
         ),
-        Value::String("global".to_string())
+        Value::String("global".into())
     );
 }
 
@@ -749,7 +737,7 @@ fn executes_if_then_branch_when_condition_is_truthy() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("after".to_string()));
+    assert_eq!(value, Value::String("after".into()));
 }
 
 #[test]
@@ -769,7 +757,7 @@ fn executes_if_else_branch_when_condition_is_falsey() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("else".to_string()));
+    assert_eq!(value, Value::String("else".into()));
 }
 
 #[test]
@@ -993,7 +981,7 @@ fn executes_var_declaration_and_reads_back_the_value() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("tea".to_string()));
+    assert_eq!(value, Value::String("tea".into()));
 }
 
 #[test]
@@ -1041,7 +1029,7 @@ fn redeclaring_a_global_variable_overwrites_the_previous_value() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("after".to_string()));
+    assert_eq!(value, Value::String("after".into()));
 }
 
 #[test]
@@ -1060,7 +1048,7 @@ fn block_assignment_updates_an_enclosing_variable() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("after".to_string()));
+    assert_eq!(value, Value::String("after".into()));
 }
 
 #[test]
@@ -1079,7 +1067,7 @@ fn block_local_variable_shadows_outer_variable_without_leaking() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("outer".to_string()));
+    assert_eq!(value, Value::String("outer".into()));
 }
 
 #[test]
@@ -1122,7 +1110,7 @@ fn block_runtime_errors_restore_the_enclosing_environment() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("outer".to_string()));
+    assert_eq!(value, Value::String("outer".into()));
 }
 
 #[test]
@@ -1149,7 +1137,7 @@ fn block_panics_restore_the_enclosing_environment() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("outer".to_string()));
+    assert_eq!(value, Value::String("outer".into()));
 }
 
 #[test]
@@ -1167,7 +1155,7 @@ fn assignment_updates_an_existing_variable_and_returns_the_new_value() {
         _ => panic!("expected an assignment expression statement"),
     };
 
-    assert_eq!(assigned, Value::String("after".to_string()));
+    assert_eq!(assigned, Value::String("after".into()));
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
@@ -1176,7 +1164,7 @@ fn assignment_updates_an_existing_variable_and_returns_the_new_value() {
         _ => panic!("expected a variable expression statement"),
     };
 
-    assert_eq!(value, Value::String("after".to_string()));
+    assert_eq!(value, Value::String("after".into()));
 }
 
 #[test]
