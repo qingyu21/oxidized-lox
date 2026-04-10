@@ -1,4 +1,7 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
 use super::Interpreter;
+use crate::environment::Environment;
 use crate::expr::Expr;
 use crate::runtime::{RuntimeError, Value};
 use crate::stmt::Stmt;
@@ -1028,6 +1031,59 @@ fn block_local_variable_is_not_visible_after_the_block_ends() {
     };
 
     assert_eq!(error.message, "Undefined variable 'beverage'.");
+}
+
+#[test]
+fn block_runtime_errors_restore_the_enclosing_environment() {
+    let statements = parse_statements(
+        "var beverage = \"outer\";\n{ var beverage = \"inner\"; beverage; missing; }\nbeverage;",
+    );
+    let interpreter = Interpreter::new();
+    resolve_statements(&interpreter, &statements);
+
+    assert!(interpreter.execute(&statements[0]).is_ok());
+
+    let error = interpreter
+        .execute(&statements[1])
+        .expect_err("runtime errors inside blocks should not leak the block environment");
+
+    assert_eq!(error.message, "Undefined variable 'missing'.");
+
+    let value = match &statements[2] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("outer environment should still be active after the block fails"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::String("outer".to_string()));
+}
+
+#[test]
+fn block_panics_restore_the_enclosing_environment() {
+    let setup = parse_statements("var beverage = \"outer\";");
+    let lookup = parse_statements("beverage;");
+    let interpreter = Interpreter::new();
+
+    assert!(interpreter.execute(&setup[0]).is_ok());
+
+    let block_environment = Environment::new_enclosed_ref(interpreter.current_environment());
+    let panic_result = catch_unwind(AssertUnwindSafe(|| {
+        interpreter
+            .execute_block(&[invalid_statement(2)], block_environment)
+            .expect("invalid test statement should panic before returning");
+    }));
+
+    assert!(panic_result.is_err());
+
+    let value = match &lookup[0] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate(expression)
+            .expect("outer environment should still be active after the block panics"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(value, Value::String("outer".to_string()));
 }
 
 #[test]

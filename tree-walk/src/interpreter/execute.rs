@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     environment::{Environment, EnvironmentRef},
@@ -12,6 +12,29 @@ use super::{
     ControlFlow, Interpreter,
     callable::{make_function, make_function_ref},
 };
+
+struct EnvironmentGuard<'a> {
+    slot: &'a RefCell<EnvironmentRef>,
+    previous: Option<EnvironmentRef>,
+}
+
+impl<'a> EnvironmentGuard<'a> {
+    fn replace(slot: &'a RefCell<EnvironmentRef>, environment: EnvironmentRef) -> Self {
+        let previous = slot.replace(environment);
+        Self {
+            slot,
+            previous: Some(previous),
+        }
+    }
+}
+
+impl Drop for EnvironmentGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(previous) = self.previous.take() {
+            self.slot.replace(previous);
+        }
+    }
+}
 
 impl Interpreter {
     pub(super) fn execute_all(&self, statements: &[Stmt]) -> Result<ControlFlow, RuntimeError> {
@@ -73,12 +96,8 @@ impl Interpreter {
         statements: &[Stmt],
         environment: EnvironmentRef,
     ) -> Result<ControlFlow, RuntimeError> {
-        // TODO(robustness): Use a guard so the previous environment is
-        // restored even if block execution panics.
-        let previous = self.environment.replace(environment);
-        let result = self.execute_all(statements);
-        self.environment.replace(previous);
-        result
+        let _guard = EnvironmentGuard::replace(&self.environment, environment);
+        self.execute_all(statements)
     }
 
     fn execute_function_declaration(
