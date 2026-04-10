@@ -3,6 +3,7 @@ use crate::diagnostics::{
     clear_error, clear_runtime_error, had_error, had_runtime_error, runtime_error,
 };
 use crate::interpreter::Interpreter;
+use crate::runtime::Value;
 use crate::test_support::scan_tokens;
 use std::sync::{LazyLock, Mutex};
 
@@ -225,6 +226,88 @@ fn statement_started_inputs_are_not_treated_as_bare_repl_expressions() {
     }
 }
 
+#[test]
+fn repl_buffers_incomplete_multiline_inputs() {
+    let cases = [
+        "if (true)",
+        "{ print 1;",
+        "fun greet(name)",
+        "class Bagel",
+        "1 +",
+        "\"tea",
+        "/* block comment",
+    ];
+
+    for source in cases {
+        assert!(
+            should_buffer_repl_input(source),
+            "expected `{source}` to keep waiting for more REPL input"
+        );
+    }
+}
+
+#[test]
+fn repl_runs_multiline_if_blocks_once_the_block_is_closed() {
+    with_clean_error_state(|| {
+        run_repl_and_reset_flags("var beverage = \"tea\";");
+
+        let mut pending = String::new();
+        run_repl_line(&mut pending, "if (true) {");
+        assert_eq!(pending, "if (true) {");
+        assert_flags(false, false);
+
+        run_repl_line(&mut pending, "  beverage = \"coffee\";");
+        assert_eq!(pending, "if (true) {\n  beverage = \"coffee\";");
+        assert_flags(false, false);
+
+        run_repl_line(&mut pending, "}");
+        assert!(pending.is_empty());
+        assert_flags(false, false);
+        assert_eq!(
+            evaluate_repl_expression("beverage"),
+            Value::String("coffee".to_string())
+        );
+    });
+}
+
+#[test]
+fn repl_runs_multiline_function_declarations_once_the_body_is_closed() {
+    with_clean_error_state(|| {
+        let mut pending = String::new();
+
+        run_repl_line(&mut pending, "fun greet(name) {");
+        assert_eq!(pending, "fun greet(name) {");
+        assert_flags(false, false);
+
+        run_repl_line(&mut pending, "  return \"hi, \" + name;");
+        assert_eq!(pending, "fun greet(name) {\n  return \"hi, \" + name;");
+        assert_flags(false, false);
+
+        run_repl_line(&mut pending, "}");
+        assert!(pending.is_empty());
+        assert_flags(false, false);
+        assert_eq!(
+            evaluate_repl_expression("greet(\"lox\")"),
+            Value::String("hi, lox".to_string())
+        );
+    });
+}
+
+#[test]
+fn repl_waits_to_run_bare_expressions_until_they_are_complete() {
+    with_clean_error_state(|| {
+        let mut pending = String::new();
+
+        run_repl_line(&mut pending, "1 /");
+        assert_eq!(pending, "1 /");
+        assert_flags(false, false);
+
+        run_repl_line(&mut pending, "0");
+        assert!(pending.is_empty());
+        assert_flags(false, true);
+    });
+}
+
 fn with_clean_error_state(test: impl FnOnce()) {
     let _guard = TEST_LOCK.lock().expect("test lock should not be poisoned");
     reset_interpreter();
@@ -291,4 +374,19 @@ fn run_repl_and_reset_flags(source: &str) {
     run_repl(source);
     clear_error();
     clear_runtime_error();
+}
+
+fn evaluate_repl_expression(source: &str) -> Value {
+    let tokens = scan_tokens(source);
+    let expr = parse_repl_expression(tokens).expect("test expression should parse");
+
+    with_interpreter(|interpreter| {
+        interpreter.clear_resolved_bindings();
+        assert!(resolve_expression(interpreter, &expr));
+        let value = interpreter
+            .interpret_expression(&expr)
+            .expect("test expression should evaluate");
+        interpreter.clear_resolved_bindings();
+        value
+    })
 }

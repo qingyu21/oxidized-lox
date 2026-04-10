@@ -41,23 +41,28 @@ pub fn run_file(path: &str) -> io::Result<()> {
 
 pub fn run_prompt() -> io::Result<()> {
     let stdin = io::stdin();
+    let mut pending_input = String::new();
 
     loop {
-        print!("> ");
+        print!("{}", repl_prompt(&pending_input));
         io::stdout().flush()?;
 
         let mut line = String::new();
         let bytes_read = stdin.read_line(&mut line)?;
 
         if bytes_read == 0 {
+            if !pending_input.is_empty() {
+                run_repl(&pending_input);
+            }
             break;
         }
 
-        // TODO(repl): Buffer incomplete multi-line input so statements like
-        // `if (...)` or blocks can span multiple prompt lines before parsing.
-        run_repl(line.trim_end());
-        clear_error();
-        clear_runtime_error();
+        run_repl_line(&mut pending_input, trim_repl_line(&line));
+
+        if pending_input.is_empty() {
+            clear_error();
+            clear_runtime_error();
+        }
     }
 
     Ok(())
@@ -78,7 +83,10 @@ fn run_repl(source: &str) {
     // the full AST before evaluation. A bytecode VM or arena-backed frontend
     // could cut allocation and traversal overhead later on.
     let tokens = scan_tokens(source);
+    run_repl_tokens(tokens);
+}
 
+fn run_repl_tokens(tokens: Vec<Token>) {
     match classify_repl_input(&tokens) {
         ReplInput::Empty => {}
         ReplInput::Expression => {
@@ -89,6 +97,164 @@ fn run_repl(source: &str) {
         }
         ReplInput::Program => run_program_tokens(tokens),
     }
+}
+
+fn repl_prompt(pending_input: &str) -> &'static str {
+    if pending_input.is_empty() {
+        "> "
+    } else {
+        "... "
+    }
+}
+
+fn trim_repl_line(line: &str) -> &str {
+    line.trim_end_matches(&['\r', '\n'][..])
+}
+
+fn run_repl_line(pending_input: &mut String, line: &str) {
+    append_repl_line(pending_input, line);
+
+    if should_buffer_repl_input(pending_input) {
+        return;
+    }
+
+    run_repl(pending_input);
+    pending_input.clear();
+}
+
+fn append_repl_line(pending_input: &mut String, line: &str) {
+    if pending_input.is_empty() {
+        pending_input.push_str(line);
+    } else {
+        pending_input.push('\n');
+        pending_input.push_str(line);
+    }
+}
+
+fn should_buffer_repl_input(source: &str) -> bool {
+    if source.trim().is_empty() {
+        return false;
+    }
+
+    if has_unclosed_repl_lexical_context(source) {
+        return true;
+    }
+
+    let tokens = scan_tokens(source);
+    repl_tokens_need_more_input(&tokens)
+}
+
+fn has_unclosed_repl_lexical_context(source: &str) -> bool {
+    let mut paren_depth = 0usize;
+    let mut brace_depth = 0usize;
+    let mut chars = source.chars().peekable();
+    let mut in_string = false;
+    let mut in_block_comment = false;
+
+    while let Some(ch) = chars.next() {
+        if in_string {
+            if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if in_block_comment {
+            if ch == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                in_block_comment = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '/' if chars.peek() == Some(&'/') => {
+                chars.next();
+                for comment_char in chars.by_ref() {
+                    if comment_char == '\n' {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                in_block_comment = true;
+            }
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '{' => brace_depth += 1,
+            '}' => brace_depth = brace_depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    in_string || in_block_comment || paren_depth > 0 || brace_depth > 0
+}
+
+fn repl_tokens_need_more_input(tokens: &[Token]) -> bool {
+    if is_empty_input(tokens) {
+        return false;
+    }
+
+    has_unmatched_conditional(tokens)
+        || ends_with_repl_continuation(tokens)
+        || starts_incomplete_multiline_statement(tokens)
+}
+
+fn has_unmatched_conditional(tokens: &[Token]) -> bool {
+    let mut pending_then_branches = 0usize;
+
+    for token in tokens {
+        match token.type_ {
+            TokenType::Question => pending_then_branches += 1,
+            TokenType::Colon => pending_then_branches = pending_then_branches.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    pending_then_branches > 0
+}
+
+fn ends_with_repl_continuation(tokens: &[Token]) -> bool {
+    matches!(
+        last_significant_token(tokens).map(|token| token.type_),
+        Some(
+            TokenType::Bang
+                | TokenType::BangEqual
+                | TokenType::Comma
+                | TokenType::Colon
+                | TokenType::Dot
+                | TokenType::Equal
+                | TokenType::EqualEqual
+                | TokenType::Greater
+                | TokenType::GreaterEqual
+                | TokenType::Less
+                | TokenType::LessEqual
+                | TokenType::Minus
+                | TokenType::Or
+                | TokenType::And
+                | TokenType::Plus
+                | TokenType::Question
+                | TokenType::Slash
+                | TokenType::Star
+        )
+    )
+}
+
+fn starts_incomplete_multiline_statement(tokens: &[Token]) -> bool {
+    matches!(
+        tokens.first().map(|token| token.type_),
+        Some(TokenType::Class | TokenType::For | TokenType::Fun | TokenType::If | TokenType::While)
+    ) && !ends_with_semicolon(tokens)
+        && !ends_with_right_brace(tokens)
+}
+
+fn last_significant_token(tokens: &[Token]) -> Option<&Token> {
+    tokens
+        .iter()
+        .rev()
+        .find(|token| token.type_ != TokenType::Eof)
 }
 
 fn scan_tokens(source: &str) -> Vec<Token> {
@@ -227,8 +393,15 @@ fn starts_with_statement(tokens: &[Token]) -> bool {
 
 fn ends_with_semicolon(tokens: &[Token]) -> bool {
     matches!(
-        tokens.iter().rev().nth(1).map(|token| token.type_),
+        last_significant_token(tokens).map(|token| token.type_),
         Some(TokenType::Semicolon)
+    )
+}
+
+fn ends_with_right_brace(tokens: &[Token]) -> bool {
+    matches!(
+        last_significant_token(tokens).map(|token| token.type_),
+        Some(TokenType::RightBrace)
     )
 }
 
