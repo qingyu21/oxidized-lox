@@ -80,12 +80,12 @@ cargo fmt --all
 
 - The crate is still in the tree-walk stage and does not include the bytecode
   VM from later parts of the book.
-- The REPL evaluates one input line at a time and does not yet buffer
-  incomplete multi-line statements.
 - Optional chapter challenge features such as static methods, getters, and the
   Chapter 13 extension challenges are still TODO.
-- Runtime object cycles are not reclaimed yet because this interpreter does
-  not implement a tracing garbage collector.
+- Runtime object cycles are not reclaimed yet. The current tree-walk runtime
+  intentionally keeps fields and bound-method captures as strong references, so
+  fixing cycles properly will require tracing GC or a broader runtime-handle
+  redesign rather than a tiny `Weak` swap.
 
 ## More Detail
 

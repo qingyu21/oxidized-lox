@@ -30,12 +30,19 @@ pub(crate) struct LoxClass {
 
 #[derive(Debug, Clone)]
 pub(crate) struct LoxInstance {
-    // TODO(memory): Plain instances are fine to drop when their last strong
-    // reference goes away, but cyclic object graphs are not. Examples include
-    // `instance.self = instance`, mutually-referential instances, or storing a
-    // bound method back onto the instance so the closure keeps `this` alive.
-    // A tracing GC, or a carefully chosen set of Weak edges, is needed to
-    // reclaim those cycles in long-lived interpreter sessions.
+    // TODO(memory): The tree-walk runtime intentionally keeps object edges
+    // strong for now: fields own the `Value`s stored in them, classes own
+    // methods, and bound methods own their receiver through captured `this`.
+    // That keeps object identity and escaped-method behavior unsurprising, but
+    // it also means cyclic graphs are retained in long-lived sessions. Common
+    // examples are `instance.self = instance`, mutually-referential instances,
+    // and storing a bound method back onto the instance.
+    //
+    // A local Weak swap is not enough here. Weakening field values or bound
+    // `this` would change observable Lox semantics by letting regular object
+    // references or escaped methods go dead unexpectedly. The real fix is a
+    // tracing GC, or a broader runtime-handle redesign that can preserve those
+    // semantics while still breaking cycles internally.
     klass: Rc<LoxClass>,
     fields: RefCell<HashMap<String, Value>>,
 }
@@ -55,6 +62,27 @@ impl LoxClass {
 
     fn instantiate(class: Rc<LoxClass>) -> Rc<LoxInstance> {
         Rc::new(LoxInstance::new(class))
+    }
+
+    pub(crate) fn arity(&self) -> usize {
+        self.find_method("init")
+            .map_or(0, |initializer| initializer.arity())
+    }
+
+    pub(crate) fn call(
+        class: Rc<LoxClass>,
+        interpreter: &Interpreter,
+        arguments: Vec<Value>,
+    ) -> Result<Value, RuntimeError> {
+        let instance = Self::instantiate(class.clone());
+
+        if let Some(initializer) = class.find_method("init") {
+            initializer
+                .bind(instance.clone())
+                .call(interpreter, arguments)?;
+        }
+
+        Ok(Value::Instance(instance))
     }
 
     // TODO(ch13-challenge2): Method lookup still prefers the lowest class in
@@ -98,33 +126,6 @@ impl LoxInstance {
     }
 }
 
-impl LoxCallable for LoxClass {
-    fn arity(&self) -> usize {
-        self.find_method("init")
-            .map_or(0, |initializer| initializer.arity())
-    }
-
-    fn call(
-        &self,
-        interpreter: &Interpreter,
-        arguments: Vec<Value>,
-    ) -> Result<Value, RuntimeError> {
-        // TODO(perf): Instantiating a class currently clones the entire class
-        // object, including its method table. Instances should keep sharing
-        // the original `Rc<LoxClass>` instead of rebuilding an owned copy on
-        // each construction.
-        let instance = Self::instantiate(Rc::new(self.clone()));
-
-        if let Some(initializer) = self.find_method("init") {
-            initializer
-                .bind(instance.clone())
-                .call(interpreter, arguments)?;
-        }
-
-        Ok(Value::Instance(instance))
-    }
-}
-
 impl fmt::Display for LoxClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
@@ -136,3 +137,6 @@ impl fmt::Display for LoxInstance {
         write!(f, "{} instance", self.klass.name)
     }
 }
+
+#[cfg(test)]
+mod tests;

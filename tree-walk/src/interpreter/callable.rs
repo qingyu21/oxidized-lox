@@ -16,14 +16,30 @@ use super::{ControlFlow, Interpreter};
 #[derive(Debug)]
 struct ClockFunction;
 
-// Runtime wrapper around a parsed function declaration. Keeping callable
-// behavior here prevents the front-end AST from taking on interpreter duties.
-pub(crate) struct LoxFunction {
+#[derive(Debug)]
+struct LoxFunctionCode {
     name: Token,
     params: Vec<Token>,
     body: Vec<Stmt>,
-    closure: EnvironmentRef,
     is_initializer: bool,
+}
+
+// Runtime wrapper around a parsed function declaration. Keeping callable
+// behavior here prevents the front-end AST from taking on interpreter duties.
+pub(crate) struct LoxFunction {
+    code: Rc<LoxFunctionCode>,
+    closure: EnvironmentRef,
+}
+
+impl LoxFunctionCode {
+    fn new(name: Token, params: Vec<Token>, body: Vec<Stmt>, is_initializer: bool) -> Self {
+        Self {
+            name,
+            params,
+            body,
+            is_initializer,
+        }
+    }
 }
 
 pub(super) fn install_native_globals(globals: &EnvironmentRef) {
@@ -48,30 +64,19 @@ pub(super) fn make_function_ref(
     closure: EnvironmentRef,
     is_initializer: bool,
 ) -> Rc<LoxFunction> {
-    Rc::new(LoxFunction::new(
+    let code = Rc::new(LoxFunctionCode::new(
         name.clone(),
         params.to_vec(),
         body.to_vec(),
-        closure,
         is_initializer,
-    ))
+    ));
+
+    Rc::new(LoxFunction::new(code, closure))
 }
 
 impl LoxFunction {
-    fn new(
-        name: Token,
-        params: Vec<Token>,
-        body: Vec<Stmt>,
-        closure: EnvironmentRef,
-        is_initializer: bool,
-    ) -> Self {
-        Self {
-            name,
-            params,
-            body,
-            closure,
-            is_initializer,
-        }
+    fn new(code: Rc<LoxFunctionCode>, closure: EnvironmentRef) -> Self {
+        Self { code, closure }
     }
 
     pub(crate) fn bind(&self, instance: Rc<LoxInstance>) -> Rc<LoxFunction> {
@@ -80,21 +85,16 @@ impl LoxFunction {
             .borrow_mut()
             .define("this".to_string(), Value::Instance(instance));
 
-        // TODO(perf): Binding a method currently clones the function name,
-        // parameter list, and full body AST every time a bound method value is
-        // created. Split immutable function code from the closure wrapper so
-        // bound methods can share the parsed definition instead of copying it.
-        Rc::new(LoxFunction::new(
-            self.name.clone(),
-            self.params.clone(),
-            self.body.clone(),
-            environment,
-            self.is_initializer,
-        ))
+        Rc::new(LoxFunction::new(self.code.clone(), environment))
     }
 
     fn bound_this(&self) -> Value {
-        let keyword = Token::new(TokenType::This, "this".to_string(), None, self.name.line);
+        let keyword = Token::new(
+            TokenType::This,
+            "this".to_string(),
+            None,
+            self.code.name.line,
+        );
         Environment::get_at(&self.closure, 0, &keyword)
             .expect("initializer methods should always have a bound 'this'")
     }
@@ -127,7 +127,7 @@ impl fmt::Display for ClockFunction {
 
 impl LoxCallable for LoxFunction {
     fn arity(&self) -> usize {
-        self.params.len()
+        self.code.params.len()
     }
 
     fn call(
@@ -140,7 +140,7 @@ impl LoxCallable for LoxFunction {
         let environment = Environment::new_enclosed_ref(self.closure.clone());
 
         // Bind evaluated argument values to the function's parameter names.
-        for (param, argument) in self.params.iter().zip(arguments) {
+        for (param, argument) in self.code.params.iter().zip(arguments) {
             environment
                 .borrow_mut()
                 .define(param.lexeme.clone(), argument);
@@ -154,16 +154,16 @@ impl LoxCallable for LoxFunction {
         // execute `return;`, the call still evaluates to the bound instance
         // (`this`). The resolver rejects `return value;` in init methods, and
         // this runtime branch preserves the same rule as a final backstop.
-        match interpreter.execute_block(&self.body, environment)? {
+        match interpreter.execute_block(&self.code.body, environment)? {
             ControlFlow::None => {
-                if self.is_initializer {
+                if self.code.is_initializer {
                     Ok(self.bound_this())
                 } else {
                     Ok(Value::Nil)
                 }
             }
             ControlFlow::Return(value) => {
-                if self.is_initializer {
+                if self.code.is_initializer {
                     Ok(self.bound_this())
                 } else {
                     Ok(value)
@@ -179,14 +179,17 @@ impl LoxCallable for LoxFunction {
 impl fmt::Debug for LoxFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LoxFunction")
-            .field("name", &self.name.lexeme)
-            .field("arity", &self.params.len())
+            .field("name", &self.code.name.lexeme)
+            .field("arity", &self.code.params.len())
             .finish_non_exhaustive()
     }
 }
 
 impl fmt::Display for LoxFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<fn {}>", self.name.lexeme)
+        write!(f, "<fn {}>", self.code.name.lexeme)
     }
 }
+
+#[cfg(test)]
+mod tests;

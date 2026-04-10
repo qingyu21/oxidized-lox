@@ -187,8 +187,8 @@ flowchart TD
 - Represents syntax that evaluates to a value: literals, variables, unary and
   binary operators, assignment, logical operators, `?:`, call expressions,
   `this`, `super`, and instance property get/set expressions.
-- Call expressions already evaluate through the interpreter's callable
-  abstraction shared by native functions, user-defined functions, and classes.
+- Call expressions already evaluate through the interpreter's runtime call
+  dispatch, which handles callable values and class construction in one place.
 
 `Stmt`
 
@@ -215,8 +215,8 @@ flowchart TD
 `LoxCallable`
 
 - Runtime trait implemented by anything Lox can invoke with `()`.
-- Defines the callable contract used by native functions, user-defined
-  functions, and classes.
+- Defines the callable contract used by native functions and user-defined
+  functions.
 - Is defined in `src/runtime/object.rs` and re-exported through
   `src/runtime.rs`, while concrete callable implementations live in
   `src/interpreter/callable.rs`.
@@ -249,6 +249,15 @@ flowchart TD
 - Because class lookup walks superclasses too, inherited methods are exposed
   through the same property-read path.
 - Property writes always target instance fields.
+- The current tree-walk runtime keeps these ownership edges strong on purpose:
+  fields own stored `Value`s, classes own methods, and bound methods own their
+  receiver through captured `this`. That keeps normal object references and
+  escaped method values behaving like ordinary Lox values.
+- The tradeoff is that cyclic object graphs are not reclaimed yet. Self-cycles,
+  mutually-referential instances, and storing a bound method back onto the
+  instance will keep those objects alive until process exit in long-lived
+  sessions. This is treated as a known runtime limitation for now, not
+  something to "fix" with a small local `Weak` substitution.
 
 `RuntimeError`
 
@@ -281,15 +290,16 @@ flowchart TD
 - Owns the current environment and implements the runtime semantics of the
   language.
 - Evaluates call expressions by first evaluating the callee and argument
-  expressions, then dispatching through `LoxCallable`.
+  expressions, then dispatching either through `LoxCallable` or through the
+  class-construction path for `LoxClass` values.
 - Evaluates property get/set expressions by first evaluating the receiver
   expression, then operating on `LoxInstance` field storage.
 - Executes class declarations by lowering parsed methods into a runtime method
   table stored on `LoxClass`.
 - When a class has a superclass, creates an extra closure environment so
   methods capture `super` alongside the later method-specific `this` binding.
-- Calls classes through the same callable abstraction used for functions, so
-  class calls can allocate instances and forward arguments into `init(...)`.
+- Calls classes by allocating a `LoxInstance` that keeps sharing the original
+  `Rc<LoxClass>`, then forwards arguments into `init(...)` when present.
 - Evaluates `super.method` expressions by reading the captured superclass and
   the current receiver from the environment chain, then rebinding the resolved
   method to that receiver.

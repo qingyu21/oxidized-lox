@@ -1,4 +1,7 @@
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::{
+    panic::{AssertUnwindSafe, catch_unwind},
+    rc::Rc,
+};
 
 use super::Interpreter;
 use crate::environment::Environment;
@@ -509,6 +512,69 @@ fn instances_store_and_read_back_fields() {
              bagel.flavor"
         ),
         Value::String("sesame".to_string())
+    );
+}
+
+#[test]
+fn acyclic_instances_drop_once_the_last_strong_reference_is_released() {
+    let value = interpret_script_result("class Bagel {} Bagel()");
+    let Value::Instance(instance) = value else {
+        panic!("expected a class call to produce an instance");
+    };
+
+    let weak = Rc::downgrade(&instance);
+    drop(instance);
+
+    assert!(
+        weak.upgrade().is_none(),
+        "acyclic instances should be released when their last strong reference drops"
+    );
+}
+
+#[test]
+fn self_referential_instances_keep_themselves_alive() {
+    let value = interpret_script_result(
+        "class Node {}
+         var node = Node();
+         node.self = node;
+         node",
+    );
+    let Value::Instance(instance) = value else {
+        panic!("expected the final expression to produce an instance");
+    };
+
+    let weak = Rc::downgrade(&instance);
+    drop(instance);
+
+    assert!(
+        weak.upgrade().is_some(),
+        "a self-cycle should keep the instance alive under the current Rc-based runtime"
+    );
+}
+
+#[test]
+fn instances_storing_bound_methods_create_retained_cycles() {
+    let value = interpret_script_result(
+        "class Greeter {
+           identity() {
+             return this;
+           }
+         }
+
+         var greeter = Greeter();
+         greeter.cached = greeter.identity;
+         greeter",
+    );
+    let Value::Instance(instance) = value else {
+        panic!("expected the final expression to produce an instance");
+    };
+
+    let weak = Rc::downgrade(&instance);
+    drop(instance);
+
+    assert!(
+        weak.upgrade().is_some(),
+        "storing a bound method back onto the instance should retain the receiver cycle"
     );
 }
 

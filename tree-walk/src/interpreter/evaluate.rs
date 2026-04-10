@@ -1,7 +1,7 @@
 use crate::{
     environment::Environment,
     expr::Expr,
-    runtime::{LoxCallable, RuntimeError, Value},
+    runtime::{LoxClass, RuntimeError, Value},
     token::{Token, TokenType},
 };
 
@@ -203,7 +203,7 @@ impl Interpreter {
                     ));
                 }
 
-                class.call(self, arguments)
+                LoxClass::call(class, self, arguments)
             }
             _ => Err(RuntimeError::new(
                 paren.clone(),
