@@ -39,6 +39,19 @@ fn concatenates_number_and_string_with_plus() {
 }
 
 #[test]
+fn plus_keeps_numeric_subexpressions_left_associative_before_stringification() {
+    assert_eq!(interpret("1 + 2 + \"3\""), Value::String("33".into()));
+}
+
+#[test]
+fn concatenates_longer_plus_chains_without_changing_results() {
+    assert_eq!(
+        interpret("\"lox\" + \"-\" + \"lang\" + 1"),
+        Value::String("lox-lang1".into())
+    );
+}
+
+#[test]
 fn evaluates_truthiness_for_bang() {
     assert_eq!(interpret("!nil"), Value::Bool(true));
     assert_eq!(interpret("!0"), Value::Bool(false));

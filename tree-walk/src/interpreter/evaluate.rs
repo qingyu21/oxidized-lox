@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     environment::Environment,
     expr::Expr,
@@ -6,6 +8,105 @@ use crate::{
 };
 
 use super::{Interpreter, ResolvedBinding};
+
+enum PlusValue {
+    Number(f64),
+    Text(ConcatenatedString),
+    Other(Value),
+}
+
+struct ConcatenatedString {
+    segments: Vec<StringSegment>,
+    len: usize,
+}
+
+enum StringSegment {
+    Shared(Rc<str>),
+    Owned(String),
+}
+
+impl From<Value> for PlusValue {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Number(value) => PlusValue::Number(value),
+            Value::String(value) => PlusValue::Text(ConcatenatedString::from_shared(value)),
+            other => PlusValue::Other(other),
+        }
+    }
+}
+
+impl PlusValue {
+    fn into_value(self) -> Value {
+        match self {
+            PlusValue::Number(value) => Value::Number(value),
+            PlusValue::Text(value) => Value::String(value.finish().into()),
+            PlusValue::Other(value) => value,
+        }
+    }
+}
+
+impl ConcatenatedString {
+    fn from_shared(value: Rc<str>) -> Self {
+        let len = value.len();
+        Self {
+            segments: vec![StringSegment::Shared(value)],
+            len,
+        }
+    }
+
+    fn push_plus_value(&mut self, value: PlusValue) {
+        match value {
+            PlusValue::Number(value) => self.push_owned(value.to_string()),
+            PlusValue::Text(value) => self.append(value),
+            PlusValue::Other(value) => self.push_owned(value.to_string()),
+        }
+    }
+
+    fn prepend_plus_value(&mut self, value: PlusValue) {
+        match value {
+            PlusValue::Number(value) => self.prepend_owned(value.to_string()),
+            PlusValue::Text(value) => self.prepend(value),
+            PlusValue::Other(value) => self.prepend_owned(value.to_string()),
+        }
+    }
+
+    fn append(&mut self, mut other: Self) {
+        self.len += other.len;
+        self.segments.append(&mut other.segments);
+    }
+
+    fn prepend(&mut self, other: Self) {
+        self.len += other.len;
+        let mut segments = other.segments;
+        segments.append(&mut self.segments);
+        self.segments = segments;
+    }
+
+    fn push_owned(&mut self, value: String) {
+        self.len += value.len();
+        if !value.is_empty() {
+            self.segments.push(StringSegment::Owned(value));
+        }
+    }
+
+    fn prepend_owned(&mut self, value: String) {
+        self.len += value.len();
+        if !value.is_empty() {
+            self.segments.insert(0, StringSegment::Owned(value));
+        }
+    }
+
+    fn finish(self) -> String {
+        let mut result = String::with_capacity(self.len);
+        for segment in self.segments {
+            match segment {
+                StringSegment::Shared(value) => result.push_str(value.as_ref()),
+                StringSegment::Owned(value) => result.push_str(&value),
+            }
+        }
+        result
+    }
+}
 
 impl Interpreter {
     pub(super) fn evaluate(&self, expr: &Expr) -> Result<Value, RuntimeError> {
@@ -254,6 +355,10 @@ impl Interpreter {
         operator: &Token,
         right_expr: &Expr,
     ) -> Result<Value, RuntimeError> {
+        if operator.type_ == TokenType::Plus {
+            return self.evaluate_plus(operator, left_expr, right_expr);
+        }
+
         let left = self.evaluate(left_expr)?;
         let right = self.evaluate(right_expr)?;
 
@@ -276,7 +381,6 @@ impl Interpreter {
             TokenType::Minus => {
                 Self::apply_numeric_binary(operator, &left, &right, |left, right| left - right)
             }
-            TokenType::Plus => Self::apply_plus(operator, &left, &right),
             TokenType::Slash => Self::apply_divide(operator, &left, &right),
             TokenType::Star => {
                 Self::apply_numeric_binary(operator, &left, &right, |left, right| left * right)
@@ -291,15 +395,54 @@ impl Interpreter {
         )?))
     }
 
-    fn apply_plus(operator: &Token, left: &Value, right: &Value) -> Result<Value, RuntimeError> {
+    fn evaluate_plus(
+        &self,
+        operator: &Token,
+        left_expr: &Expr,
+        right_expr: &Expr,
+    ) -> Result<Value, RuntimeError> {
+        Ok(Self::combine_plus_values(
+            operator,
+            self.evaluate_plus_operand(left_expr)?,
+            self.evaluate_plus_operand(right_expr)?,
+        )?
+        .into_value())
+    }
+
+    fn evaluate_plus_operand(&self, expr: &Expr) -> Result<PlusValue, RuntimeError> {
+        if let Expr::Binary {
+            left,
+            operator,
+            right,
+        } = expr
+            && operator.type_ == TokenType::Plus
+        {
+            return Self::combine_plus_values(
+                operator,
+                self.evaluate_plus_operand(left)?,
+                self.evaluate_plus_operand(right)?,
+            );
+        }
+
+        Ok(PlusValue::from(self.evaluate(expr)?))
+    }
+
+    fn combine_plus_values(
+        operator: &Token,
+        left: PlusValue,
+        right: PlusValue,
+    ) -> Result<PlusValue, RuntimeError> {
         match (left, right) {
-            (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
-            (Value::String(_), _) | (_, Value::String(_)) => {
-                // TODO(perf): Repeated `+` concatenation allocates and copies
-                // into a fresh result buffer each time. Shared string storage
-                // makes reads cheaper, but concatenation itself still pays for
-                // building the combined text.
-                Ok(Value::String(format!("{left}{right}").into()))
+            (PlusValue::Number(left), PlusValue::Number(right)) => {
+                Ok(PlusValue::Number(left + right))
+            }
+            (PlusValue::Text(mut text), right) => {
+                text.push_plus_value(right);
+                Ok(PlusValue::Text(text))
+            }
+            (left, PlusValue::Text(mut text)) => {
+                text.prepend_plus_value(left);
+                Ok(PlusValue::Text(text))
             }
             _ => Err(RuntimeError::new(
                 operator.clone(),

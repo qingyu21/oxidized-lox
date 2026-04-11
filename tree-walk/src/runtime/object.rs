@@ -30,19 +30,22 @@ pub(crate) struct LoxClass {
 
 #[derive(Debug, Clone)]
 pub(crate) struct LoxInstance {
-    // TODO(memory): The tree-walk runtime intentionally keeps object edges
-    // strong for now: fields own the `Value`s stored in them, classes own
-    // methods, and bound methods own their receiver through captured `this`.
-    // That keeps object identity and escaped-method behavior unsurprising, but
-    // it also means cyclic graphs are retained in long-lived sessions. Common
-    // examples are `instance.self = instance`, mutually-referential instances,
-    // and storing a bound method back onto the instance.
+    // The tree-walk runtime deliberately keeps ordinary object edges strong:
+    // fields own the `Value`s stored in them, classes own methods, and bound
+    // methods own their receiver through captured `this`. That keeps object
+    // identity and escaped-method behavior unsurprising, but it also means
+    // cyclic graphs are retained in long-lived sessions.
     //
-    // A local Weak swap is not enough here. Weakening field values or bound
-    // `this` would change observable Lox semantics by letting regular object
-    // references or escaped methods go dead unexpectedly. The real fix is a
-    // tracing GC, or a broader runtime-handle redesign that can preserve those
-    // semantics while still breaking cycles internally.
+    // Common examples are `instance.self = instance`, mutually-referential
+    // instances, and storing a bound method back onto the instance. A local
+    // `Weak` swap is not enough here: weakening field values or bound `this`
+    // would change observable Lox semantics by letting regular object
+    // references or escaped methods go dead unexpectedly.
+    //
+    // For now this interpreter documents and tests that limitation rather
+    // than partially hiding it. The real fix is a tracing GC, or a broader
+    // runtime-handle redesign that can preserve those semantics while still
+    // breaking cycles internally.
     klass: Rc<LoxClass>,
     fields: RefCell<HashMap<Rc<str>, Value>>,
 }
