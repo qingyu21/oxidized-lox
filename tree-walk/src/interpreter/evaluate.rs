@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     environment::Environment,
-    expr::Expr,
+    expr::{Expr, ExprRef},
     runtime::{LoxClass, RuntimeError, Value},
     token::{Token, TokenType},
 };
@@ -259,7 +259,7 @@ impl Interpreter {
         &self,
         callee_expr: &Expr,
         paren: &Token,
-        argument_exprs: &[Expr],
+        argument_exprs: &[ExprRef],
     ) -> Result<Value, RuntimeError> {
         // Evaluate the callee expression first. This may be a simple variable
         // lookup like `clock`, but the grammar allows any higher-precedence

@@ -15,7 +15,7 @@ impl Parser {
         while self.match_token(&[TokenType::Comma]) {
             let operator = self.previous().clone();
             let right = self.assignment()?;
-            expr = Expr::binary(expr, operator, right);
+            expr = Expr::binary(&mut self.exprs, expr, operator, right);
         }
 
         Ok(expr)
@@ -30,8 +30,10 @@ impl Parser {
             let value = self.assignment()?;
 
             match expr {
-                Expr::Variable { name } => return Ok(Expr::assign(name, value)),
-                Expr::Get { object, name } => return Ok(Expr::set(*object, name, value)),
+                Expr::Variable { name } => return Ok(Expr::assign(&mut self.exprs, name, value)),
+                Expr::Get { object, name } => {
+                    return Ok(Expr::set(&mut self.exprs, object, name, value));
+                }
                 _ => {}
             }
 
@@ -52,7 +54,12 @@ impl Parser {
                 "Expect ':' after then branch of conditional expression.",
             )?;
             let else_branch = self.conditional()?;
-            return Ok(Expr::conditional(expr, then_branch, else_branch));
+            return Ok(Expr::conditional(
+                &mut self.exprs,
+                expr,
+                then_branch,
+                else_branch,
+            ));
         }
 
         Ok(expr)
@@ -65,7 +72,7 @@ impl Parser {
         while self.match_token(&[TokenType::Or]) {
             let operator = self.previous().clone();
             let right = self.logic_and()?;
-            expr = Expr::logical(expr, operator, right);
+            expr = Expr::logical(&mut self.exprs, expr, operator, right);
         }
 
         Ok(expr)
@@ -78,7 +85,7 @@ impl Parser {
         while self.match_token(&[TokenType::And]) {
             let operator = self.previous().clone();
             let right = self.equality()?;
-            expr = Expr::logical(expr, operator, right);
+            expr = Expr::logical(&mut self.exprs, expr, operator, right);
         }
 
         Ok(expr)
@@ -91,7 +98,7 @@ impl Parser {
         while self.match_token(&[TokenType::BangEqual, TokenType::EqualEqual]) {
             let operator = self.previous().clone();
             let right = self.comparison()?;
-            expr = Expr::binary(expr, operator, right);
+            expr = Expr::binary(&mut self.exprs, expr, operator, right);
         }
 
         Ok(expr)
@@ -109,7 +116,7 @@ impl Parser {
         ]) {
             let operator = self.previous().clone();
             let right = self.term()?;
-            expr = Expr::binary(expr, operator, right);
+            expr = Expr::binary(&mut self.exprs, expr, operator, right);
         }
 
         Ok(expr)
@@ -122,7 +129,7 @@ impl Parser {
         while self.match_token(&[TokenType::Minus, TokenType::Plus]) {
             let operator = self.previous().clone();
             let right = self.factor()?;
-            expr = Expr::binary(expr, operator, right);
+            expr = Expr::binary(&mut self.exprs, expr, operator, right);
         }
 
         Ok(expr)
@@ -135,7 +142,7 @@ impl Parser {
         while self.match_token(&[TokenType::Slash, TokenType::Star]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
-            expr = Expr::binary(expr, operator, right);
+            expr = Expr::binary(&mut self.exprs, expr, operator, right);
         }
 
         Ok(expr)
@@ -146,7 +153,7 @@ impl Parser {
         if self.match_token(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
-            return Ok(Expr::unary(operator, right));
+            return Ok(Expr::unary(&mut self.exprs, operator, right));
         }
 
         self.call()
@@ -163,7 +170,7 @@ impl Parser {
                 let name = self
                     .consume(TokenType::Identifier, "Expect property name after '.'.")?
                     .clone();
-                expr = Expr::get(expr, name);
+                expr = Expr::get(&mut self.exprs, expr, name);
             } else {
                 break;
             }
@@ -200,7 +207,7 @@ impl Parser {
             .consume(TokenType::RightParen, "Expect ')' after arguments.")?
             .clone();
 
-        Ok(Expr::call(callee, paren, arguments))
+        Ok(Expr::call(&mut self.exprs, callee, paren, arguments))
     }
 
     // primary -> "true" | "false" | "nil" | "this" | NUMBER | STRING |
@@ -235,7 +242,7 @@ impl Parser {
         if self.match_token(&[TokenType::LeftParen]) {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
-            return Ok(Expr::grouping(expr));
+            return Ok(Expr::grouping(&mut self.exprs, expr));
         }
 
         if self.match_token(&[TokenType::Super]) {

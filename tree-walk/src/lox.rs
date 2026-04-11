@@ -2,7 +2,7 @@ use crate::{
     diagnostics::{clear_error, clear_runtime_error, had_error, had_runtime_error, runtime_error},
     expr::Expr,
     interpreter::Interpreter,
-    parser::Parser,
+    parser::{ParsedExpression, ParsedProgram, Parser},
     resolver::Resolver,
     scanner::Scanner,
     stmt::Stmt,
@@ -261,14 +261,14 @@ fn scan_tokens(source: impl Into<String>) -> Vec<Token> {
 }
 
 fn run_program_tokens(tokens: Vec<Token>) {
-    let Some(statements) = parse_program(tokens) else {
+    let Some(program) = parse_program(tokens) else {
         return;
     };
 
-    resolve_and_interpret_statements(&statements);
+    resolve_and_interpret_statements(&program);
 }
 
-fn parse_program(tokens: Vec<Token>) -> Option<Vec<Stmt>> {
+fn parse_program(tokens: Vec<Token>) -> Option<ParsedProgram> {
     let mut parser = Parser::new(tokens);
     let statements = parser.parse();
 
@@ -279,14 +279,14 @@ fn parse_program(tokens: Vec<Token>) -> Option<Vec<Stmt>> {
     }
 }
 
-fn parse_repl_expression(tokens: Vec<Token>) -> Option<Expr> {
+fn parse_repl_expression(tokens: Vec<Token>) -> Option<ParsedExpression> {
     let mut parser = Parser::new(tokens);
     let expr = parser.parse_expression_input()?;
 
     if stop_after_error() { None } else { Some(expr) }
 }
 
-fn resolve_and_interpret_statements(statements: &[Stmt]) {
+fn resolve_and_interpret_statements(statements: &ParsedProgram) {
     with_interpreter(|interpreter| {
         interpreter.clear_resolved_bindings();
 
@@ -300,7 +300,7 @@ fn resolve_and_interpret_statements(statements: &[Stmt]) {
     });
 }
 
-fn resolve_and_interpret_expression(expr: &Expr) {
+fn resolve_and_interpret_expression(expr: &ParsedExpression) {
     with_interpreter(|interpreter| {
         interpreter.clear_resolved_bindings();
 

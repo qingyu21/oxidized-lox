@@ -6,6 +6,7 @@ use std::{
 use super::Interpreter;
 use crate::environment::Environment;
 use crate::expr::Expr;
+use crate::expr::ExprArena;
 use crate::runtime::{RuntimeError, Value};
 use crate::stmt::Stmt;
 use crate::test_support::{parse_statements, resolve_statements};
@@ -1135,9 +1136,10 @@ fn block_panics_restore_the_enclosing_environment() {
     assert!(interpreter.execute(&setup[0]).is_ok());
 
     let block_environment = Environment::new_enclosed_ref(interpreter.current_environment());
+    let (_invalid_exprs, invalid) = invalid_statement(2);
     let panic_result = catch_unwind(AssertUnwindSafe(|| {
         interpreter
-            .execute_block(&[invalid_statement(2)], block_environment)
+            .execute_block(&[invalid], block_environment)
             .expect("invalid test statement should panic before returning");
     }));
 
@@ -1204,12 +1206,14 @@ fn executes_multiple_statements_in_order() {
 
 #[test]
 fn stops_executing_after_the_first_runtime_error() {
-    let mut statements = parse_statements("1 + 2;\n1 / 0;");
-    statements.push(invalid_statement(3));
+    let statements = parse_statements("1 + 2;\n1 / 0;");
+    let (_invalid_exprs, invalid) = invalid_statement(3);
+    let mut execution_order = statements.as_slice().to_vec();
+    execution_order.push(invalid);
     let interpreter = Interpreter::new();
 
     let error = interpreter
-        .execute_all(&statements)
+        .execute_all(&execution_order)
         .expect_err("execution should stop at division by zero");
 
     assert_eq!(error.message, "Division by zero.");
@@ -1256,10 +1260,15 @@ fn evaluate_result(source: &str) -> Result<Value, RuntimeError> {
     interpreter.evaluate(expr)
 }
 
-fn invalid_statement(line: u32) -> Stmt {
-    Stmt::expression(Expr::Binary {
-        left: Box::new(Expr::literal(Literal::Number(1.0))),
+fn invalid_statement(line: u32) -> (Rc<ExprArena>, Stmt) {
+    let mut exprs = ExprArena::new();
+    let left = exprs.alloc(Expr::literal(Literal::Number(1.0)));
+    let right = exprs.alloc(Expr::literal(Literal::Number(2.0)));
+    let statement = Stmt::expression(Expr::Binary {
+        left,
         operator: Token::new(TokenType::Print, "print".to_string(), None, line),
-        right: Box::new(Expr::literal(Literal::Number(2.0))),
-    })
+        right,
+    });
+
+    (exprs.into_shared(), statement)
 }

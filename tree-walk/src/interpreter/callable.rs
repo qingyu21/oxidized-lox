@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     environment::{Environment, EnvironmentRef},
+    expr::ExprArenaRef,
     runtime::{LoxCallable, LoxInstance, RuntimeError, Value},
     stmt::Stmt,
     token::{Token, TokenType},
@@ -21,6 +22,7 @@ struct LoxFunctionCode {
     name: Token,
     params: Vec<Token>,
     body: Vec<Stmt>,
+    _exprs: ExprArenaRef,
     is_initializer: bool,
 }
 
@@ -32,11 +34,18 @@ pub(crate) struct LoxFunction {
 }
 
 impl LoxFunctionCode {
-    fn new(name: Token, params: Vec<Token>, body: Vec<Stmt>, is_initializer: bool) -> Self {
+    fn new(
+        name: Token,
+        params: Vec<Token>,
+        body: Vec<Stmt>,
+        exprs: ExprArenaRef,
+        is_initializer: bool,
+    ) -> Self {
         Self {
             name,
             params,
             body,
+            _exprs: exprs,
             is_initializer,
         }
     }
@@ -49,15 +58,17 @@ pub(super) fn install_native_globals(globals: &EnvironmentRef) {
 }
 
 pub(super) fn make_function(
+    exprs: &ExprArenaRef,
     name: &Token,
     params: &[Token],
     body: &[Stmt],
     closure: EnvironmentRef,
 ) -> Value {
-    Value::Callable(make_function_ref(name, params, body, closure, false))
+    Value::Callable(make_function_ref(exprs, name, params, body, closure, false))
 }
 
 pub(super) fn make_function_ref(
+    exprs: &ExprArenaRef,
     name: &Token,
     params: &[Token],
     body: &[Stmt],
@@ -68,6 +79,7 @@ pub(super) fn make_function_ref(
         name.clone(),
         params.to_vec(),
         body.to_vec(),
+        exprs.clone(),
         is_initializer,
     ));
 

@@ -1,43 +1,55 @@
+use std::{fmt, ops::Deref, rc::Rc};
+
 use crate::token::{Literal, Token};
+
+pub(crate) type ExprArenaRef = Rc<ExprArena>;
+
+#[allow(clippy::vec_box)]
+#[derive(Debug, Default)]
+pub(crate) struct ExprArena {
+    // Box each node so arena growth never relocates previously stored
+    // expressions; child ExprRefs rely on those stable addresses.
+    nodes: Vec<Box<Expr>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ExprRef(*const Expr);
 
 #[derive(Debug, Clone)]
 pub(crate) enum Expr {
     Assign {
         name: Token,
-        value: Box<Expr>,
+        value: ExprRef,
     },
     Binary {
-        // TODO(perf): Boxing child nodes keeps the recursive enum sized, but
-        // it also adds heap allocations per node. An arena/index-based AST
-        // can reduce allocation overhead for larger trees.
-        left: Box<Expr>,
+        left: ExprRef,
         operator: Token,
-        right: Box<Expr>,
+        right: ExprRef,
     },
     Call {
-        callee: Box<Expr>,
+        callee: ExprRef,
         paren: Token,
-        arguments: Vec<Expr>,
+        arguments: Vec<ExprRef>,
     },
     Get {
-        object: Box<Expr>,
+        object: ExprRef,
         name: Token,
     },
     Grouping {
-        expression: Box<Expr>,
+        expression: ExprRef,
     },
     Literal {
         value: Literal,
     },
     Logical {
-        left: Box<Expr>,
+        left: ExprRef,
         operator: Token,
-        right: Box<Expr>,
+        right: ExprRef,
     },
     Set {
-        object: Box<Expr>,
+        object: ExprRef,
         name: Token,
-        value: Box<Expr>,
+        value: ExprRef,
     },
     Super {
         keyword: Token,
@@ -50,55 +62,63 @@ pub(crate) enum Expr {
         name: Token,
     },
     Conditional {
-        condition: Box<Expr>,
-        then_branch: Box<Expr>,
-        else_branch: Box<Expr>,
+        condition: ExprRef,
+        then_branch: ExprRef,
+        else_branch: ExprRef,
     },
     Unary {
         operator: Token,
-        right: Box<Expr>,
+        right: ExprRef,
     },
 }
 
 impl Expr {
     // Construct an assignment expression that updates an existing binding.
-    pub(crate) fn assign(name: Token, value: Expr) -> Self {
+    pub(crate) fn assign(exprs: &mut ExprArena, name: Token, value: Expr) -> Self {
         Expr::Assign {
             name,
-            value: Box::new(value),
+            value: exprs.alloc(value),
         }
     }
 
     // Construct a binary expression with left and right operands.
-    pub(crate) fn binary(left: Expr, operator: Token, right: Expr) -> Self {
+    pub(crate) fn binary(exprs: &mut ExprArena, left: Expr, operator: Token, right: Expr) -> Self {
         Expr::Binary {
-            left: Box::new(left),
+            left: exprs.alloc(left),
             operator,
-            right: Box::new(right),
+            right: exprs.alloc(right),
         }
     }
 
     // Construct a function call expression with a callee and zero or more arguments.
-    pub(crate) fn call(callee: Expr, paren: Token, arguments: Vec<Expr>) -> Self {
+    pub(crate) fn call(
+        exprs: &mut ExprArena,
+        callee: Expr,
+        paren: Token,
+        arguments: Vec<Expr>,
+    ) -> Self {
         Expr::Call {
-            callee: Box::new(callee),
+            callee: exprs.alloc(callee),
             paren,
-            arguments,
+            arguments: arguments
+                .into_iter()
+                .map(|argument| exprs.alloc(argument))
+                .collect(),
         }
     }
 
     // Construct a property read expression like `object.name`.
-    pub(crate) fn get(object: Expr, name: Token) -> Self {
+    pub(crate) fn get(exprs: &mut ExprArena, object: Expr, name: Token) -> Self {
         Expr::Get {
-            object: Box::new(object),
+            object: exprs.alloc(object),
             name,
         }
     }
 
     // Construct a grouping expression that preserves explicit parentheses.
-    pub(crate) fn grouping(expression: Expr) -> Self {
+    pub(crate) fn grouping(exprs: &mut ExprArena, expression: Expr) -> Self {
         Expr::Grouping {
-            expression: Box::new(expression),
+            expression: exprs.alloc(expression),
         }
     }
 
@@ -108,20 +128,20 @@ impl Expr {
     }
 
     // Construct a logical expression that may short-circuit.
-    pub(crate) fn logical(left: Expr, operator: Token, right: Expr) -> Self {
+    pub(crate) fn logical(exprs: &mut ExprArena, left: Expr, operator: Token, right: Expr) -> Self {
         Expr::Logical {
-            left: Box::new(left),
+            left: exprs.alloc(left),
             operator,
-            right: Box::new(right),
+            right: exprs.alloc(right),
         }
     }
 
     // Construct a property assignment like `object.name = value`.
-    pub(crate) fn set(object: Expr, name: Token, value: Expr) -> Self {
+    pub(crate) fn set(exprs: &mut ExprArena, object: ExprRef, name: Token, value: Expr) -> Self {
         Expr::Set {
-            object: Box::new(object),
+            object,
             name,
-            value: Box::new(value),
+            value: exprs.alloc(value),
         }
     }
 
@@ -141,19 +161,74 @@ impl Expr {
     }
 
     // Construct a conditional expression with then/else branches.
-    pub(crate) fn conditional(condition: Expr, then_branch: Expr, else_branch: Expr) -> Self {
+    pub(crate) fn conditional(
+        exprs: &mut ExprArena,
+        condition: Expr,
+        then_branch: Expr,
+        else_branch: Expr,
+    ) -> Self {
         Expr::Conditional {
-            condition: Box::new(condition),
-            then_branch: Box::new(then_branch),
-            else_branch: Box::new(else_branch),
+            condition: exprs.alloc(condition),
+            then_branch: exprs.alloc(then_branch),
+            else_branch: exprs.alloc(else_branch),
         }
     }
 
     // Construct a unary expression with one operand.
-    pub(crate) fn unary(operator: Token, right: Expr) -> Self {
+    pub(crate) fn unary(exprs: &mut ExprArena, operator: Token, right: Expr) -> Self {
         Expr::Unary {
             operator,
-            right: Box::new(right),
+            right: exprs.alloc(right),
         }
+    }
+}
+
+impl ExprArena {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn alloc(&mut self, expr: Expr) -> ExprRef {
+        self.nodes.push(Box::new(expr));
+        ExprRef(
+            self.nodes
+                .last()
+                .expect("arena should contain the expression that was just inserted")
+                .as_ref() as *const Expr,
+        )
+    }
+
+    pub(crate) fn into_shared(self) -> ExprArenaRef {
+        Rc::new(self)
+    }
+}
+
+impl ExprRef {
+    fn as_expr(&self) -> &Expr {
+        // SAFETY: `ExprRef` points at an `Expr` owned by a boxed node inside an
+        // `ExprArena`. The arena stores each node at a stable address, and all
+        // parser outputs carrying these refs keep the arena alive for at least
+        // as long as the expression tree is traversed.
+        unsafe { &*self.0 }
+    }
+}
+
+impl Deref for ExprRef {
+    type Target = Expr;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_expr()
+    }
+}
+
+impl AsRef<Expr> for ExprRef {
+    fn as_ref(&self) -> &Expr {
+        self.as_expr()
+    }
+}
+
+impl fmt::Debug for ExprRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_expr().fmt(f)
     }
 }

@@ -1,4 +1,4 @@
-use crate::expr::Expr;
+use crate::expr::{Expr, ExprArenaRef};
 use crate::token::Token;
 
 #[derive(Debug, Clone)]
@@ -6,6 +6,7 @@ pub(crate) struct FunctionDecl {
     pub(crate) name: Token,
     pub(crate) params: Vec<Token>,
     pub(crate) body: Vec<Stmt>,
+    pub(crate) exprs: Option<ExprArenaRef>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +50,12 @@ impl FunctionDecl {
     // Construct a function or method declaration with its name, parameters,
     // and body statements.
     pub(crate) fn new(name: Token, params: Vec<Token>, body: Vec<Stmt>) -> Self {
-        Self { name, params, body }
+        Self {
+            name,
+            params,
+            body,
+            exprs: None,
+        }
     }
 }
 

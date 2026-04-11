@@ -1,7 +1,8 @@
 use crate::diagnostics;
-use crate::expr::Expr;
+use crate::expr::{Expr, ExprArena, ExprArenaRef};
 use crate::stmt::{FunctionDecl, Stmt};
 use crate::token::{Token, TokenType};
+use std::{mem, ops::Deref};
 
 mod expressions;
 mod statements;
@@ -11,8 +12,19 @@ struct ParseError;
 
 const MAX_ARITY: usize = 255;
 
+pub(crate) struct ParsedProgram {
+    _exprs: ExprArenaRef,
+    statements: Vec<Stmt>,
+}
+
+pub(crate) struct ParsedExpression {
+    _exprs: ExprArenaRef,
+    expression: Expr,
+}
+
 pub(crate) struct Parser {
     tokens: Vec<Token>,
+    exprs: ExprArena,
     // Index of the next token to be parsed.
     current: usize,
     // Number of enclosing loop statements currently being parsed.
@@ -27,6 +39,7 @@ impl Parser {
     pub(crate) fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens,
+            exprs: ExprArena::new(),
             current: 0,
             loop_depth: 0,
             function_depth: 0,
@@ -34,7 +47,7 @@ impl Parser {
     }
 
     // program -> declaration* EOF ;
-    pub(crate) fn parse(&mut self) -> Vec<Stmt> {
+    pub(crate) fn parse(&mut self) -> ParsedProgram {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
@@ -45,12 +58,13 @@ impl Parser {
                 }
             }
         }
-
-        statements
+        let exprs = self.take_exprs();
+        attach_exprs_to_statements(&exprs, &mut statements);
+        ParsedProgram::new(exprs, statements)
     }
 
     // Parse a single expression that must consume the entire input.
-    pub(crate) fn parse_expression_input(&mut self) -> Option<Expr> {
+    pub(crate) fn parse_expression_input(&mut self) -> Option<ParsedExpression> {
         let expr = self.expression().ok()?;
 
         if !self.is_at_end() {
@@ -58,7 +72,7 @@ impl Parser {
             return None;
         }
 
-        Some(expr)
+        Some(ParsedExpression::new(self.take_exprs(), expr))
     }
 
     // declaration -> classDecl | funDecl | varDecl | statement ;
@@ -298,6 +312,87 @@ impl Parser {
     // Borrow the most recently consumed token.
     fn previous(&self) -> &Token {
         &self.tokens[self.current - 1]
+    }
+
+    fn take_exprs(&mut self) -> ExprArenaRef {
+        mem::take(&mut self.exprs).into_shared()
+    }
+}
+
+impl ParsedProgram {
+    fn new(exprs: ExprArenaRef, statements: Vec<Stmt>) -> Self {
+        Self {
+            _exprs: exprs,
+            statements,
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[Stmt] {
+        &self.statements
+    }
+}
+
+impl Deref for ParsedProgram {
+    type Target = [Stmt];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl ParsedExpression {
+    fn new(exprs: ExprArenaRef, expression: Expr) -> Self {
+        Self {
+            _exprs: exprs,
+            expression,
+        }
+    }
+}
+
+fn attach_exprs_to_statements(exprs: &ExprArenaRef, statements: &mut [Stmt]) {
+    for statement in statements {
+        attach_exprs_to_statement(exprs, statement);
+    }
+}
+
+fn attach_exprs_to_statement(exprs: &ExprArenaRef, statement: &mut Stmt) {
+    match statement {
+        Stmt::Block { statements } => attach_exprs_to_statements(exprs, statements),
+        Stmt::Class { methods, .. } => {
+            for method in methods {
+                attach_exprs_to_function(exprs, method);
+            }
+        }
+        Stmt::Function(function) => attach_exprs_to_function(exprs, function),
+        Stmt::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            attach_exprs_to_statement(exprs, then_branch);
+            if let Some(else_branch) = else_branch {
+                attach_exprs_to_statement(exprs, else_branch);
+            }
+        }
+        Stmt::While { body, .. } => attach_exprs_to_statement(exprs, body),
+        Stmt::Break
+        | Stmt::Expression { .. }
+        | Stmt::Print { .. }
+        | Stmt::Return { .. }
+        | Stmt::Var { .. } => {}
+    }
+}
+
+fn attach_exprs_to_function(exprs: &ExprArenaRef, function: &mut FunctionDecl) {
+    function.exprs = Some(exprs.clone());
+    attach_exprs_to_statements(exprs, &mut function.body);
+}
+
+impl Deref for ParsedExpression {
+    type Target = Expr;
+
+    fn deref(&self) -> &Self::Target {
+        &self.expression
     }
 }
 

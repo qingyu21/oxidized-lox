@@ -15,7 +15,7 @@ impl AstPrinter {
                 callee, arguments, ..
             } => self.parenthesize(
                 "call",
-                std::iter::once(callee.as_ref()).chain(arguments.iter()),
+                std::iter::once(callee.as_ref()).chain(arguments.iter().map(AsRef::as_ref)),
             ),
             Expr::Get { object, name } => format!("(. {} {})", self.print(object), name.lexeme),
             Expr::Grouping { expression } => self.parenthesize("group", [expression.as_ref()]),
@@ -75,24 +75,29 @@ impl AstPrinter {
 #[cfg(test)]
 mod tests {
     use super::AstPrinter;
-    use crate::expr::Expr;
+    use crate::expr::{Expr, ExprArena};
     use crate::token::{Literal, Token, TokenType};
 
     #[test]
     fn prints_ast_in_book_style() {
+        let mut exprs = ExprArena::new();
+        let unary_operand = exprs.alloc(Expr::Literal {
+            value: Literal::Number(123.0),
+        });
+        let grouped_literal = exprs.alloc(Expr::Literal {
+            value: Literal::Number(45.67),
+        });
+        let left = exprs.alloc(Expr::Unary {
+            operator: token(TokenType::Minus, "-"),
+            right: unary_operand,
+        });
+        let right = exprs.alloc(Expr::Grouping {
+            expression: grouped_literal,
+        });
         let expression = Expr::Binary {
-            left: Box::new(Expr::Unary {
-                operator: token(TokenType::Minus, "-"),
-                right: Box::new(Expr::Literal {
-                    value: Literal::Number(123.0),
-                }),
-            }),
+            left,
             operator: token(TokenType::Star, "*"),
-            right: Box::new(Expr::Grouping {
-                expression: Box::new(Expr::Literal {
-                    value: Literal::Number(45.67),
-                }),
-            }),
+            right,
         };
 
         let printer = AstPrinter;

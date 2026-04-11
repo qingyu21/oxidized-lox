@@ -107,6 +107,10 @@ impl Interpreter {
         // Function declarations are executable statements: evaluating one
         // creates a callable runtime value and binds it in the current scope.
         let value = make_function(
+            function
+                .exprs
+                .as_ref()
+                .expect("function declarations should carry their expression arena"),
             &function.name,
             &function.params,
             &function.body,
@@ -169,6 +173,10 @@ impl Interpreter {
         let mut method_table = HashMap::new();
         for method in methods {
             let function = make_function_ref(
+                method
+                    .exprs
+                    .as_ref()
+                    .expect("class methods should carry their expression arena"),
                 &method.name,
                 &method.params,
                 &method.body,
