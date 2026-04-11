@@ -6,7 +6,7 @@ use crate::{
     resolver::Resolver,
     scanner::Scanner,
     stmt::Stmt,
-    token::{Token, TokenType},
+    token::TokenType,
 };
 use std::{
     cell::RefCell,
@@ -69,33 +69,39 @@ pub fn run_prompt() -> io::Result<()> {
 }
 
 fn run(source: impl Into<String>) {
-    // TODO(perf): This pipeline materializes both the full token stream and
-    // the full AST before evaluation. A bytecode VM or arena-backed frontend
-    // could cut allocation and traversal overhead later on.
-    let tokens = scan_tokens(source);
-    run_program_tokens(tokens);
+    // TODO(perf): This still materializes a full AST before evaluation.
+    // A bytecode VM or lower-level IR could cut allocation and traversal
+    // overhead further down the line.
+    let Some(program) = parse_program(source) else {
+        return;
+    };
+
+    resolve_and_interpret_statements(&program);
 }
 
 // REPL input may be either a full statement or a bare expression whose value
 // should be echoed back to the user.
 fn run_repl(source: impl Into<String>) {
-    // TODO(perf): This pipeline materializes both the full token stream and
-    // the full AST before evaluation. A bytecode VM or arena-backed frontend
-    // could cut allocation and traversal overhead later on.
-    let tokens = scan_tokens(source);
-    run_repl_tokens(tokens);
-}
+    // TODO(perf): REPL execution still materializes a full AST before
+    // evaluation. A bytecode VM or lower-level IR could trim that remaining
+    // frontend overhead later on.
+    let source = source.into();
 
-fn run_repl_tokens(tokens: Vec<Token>) {
-    match classify_repl_input(&tokens) {
+    match classify_repl_source(&source) {
         ReplInput::Empty => {}
         ReplInput::Expression => {
-            let Some(expr) = parse_repl_expression(tokens) else {
+            let Some(expr) = parse_repl_expression(source) else {
                 return;
             };
             resolve_and_interpret_expression(&expr);
         }
-        ReplInput::Program => run_program_tokens(tokens),
+        ReplInput::Program => {
+            let Some(program) = parse_program(source) else {
+                return;
+            };
+
+            resolve_and_interpret_statements(&program);
+        }
     }
 }
 
@@ -139,8 +145,7 @@ fn should_buffer_repl_input(source: &str) -> bool {
         return true;
     }
 
-    let tokens = scan_tokens(source);
-    repl_tokens_need_more_input(&tokens)
+    repl_summary_needs_more_input(&summarize_repl_tokens(source))
 }
 
 fn has_unclosed_repl_lexical_context(source: &str) -> bool {
@@ -191,85 +196,44 @@ fn has_unclosed_repl_lexical_context(source: &str) -> bool {
     in_string || in_block_comment || paren_depth > 0 || brace_depth > 0
 }
 
-fn repl_tokens_need_more_input(tokens: &[Token]) -> bool {
-    if is_empty_input(tokens) {
-        return false;
-    }
-
-    has_unmatched_conditional(tokens)
-        || ends_with_repl_continuation(tokens)
-        || starts_incomplete_multiline_statement(tokens)
+#[derive(Default)]
+struct ReplTokenSummary {
+    is_empty: bool,
+    first: Option<TokenType>,
+    last_significant: Option<TokenType>,
+    pending_then_branches: usize,
 }
 
-fn has_unmatched_conditional(tokens: &[Token]) -> bool {
-    let mut pending_then_branches = 0usize;
+fn summarize_repl_tokens(source: &str) -> ReplTokenSummary {
+    let mut scanner = Scanner::new(source);
+    let mut summary = ReplTokenSummary {
+        is_empty: true,
+        ..ReplTokenSummary::default()
+    };
 
-    for token in tokens {
+    loop {
+        let token = scanner.next_token();
+
+        if token.type_ == TokenType::Eof {
+            return summary;
+        }
+
+        summary.is_empty = false;
+        summary.first.get_or_insert(token.type_);
+        summary.last_significant = Some(token.type_);
+
         match token.type_ {
-            TokenType::Question => pending_then_branches += 1,
-            TokenType::Colon => pending_then_branches = pending_then_branches.saturating_sub(1),
+            TokenType::Question => summary.pending_then_branches += 1,
+            TokenType::Colon => {
+                summary.pending_then_branches = summary.pending_then_branches.saturating_sub(1);
+            }
             _ => {}
         }
     }
-
-    pending_then_branches > 0
 }
 
-fn ends_with_repl_continuation(tokens: &[Token]) -> bool {
-    matches!(
-        last_significant_token(tokens).map(|token| token.type_),
-        Some(
-            TokenType::Bang
-                | TokenType::BangEqual
-                | TokenType::Comma
-                | TokenType::Colon
-                | TokenType::Dot
-                | TokenType::Equal
-                | TokenType::EqualEqual
-                | TokenType::Greater
-                | TokenType::GreaterEqual
-                | TokenType::Less
-                | TokenType::LessEqual
-                | TokenType::Minus
-                | TokenType::Or
-                | TokenType::And
-                | TokenType::Plus
-                | TokenType::Question
-                | TokenType::Slash
-                | TokenType::Star
-        )
-    )
-}
-
-fn starts_incomplete_multiline_statement(tokens: &[Token]) -> bool {
-    matches!(
-        tokens.first().map(|token| token.type_),
-        Some(TokenType::Class | TokenType::For | TokenType::Fun | TokenType::If | TokenType::While)
-    ) && !ends_with_semicolon(tokens)
-        && !ends_with_right_brace(tokens)
-}
-
-fn last_significant_token(tokens: &[Token]) -> Option<&Token> {
-    tokens
-        .iter()
-        .rev()
-        .find(|token| token.type_ != TokenType::Eof)
-}
-
-fn scan_tokens(source: impl Into<String>) -> Vec<Token> {
-    Scanner::new(source).scan_tokens()
-}
-
-fn run_program_tokens(tokens: Vec<Token>) {
-    let Some(program) = parse_program(tokens) else {
-        return;
-    };
-
-    resolve_and_interpret_statements(&program);
-}
-
-fn parse_program(tokens: Vec<Token>) -> Option<ParsedProgram> {
-    let mut parser = Parser::new(tokens);
+fn parse_program(source: impl Into<String>) -> Option<ParsedProgram> {
+    let mut parser = Parser::new(source);
     let statements = parser.parse();
 
     if stop_after_error() {
@@ -279,8 +243,8 @@ fn parse_program(tokens: Vec<Token>) -> Option<ParsedProgram> {
     }
 }
 
-fn parse_repl_expression(tokens: Vec<Token>) -> Option<ParsedExpression> {
-    let mut parser = Parser::new(tokens);
+fn parse_repl_expression(source: impl Into<String>) -> Option<ParsedExpression> {
+    let mut parser = Parser::new(source);
     let expr = parser.parse_expression_input()?;
 
     if stop_after_error() { None } else { Some(expr) }
@@ -336,45 +300,39 @@ fn stop_after_error() -> bool {
     had_error()
 }
 
-fn is_empty_input(tokens: &[Token]) -> bool {
-    matches!(
-        tokens,
-        [Token {
-            type_: TokenType::Eof,
-            ..
-        }]
-    )
-}
-
 enum ReplInput {
     Empty,
     Expression,
     Program,
 }
 
-fn classify_repl_input(tokens: &[Token]) -> ReplInput {
-    if is_empty_input(tokens) {
+fn classify_repl_source(source: &str) -> ReplInput {
+    classify_repl_summary(&summarize_repl_tokens(source))
+}
+
+fn classify_repl_summary(summary: &ReplTokenSummary) -> ReplInput {
+    if summary.is_empty {
         ReplInput::Empty
-    } else if should_eval_repl_expression(tokens) {
+    } else if should_eval_repl_summary_expression(summary) {
         ReplInput::Expression
     } else {
         ReplInput::Program
     }
 }
 
-// Use a small token-based heuristic so the REPL can accept bare expressions
+// Use a small token-summary heuristic so the REPL can accept bare expressions
 // without first trying statement parsing and emitting a spurious syntax error.
-fn should_eval_repl_expression(tokens: &[Token]) -> bool {
-    if starts_with_statement(tokens) {
+fn should_eval_repl_summary_expression(summary: &ReplTokenSummary) -> bool {
+    if starts_with_statement_type(summary.first) {
         return false;
     }
 
-    !ends_with_semicolon(tokens)
+    !ends_with_semicolon_type(summary.last_significant)
 }
 
-fn starts_with_statement(tokens: &[Token]) -> bool {
+fn starts_with_statement_type(first: Option<TokenType>) -> bool {
     matches!(
-        tokens.first().map(|token| token.type_),
+        first,
         Some(
             TokenType::Print
                 | TokenType::Var
@@ -390,18 +348,56 @@ fn starts_with_statement(tokens: &[Token]) -> bool {
     )
 }
 
-fn ends_with_semicolon(tokens: &[Token]) -> bool {
+fn repl_summary_needs_more_input(summary: &ReplTokenSummary) -> bool {
+    !summary.is_empty
+        && (summary.pending_then_branches > 0
+            || ends_with_repl_continuation_type(summary.last_significant)
+            || starts_incomplete_multiline_statement_type(summary.first, summary.last_significant))
+}
+
+fn ends_with_repl_continuation_type(last_significant: Option<TokenType>) -> bool {
     matches!(
-        last_significant_token(tokens).map(|token| token.type_),
-        Some(TokenType::Semicolon)
+        last_significant,
+        Some(
+            TokenType::Bang
+                | TokenType::BangEqual
+                | TokenType::Comma
+                | TokenType::Colon
+                | TokenType::Dot
+                | TokenType::Equal
+                | TokenType::EqualEqual
+                | TokenType::Greater
+                | TokenType::GreaterEqual
+                | TokenType::Less
+                | TokenType::LessEqual
+                | TokenType::Minus
+                | TokenType::Or
+                | TokenType::And
+                | TokenType::Plus
+                | TokenType::Question
+                | TokenType::Slash
+                | TokenType::Star
+        )
     )
 }
 
-fn ends_with_right_brace(tokens: &[Token]) -> bool {
+fn starts_incomplete_multiline_statement_type(
+    first: Option<TokenType>,
+    last_significant: Option<TokenType>,
+) -> bool {
     matches!(
-        last_significant_token(tokens).map(|token| token.type_),
-        Some(TokenType::RightBrace)
-    )
+        first,
+        Some(TokenType::Class | TokenType::For | TokenType::Fun | TokenType::If | TokenType::While)
+    ) && !ends_with_semicolon_type(last_significant)
+        && !ends_with_right_brace_type(last_significant)
+}
+
+fn ends_with_semicolon_type(last_significant: Option<TokenType>) -> bool {
+    matches!(last_significant, Some(TokenType::Semicolon))
+}
+
+fn ends_with_right_brace_type(last_significant: Option<TokenType>) -> bool {
+    matches!(last_significant, Some(TokenType::RightBrace))
 }
 
 #[cfg(test)]

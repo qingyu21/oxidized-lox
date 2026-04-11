@@ -28,7 +28,6 @@ pub(crate) struct Scanner {
     // Every token now points back into this shared source buffer by span,
     // which avoids allocating a fresh lexeme string for each token.
     source: Rc<String>,
-    tokens: Vec<Token>,
     // Whole-input ASCII mode lets the hot scanning helpers read bytes
     // directly instead of decoding a one-character iterator each time.
     ascii_only: bool,
@@ -43,12 +42,10 @@ pub(crate) struct Scanner {
 impl Scanner {
     pub(crate) fn new(source: impl Into<String>) -> Self {
         let source: String = source.into();
-        let token_capacity = Self::estimate_token_capacity(&source);
         let ascii_only = source.is_ascii();
 
         Self {
             source: Rc::new(source),
-            tokens: Vec::with_capacity(token_capacity),
             ascii_only,
             start: 0,
             current: 0,
@@ -56,77 +53,83 @@ impl Scanner {
         }
     }
 
-    pub(crate) fn scan_tokens(mut self) -> Vec<Token> {
-        while !self.is_at_end() {
-            // Mark the start of the next lexeme before scanning it.
+    pub(crate) fn next_token(&mut self) -> Token {
+        loop {
             self.start = self.current;
-            self.scan_token();
+
+            if self.is_at_end() {
+                return Token::from_source_span(
+                    TokenType::Eof,
+                    self.source.clone(),
+                    self.current..self.current,
+                    None,
+                    self.line,
+                );
+            }
+
+            if let Some(token) = self.scan_token() {
+                return token;
+            }
         }
-
-        self.tokens.push(Token::from_source_span(
-            TokenType::Eof,
-            self.source.clone(),
-            self.current..self.current,
-            None,
-            self.line,
-        ));
-
-        self.tokens
     }
 
-    fn scan_token(&mut self) {
+    fn scan_token(&mut self) -> Option<Token> {
         let c = self.advance();
 
         match c {
-            '(' => self.add_token(TokenType::LeftParen),
-            ')' => self.add_token(TokenType::RightParen),
-            '{' => self.add_token(TokenType::LeftBrace),
-            '}' => self.add_token(TokenType::RightBrace),
-            ',' => self.add_token(TokenType::Comma),
-            '.' => self.add_token(TokenType::Dot),
-            '-' => self.add_token(TokenType::Minus),
-            '+' => self.add_token(TokenType::Plus),
-            ':' => self.add_token(TokenType::Colon),
-            '?' => self.add_token(TokenType::Question),
-            ';' => self.add_token(TokenType::Semicolon),
-            '*' => self.add_token(TokenType::Star),
-            '!' => self.add_conditional_token('=', TokenType::BangEqual, TokenType::Bang),
-            '=' => self.add_conditional_token('=', TokenType::EqualEqual, TokenType::Equal),
-            '<' => self.add_conditional_token('=', TokenType::LessEqual, TokenType::Less),
-            '>' => self.add_conditional_token('=', TokenType::GreaterEqual, TokenType::Greater),
+            '(' => Some(self.add_token(TokenType::LeftParen)),
+            ')' => Some(self.add_token(TokenType::RightParen)),
+            '{' => Some(self.add_token(TokenType::LeftBrace)),
+            '}' => Some(self.add_token(TokenType::RightBrace)),
+            ',' => Some(self.add_token(TokenType::Comma)),
+            '.' => Some(self.add_token(TokenType::Dot)),
+            '-' => Some(self.add_token(TokenType::Minus)),
+            '+' => Some(self.add_token(TokenType::Plus)),
+            ':' => Some(self.add_token(TokenType::Colon)),
+            '?' => Some(self.add_token(TokenType::Question)),
+            ';' => Some(self.add_token(TokenType::Semicolon)),
+            '*' => Some(self.add_token(TokenType::Star)),
+            '!' => Some(self.add_conditional_token('=', TokenType::BangEqual, TokenType::Bang)),
+            '=' => Some(self.add_conditional_token('=', TokenType::EqualEqual, TokenType::Equal)),
+            '<' => Some(self.add_conditional_token('=', TokenType::LessEqual, TokenType::Less)),
+            '>' => {
+                Some(self.add_conditional_token('=', TokenType::GreaterEqual, TokenType::Greater))
+            }
             '/' => {
                 if self.match_char('/') {
                     // A comment goes until the end of the line.
                     while !self.is_at_end() && self.peek() != Some('\n') {
                         self.advance();
                     }
+                    None
                 } else if self.match_char('*') {
                     self.block_comment();
+                    None
                 } else {
-                    self.add_token(TokenType::Slash);
+                    Some(self.add_token(TokenType::Slash))
                 }
             }
             '"' => self.string(),
-            ' ' | '\r' | '\t' => {}
-            '\n' => self.line += 1,
+            ' ' | '\r' | '\t' => None,
+            '\n' => {
+                self.line += 1;
+                None
+            }
             _ => {
                 if Self::is_digit(c) {
-                    self.number();
+                    Some(self.number())
                 } else if Self::is_alpha(c) {
-                    self.identifier();
+                    Some(self.identifier())
                 } else {
                     diagnostics::error(self.line, "Unexpected character.");
+                    None
                 }
             }
         }
     }
 
-    fn estimate_token_capacity(source: &str) -> usize {
-        source.len().saturating_div(4).max(8)
-    }
-
-    fn add_token(&mut self, type_: TokenType) {
-        self.add_token_literal(type_, None);
+    fn add_token(&self, type_: TokenType) -> Token {
+        self.add_token_literal(type_, None)
     }
 
     fn is_digit(c: char) -> bool {
@@ -141,7 +144,7 @@ impl Scanner {
         Self::is_alpha(c) || Self::is_digit(c)
     }
 
-    fn string(&mut self) {
+    fn string(&mut self) -> Option<Token> {
         while self.peek() != Some('"') && !self.is_at_end() {
             if self.peek() == Some('\n') {
                 self.line += 1;
@@ -152,7 +155,7 @@ impl Scanner {
 
         if self.is_at_end() {
             diagnostics::error(self.line, "Unterminated string.");
-            return;
+            return None;
         }
 
         // The closing quote.
@@ -160,10 +163,10 @@ impl Scanner {
 
         // Trim the surrounding quotes.
         let value = self.source[self.start + 1..self.current - 1].to_string();
-        self.add_token_literal(TokenType::String, Some(Literal::String(value.into())));
+        Some(self.add_token_literal(TokenType::String, Some(Literal::String(value.into()))))
     }
 
-    fn number(&mut self) {
+    fn number(&mut self) -> Token {
         while self.peek().is_some_and(Self::is_digit) {
             self.advance();
         }
@@ -182,17 +185,17 @@ impl Scanner {
             .parse::<f64>()
             .expect("scanner produced an invalid number literal");
 
-        self.add_token_literal(TokenType::Number, Some(Literal::Number(value)));
+        self.add_token_literal(TokenType::Number, Some(Literal::Number(value)))
     }
 
-    fn identifier(&mut self) {
+    fn identifier(&mut self) -> Token {
         while self.peek().is_some_and(Self::is_alpha_numeric) {
             self.advance();
         }
 
         let text = &self.source[self.start..self.current];
         let type_ = KEYWORDS.get(text).copied().unwrap_or(TokenType::Identifier);
-        self.add_token(type_);
+        self.add_token(type_)
     }
 
     fn block_comment(&mut self) {
@@ -216,24 +219,29 @@ impl Scanner {
 
     // Scan operators like `!`/`!=` or `=`/`==` where the current character
     // may optionally be followed by one more expected character.
-    fn add_conditional_token(&mut self, expected: char, matched: TokenType, unmatched: TokenType) {
+    fn add_conditional_token(
+        &mut self,
+        expected: char,
+        matched: TokenType,
+        unmatched: TokenType,
+    ) -> Token {
         let type_ = if self.match_char(expected) {
             matched
         } else {
             unmatched
         };
 
-        self.add_token(type_);
+        self.add_token(type_)
     }
 
-    fn add_token_literal(&mut self, type_: TokenType, literal: Option<Literal>) {
-        self.tokens.push(Token::from_source_span(
+    fn add_token_literal(&self, type_: TokenType, literal: Option<Literal>) -> Token {
+        Token::from_source_span(
             type_,
             self.source.clone(),
             self.start..self.current,
             literal,
             self.line,
-        ));
+        )
     }
 
     fn is_at_end(&self) -> bool {
@@ -320,7 +328,18 @@ mod tests {
     use super::*;
 
     fn scan(source: &str) -> Vec<Token> {
-        Scanner::new(source).scan_tokens()
+        let mut scanner = Scanner::new(source);
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = scanner.next_token();
+            let is_eof = token.type_ == TokenType::Eof;
+            tokens.push(token);
+
+            if is_eof {
+                return tokens;
+            }
+        }
     }
 
     #[test]
@@ -439,19 +458,5 @@ mod tests {
             Some(Literal::Number(value)) => assert_eq!(*value, 123.0),
             other => panic!("expected number literal, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn tokens_share_the_same_source_backing() {
-        let tokens = scan("print tea;");
-
-        assert!(
-            tokens[0].lexeme.shares_backing_with(&tokens[1].lexeme),
-            "scanner tokens should reference the same shared source buffer"
-        );
-        assert!(
-            tokens[1].lexeme.shares_backing_with(&tokens[2].lexeme),
-            "punctuation tokens should also reuse the shared source buffer"
-        );
     }
 }

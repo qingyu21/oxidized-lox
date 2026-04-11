@@ -109,11 +109,6 @@ impl Lexeme {
     pub(crate) fn to_rc(&self) -> Rc<str> {
         self.as_ref().into()
     }
-
-    #[cfg(test)]
-    pub(crate) fn shares_backing_with(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.source, &other.source)
-    }
 }
 
 impl AsRef<str> for Lexeme {
@@ -178,5 +173,40 @@ impl fmt::Display for Token {
             Some(literal) => write!(f, "{} {} {}", self.type_, self.lexeme, literal),
             None => write!(f, "{} {} null", self.type_, self.lexeme),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scanner::Scanner;
+
+    fn scan(source: &str) -> Vec<Token> {
+        let mut scanner = Scanner::new(source);
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = scanner.next_token();
+            let is_eof = token.type_ == TokenType::Eof;
+            tokens.push(token);
+
+            if is_eof {
+                return tokens;
+            }
+        }
+    }
+
+    #[test]
+    fn scanner_tokens_share_the_same_source_backing() {
+        let tokens = scan("print tea;");
+
+        assert!(
+            Rc::ptr_eq(&tokens[0].lexeme.source, &tokens[1].lexeme.source),
+            "scanner tokens should reference the same shared source buffer"
+        );
+        assert!(
+            Rc::ptr_eq(&tokens[1].lexeme.source, &tokens[2].lexeme.source),
+            "punctuation tokens should also reuse the shared source buffer"
+        );
     }
 }

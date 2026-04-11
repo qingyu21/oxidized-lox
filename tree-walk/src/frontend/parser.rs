@@ -1,5 +1,6 @@
 use crate::diagnostics;
 use crate::expr::{Expr, ExprArena, ExprArenaRef};
+use crate::scanner::Scanner;
 use crate::stmt::{FunctionDecl, Stmt};
 use crate::token::{Token, TokenType};
 use std::{mem, ops::Deref};
@@ -23,10 +24,13 @@ pub(crate) struct ParsedExpression {
 }
 
 pub(crate) struct Parser {
-    tokens: Vec<Token>,
+    scanner: Scanner,
     exprs: ExprArena,
-    // Index of the next token to be parsed.
-    current: usize,
+    // Token currently being considered by the parser.
+    current_token: Token,
+    // Most recently consumed token, used by Pratt parsing and error recovery.
+    previous_token: Token,
+    has_previous: bool,
     // Number of enclosing loop statements currently being parsed.
     loop_depth: usize,
     // Number of enclosing function bodies currently being parsed.
@@ -36,11 +40,16 @@ pub(crate) struct Parser {
 type ParseRule = fn(&mut Parser) -> Result<Expr, ParseError>;
 
 impl Parser {
-    pub(crate) fn new(tokens: Vec<Token>) -> Self {
+    pub(crate) fn new(source: impl Into<String>) -> Self {
+        let mut scanner = Scanner::new(source);
+        let current_token = scanner.next_token();
+
         Self {
-            tokens,
+            scanner,
             exprs: ExprArena::new(),
-            current: 0,
+            previous_token: Token::new(TokenType::Eof, "", None, current_token.line),
+            current_token,
+            has_previous: false,
             loop_depth: 0,
             function_depth: 0,
         }
@@ -226,7 +235,7 @@ impl Parser {
     // Discard tokens until the parser reaches a likely statement boundary.
     fn synchronize(&mut self) {
         while !self.is_at_end() {
-            if self.current > 0 && self.previous().type_ == TokenType::Semicolon {
+            if self.has_previous && self.previous().type_ == TokenType::Semicolon {
                 return;
             }
 
@@ -293,9 +302,12 @@ impl Parser {
     // Consume the current token and move to the next one.
     fn advance(&mut self) -> &Token {
         if !self.is_at_end() {
-            self.current += 1;
+            self.previous_token = mem::replace(&mut self.current_token, self.scanner.next_token());
+        } else {
+            self.previous_token = self.current_token.clone();
         }
 
+        self.has_previous = true;
         self.previous()
     }
 
@@ -306,12 +318,13 @@ impl Parser {
 
     // Borrow the current token without consuming it.
     fn peek(&self) -> &Token {
-        &self.tokens[self.current]
+        &self.current_token
     }
 
     // Borrow the most recently consumed token.
     fn previous(&self) -> &Token {
-        &self.tokens[self.current - 1]
+        debug_assert!(self.has_previous, "previous() called before advance()");
+        &self.previous_token
     }
 
     fn take_exprs(&mut self) -> ExprArenaRef {

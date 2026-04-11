@@ -4,7 +4,7 @@ use crate::diagnostics::{
 };
 use crate::interpreter::Interpreter;
 use crate::runtime::Value;
-use crate::test_support::scan_tokens;
+use crate::token::Token;
 use std::sync::{LazyLock, Mutex};
 
 static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -192,14 +192,15 @@ fn run_still_marks_assignment_only_locals_as_unused() {
 
 #[test]
 fn bare_expressions_are_detected_in_the_repl() {
-    let tokens = scan_tokens("1 + 2");
-    assert!(should_eval_repl_expression(&tokens));
+    assert!(matches!(
+        classify_repl_source("1 + 2"),
+        ReplInput::Expression
+    ));
 }
 
 #[test]
 fn semicolon_terminated_inputs_are_not_treated_as_bare_repl_expressions() {
-    let tokens = scan_tokens("1 + 2;");
-    assert!(!should_eval_repl_expression(&tokens));
+    assert!(matches!(classify_repl_source("1 + 2;"), ReplInput::Program));
 }
 
 #[test]
@@ -218,9 +219,8 @@ fn statement_started_inputs_are_not_treated_as_bare_repl_expressions() {
     ];
 
     for source in cases {
-        let tokens = scan_tokens(source);
         assert!(
-            !should_eval_repl_expression(&tokens),
+            matches!(classify_repl_source(source), ReplInput::Program),
             "expected `{source}` to be treated as a statement"
         );
     }
@@ -377,8 +377,7 @@ fn run_repl_and_reset_flags(source: &str) {
 }
 
 fn evaluate_repl_expression(source: &str) -> Value {
-    let tokens = scan_tokens(source);
-    let expr = parse_repl_expression(tokens).expect("test expression should parse");
+    let expr = parse_repl_expression(source).expect("test expression should parse");
 
     with_interpreter(|interpreter| {
         interpreter.clear_resolved_bindings();
