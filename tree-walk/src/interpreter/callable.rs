@@ -95,7 +95,7 @@ impl LoxFunction {
             None,
             self.code.name.line,
         );
-        Environment::get_at(&self.closure, 0, &keyword)
+        Environment::get_at(&self.closure, 0, 0, &keyword)
             .expect("initializer methods should always have a bound 'this'")
     }
 }

@@ -68,7 +68,7 @@ impl<'a> Resolver<'a> {
                 if self
                     .scopes
                     .last()
-                    .and_then(|scope| scope.get(name.lexeme.as_ref()))
+                    .and_then(|scope| scope.bindings.get(name.lexeme.as_ref()))
                     .is_some_and(|binding| !binding.defined)
                 {
                     return Err(

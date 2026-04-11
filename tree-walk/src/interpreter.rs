@@ -24,7 +24,7 @@ enum ControlFlow {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResolvedBinding {
-    Local(usize),
+    Local { distance: usize, slot: usize },
     Global,
     Unresolved,
 }
@@ -34,11 +34,9 @@ pub(crate) struct Interpreter {
     // do not depend on whatever the current environment happens to be.
     globals: EnvironmentRef,
     environment: RefCell<EnvironmentRef>,
-    // Maps a variable-use token id to the lexical distance computed by the
-    // resolver, or records that the name was resolved as global.
-    // TODO(ch11-challenge4): This still stores only scope distance. The
-    // Chapter 11 challenge to assign per-scope local indexes and access locals
-    // by slot instead of name has not been implemented in this interpreter.
+    // Maps a variable-use token id to the lexical binding chosen by the
+    // resolver so local reads and writes can jump straight to an environment
+    // slot instead of re-hashing the variable name at runtime.
     // TODO(ch13-challenge3): No extra self-chosen language feature from
     // Chapter 13 challenge 3 has been implemented yet. Any such feature will
     // likely require coordinated parser, resolver, runtime, and test updates.

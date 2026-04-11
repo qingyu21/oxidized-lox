@@ -45,15 +45,30 @@ enum FunctionType {
 struct BindingInfo {
     token: Token,
     kind: BindingKind,
+    slot: usize,
     defined: bool,
     used: bool,
+}
+
+#[derive(Debug, Default)]
+struct Scope {
+    bindings: HashMap<Rc<str>, BindingInfo>,
+    next_slot: usize,
+}
+
+impl Scope {
+    fn allocate_slot(&mut self) -> usize {
+        let slot = self.next_slot;
+        self.next_slot += 1;
+        slot
+    }
 }
 
 pub(crate) struct Resolver<'a> {
     interpreter: &'a Interpreter,
     // Stack of lexical scopes being resolved. Each binding tracks whether it is
     // fully defined yet and whether it was ever read before the scope ended.
-    scopes: Vec<HashMap<Rc<str>, BindingInfo>>,
+    scopes: Vec<Scope>,
     // Surrounding class context for the current resolver walk. This lets us
     // reject `this` outside classes and restore outer state for nested classes.
     current_class: ClassType,

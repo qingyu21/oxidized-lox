@@ -150,9 +150,13 @@ impl Interpreter {
     fn evaluate_assign(&self, name: &Token, value_expr: &Expr) -> Result<Value, RuntimeError> {
         let value = self.evaluate(value_expr)?;
         match self.resolved_binding(name) {
-            ResolvedBinding::Local(distance) => {
-                Environment::assign_at(&self.current_environment(), distance, name, value.clone())?
-            }
+            ResolvedBinding::Local { distance, slot } => Environment::assign_at(
+                &self.current_environment(),
+                distance,
+                slot,
+                name,
+                value.clone(),
+            )?,
             ResolvedBinding::Global => self.globals.borrow_mut().assign(name, value.clone())?,
             ResolvedBinding::Unresolved => self
                 .current_environment()
@@ -198,7 +202,7 @@ impl Interpreter {
     fn evaluate_super(&self, keyword: &Token, method_name: &Token) -> Result<Value, RuntimeError> {
         // Resolver records `super` as a local binding, so start by finding
         // the captured superclass for the enclosing subclass declaration.
-        let ResolvedBinding::Local(distance) = self.resolved_binding(keyword) else {
+        let ResolvedBinding::Local { distance, slot } = self.resolved_binding(keyword) else {
             return Err(RuntimeError::new(
                 keyword.clone(),
                 "Undefined variable 'super'.",
@@ -206,7 +210,7 @@ impl Interpreter {
         };
 
         let environment = self.current_environment();
-        let superclass = match Environment::get_at(&environment, distance, keyword)? {
+        let superclass = match Environment::get_at(&environment, distance, slot, keyword)? {
             Value::Class(superclass) => superclass,
             _ => unreachable!("resolver should bind 'super' to a class value"),
         };
@@ -219,6 +223,7 @@ impl Interpreter {
             distance
                 .checked_sub(1)
                 .expect("resolver should place 'this' inside the 'super' scope"),
+            0,
             &this_keyword,
         )? {
             Value::Instance(object) => object,
@@ -242,8 +247,8 @@ impl Interpreter {
     // legacy call sites that bypass the resolver pass.
     fn look_up_variable(&self, name: &Token) -> Result<Value, RuntimeError> {
         match self.resolved_binding(name) {
-            ResolvedBinding::Local(distance) => {
-                Environment::get_at(&self.current_environment(), distance, name)
+            ResolvedBinding::Local { distance, slot } => {
+                Environment::get_at(&self.current_environment(), distance, slot, name)
             }
             ResolvedBinding::Global => self.globals.borrow().get(name),
             ResolvedBinding::Unresolved => self.current_environment().borrow().get(name),

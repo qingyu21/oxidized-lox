@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use super::{BindingInfo, BindingKind, ResolveError, Resolver};
+use super::{BindingInfo, BindingKind, ResolveError, Resolver, Scope};
 use crate::{
     diagnostics,
     interpreter::ResolvedBinding,
@@ -14,11 +12,13 @@ impl<'a> Resolver<'a> {
         };
 
         let token = Token::new(TokenType::This, "this", None, line);
-        scope.insert(
+        let slot = scope.allocate_slot();
+        scope.bindings.insert(
             token.lexeme.to_rc(),
             BindingInfo {
                 token,
                 kind: BindingKind::This,
+                slot,
                 defined: true,
                 used: false,
             },
@@ -31,11 +31,13 @@ impl<'a> Resolver<'a> {
         };
 
         let token = Token::new(TokenType::Super, "super", None, line);
-        scope.insert(
+        let slot = scope.allocate_slot();
+        scope.bindings.insert(
             token.lexeme.to_rc(),
             BindingInfo {
                 token,
                 kind: BindingKind::Super,
+                slot,
                 defined: true,
                 used: false,
             },
@@ -44,7 +46,7 @@ impl<'a> Resolver<'a> {
 
     // Push a fresh lexical scope for a block or function body.
     pub(super) fn begin_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(Scope::default());
     }
 
     // Pop the innermost lexical scope once resolution leaves it, reporting a
@@ -55,6 +57,7 @@ impl<'a> Resolver<'a> {
         };
 
         let unused = scope
+            .bindings
             .values()
             .filter(|binding| {
                 binding.kind == BindingKind::Variable && binding.defined && !binding.used
@@ -95,15 +98,17 @@ impl<'a> Resolver<'a> {
             return Ok(());
         };
 
-        if scope.contains_key(name.lexeme.as_ref()) {
+        if scope.bindings.contains_key(name.lexeme.as_ref()) {
             return Err(self.error(name, "Already a variable with this name in this scope."));
         }
 
-        scope.insert(
+        let slot = scope.allocate_slot();
+        scope.bindings.insert(
             name.lexeme.to_rc(),
             BindingInfo {
                 token: name.clone(),
                 kind,
+                slot,
                 defined: false,
                 used: false,
             },
@@ -116,7 +121,7 @@ impl<'a> Resolver<'a> {
         if let Some(binding) = self
             .scopes
             .last_mut()
-            .and_then(|scope| scope.get_mut(name.lexeme.as_ref()))
+            .and_then(|scope| scope.bindings.get_mut(name.lexeme.as_ref()))
         {
             binding.defined = true;
         }
@@ -126,12 +131,17 @@ impl<'a> Resolver<'a> {
     // distance to the interpreter for later fast runtime lookup.
     pub(super) fn resolve_local(&mut self, name: &Token, mark_used: bool) {
         for (distance, scope) in self.scopes.iter_mut().rev().enumerate() {
-            if let Some(binding) = scope.get_mut(name.lexeme.as_ref()) {
+            if let Some(binding) = scope.bindings.get_mut(name.lexeme.as_ref()) {
                 if mark_used {
                     binding.used = true;
                 }
-                self.interpreter
-                    .resolve(name, ResolvedBinding::Local(distance));
+                self.interpreter.resolve(
+                    name,
+                    ResolvedBinding::Local {
+                        distance,
+                        slot: binding.slot,
+                    },
+                );
                 return;
             }
         }

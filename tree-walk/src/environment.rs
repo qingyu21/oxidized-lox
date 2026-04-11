@@ -8,7 +8,8 @@ pub(crate) type EnvironmentRef = Rc<RefCell<Environment>>;
 #[derive(Default)]
 pub(crate) struct Environment {
     enclosing: Option<EnvironmentRef>,
-    values: HashMap<Rc<str>, Value>,
+    slots_by_name: HashMap<Rc<str>, usize>,
+    values: Vec<Value>,
 }
 
 impl Environment {
@@ -25,7 +26,8 @@ impl Environment {
     pub(crate) fn from_enclosing(enclosing: EnvironmentRef) -> Self {
         Self {
             enclosing: Some(enclosing),
-            values: HashMap::new(),
+            slots_by_name: HashMap::new(),
+            values: Vec::new(),
         }
     }
 
@@ -35,13 +37,21 @@ impl Environment {
 
     // Bind a value to a name in the current environment.
     pub(crate) fn define(&mut self, name: impl Into<Rc<str>>, value: Value) {
-        self.values.insert(name.into(), value);
+        let name = name.into();
+
+        if let Some(slot) = self.slot_for_name(name.as_ref()) {
+            self.values[slot] = value;
+        } else {
+            let slot = self.values.len();
+            self.values.push(value);
+            self.slots_by_name.insert(name, slot);
+        }
     }
 
     // Update the value stored for an existing variable.
     pub(crate) fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
-        if let Some(slot) = self.values.get_mut(name.lexeme.as_ref()) {
-            *slot = value;
+        if let Some(slot) = self.slot_for_name(name.lexeme.as_ref()) {
+            self.values[slot] = value;
             Ok(())
         } else if let Some(enclosing) = &self.enclosing {
             enclosing.borrow_mut().assign(name, value)
@@ -55,8 +65,8 @@ impl Environment {
 
     // Look up the current value stored for a variable name.
     pub(crate) fn get(&self, name: &Token) -> Result<Value, RuntimeError> {
-        if let Some(value) = self.values.get(name.lexeme.as_ref()) {
-            Ok(value.clone())
+        if let Some(slot) = self.slot_for_name(name.lexeme.as_ref()) {
+            Ok(self.values[slot].clone())
         } else if let Some(enclosing) = &self.enclosing {
             enclosing.borrow().get(name)
         } else {
@@ -68,18 +78,19 @@ impl Environment {
     }
 
     // Update a binding in the ancestor environment selected by the resolver's
-    // precomputed lexical distance.
+    // precomputed lexical distance and slot index.
     pub(crate) fn assign_at(
         environment: &EnvironmentRef,
         distance: usize,
+        slot: usize,
         name: &Token,
         value: Value,
     ) -> Result<(), RuntimeError> {
         let ancestor = Self::ancestor(environment, distance);
         let mut ancestor = ancestor.borrow_mut();
 
-        if let Some(slot) = ancestor.values.get_mut(name.lexeme.as_ref()) {
-            *slot = value;
+        if let Some(target) = ancestor.values.get_mut(slot) {
+            *target = value;
             Ok(())
         } else {
             Err(RuntimeError::new(
@@ -90,16 +101,17 @@ impl Environment {
     }
 
     // Read a binding from the ancestor environment selected by the resolver's
-    // precomputed lexical distance.
+    // precomputed lexical distance and slot index.
     pub(crate) fn get_at(
         environment: &EnvironmentRef,
         distance: usize,
+        slot: usize,
         name: &Token,
     ) -> Result<Value, RuntimeError> {
         let ancestor = Self::ancestor(environment, distance);
         let ancestor = ancestor.borrow();
 
-        if let Some(value) = ancestor.values.get(name.lexeme.as_ref()) {
+        if let Some(value) = ancestor.values.get(slot) {
             Ok(value.clone())
         } else {
             Err(RuntimeError::new(
@@ -126,6 +138,10 @@ impl Environment {
         }
 
         environment
+    }
+
+    fn slot_for_name(&self, name: &str) -> Option<usize> {
+        self.slots_by_name.get(name).copied()
     }
 }
 
@@ -161,6 +177,35 @@ mod tests {
         assert!(
             Rc::ptr_eq(&first, &second),
             "environment reads should clone only the shared string handle"
+        );
+    }
+
+    #[test]
+    fn ancestor_slot_access_reads_and_writes_the_expected_binding() {
+        let outer = Environment::new_ref();
+        outer
+            .borrow_mut()
+            .define("tea", Value::String("earl grey".into()));
+        outer.borrow_mut().define("count", Value::Number(1.0));
+
+        let inner = Environment::new_enclosed_ref(outer.clone());
+        let name = Token::new(TokenType::Identifier, "count", None, 1);
+
+        assert_eq!(
+            Environment::get_at(&inner, 1, 1, &name)
+                .expect("slot lookup should read the outer binding"),
+            Value::Number(1.0)
+        );
+
+        Environment::assign_at(&inner, 1, 1, &name, Value::Number(2.0))
+            .expect("slot update should write the outer binding");
+
+        assert_eq!(
+            outer
+                .borrow()
+                .get(&name)
+                .expect("named lookup should see the slot update"),
+            Value::Number(2.0)
         );
     }
 }
