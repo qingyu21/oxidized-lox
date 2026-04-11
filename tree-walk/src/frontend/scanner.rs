@@ -28,8 +28,10 @@ pub(crate) struct Scanner {
     // Every token now points back into this shared source buffer by span,
     // which avoids allocating a fresh lexeme string for each token.
     source: Rc<String>,
-    // TODO(perf): Preallocate token capacity once token density is clearer.
     tokens: Vec<Token>,
+    // Whole-input ASCII mode lets the hot scanning helpers read bytes
+    // directly instead of decoding a one-character iterator each time.
+    ascii_only: bool,
     // Byte offset of the current lexeme's first byte in `source`.
     start: usize,
     // Byte offset of the next character to read in `source`.
@@ -40,9 +42,14 @@ pub(crate) struct Scanner {
 
 impl Scanner {
     pub(crate) fn new(source: impl Into<String>) -> Self {
+        let source: String = source.into();
+        let token_capacity = Self::estimate_token_capacity(&source);
+        let ascii_only = source.is_ascii();
+
         Self {
-            source: Rc::new(source.into()),
-            tokens: Vec::new(),
+            source: Rc::new(source),
+            tokens: Vec::with_capacity(token_capacity),
+            ascii_only,
             start: 0,
             current: 0,
             line: 1,
@@ -112,6 +119,10 @@ impl Scanner {
                 }
             }
         }
+    }
+
+    fn estimate_token_capacity(source: &str) -> usize {
+        source.len().saturating_div(4).max(8)
     }
 
     fn add_token(&mut self, type_: TokenType) {
@@ -229,16 +240,29 @@ impl Scanner {
         self.current >= self.source.len()
     }
 
+    fn ascii_byte_at(&self, offset: usize) -> Option<u8> {
+        self.ascii_only
+            .then_some(self.source.as_bytes())
+            .and_then(|bytes| bytes.get(offset).copied())
+    }
+
     // Return the character at the current byte offset, if any.
     fn current_char(&self) -> Option<char> {
+        if let Some(byte) = self.ascii_byte_at(self.current) {
+            return Some(byte as char);
+        }
+
         self.source[self.current..].chars().next()
     }
 
     fn advance(&mut self) -> char {
-        // TODO(perf): For an ASCII-first scanner, a byte-oriented fast path
-        // would be cheaper than creating a `chars()` iterator each time.
-        // `start` and `current` are byte offsets, but we still decode one
-        // Unicode scalar value at a time and advance by its UTF-8 width.
+        if let Some(byte) = self.ascii_byte_at(self.current) {
+            self.current += 1;
+            return byte as char;
+        }
+
+        // `start` and `current` are byte offsets, so non-ASCII input still
+        // advances one Unicode scalar value at a time by UTF-8 width.
         let ch = self
             .current_char()
             .expect("advance() called at the end of source");
@@ -251,6 +275,15 @@ impl Scanner {
     // If the next character matches `expected`, consume it and return `true`.
     // Otherwise leave the scanner position unchanged and return `false`.
     fn match_char(&mut self, expected: char) -> bool {
+        if let Some(byte) = self.ascii_byte_at(self.current) {
+            if expected.is_ascii() && byte == expected as u8 {
+                self.current += 1;
+                return true;
+            }
+
+            return false;
+        }
+
         let Some(ch) = self.current_char() else {
             return false;
         };
@@ -270,6 +303,14 @@ impl Scanner {
 
     // Return the next lookahead character, if there is one.
     fn peek_next(&self) -> Option<char> {
+        if let Some(byte) = self
+            .current
+            .checked_add(1)
+            .and_then(|offset| self.ascii_byte_at(offset))
+        {
+            return Some(byte as char);
+        }
+
         self.source[self.current..].chars().nth(1)
     }
 }
@@ -290,6 +331,15 @@ mod tests {
         assert_eq!(tokens[0].lexeme.as_ref(), "\"hello\"");
         assert_eq!(tokens[0].literal, Some(Literal::String("hello".into())));
         assert_eq!(tokens[1].type_, TokenType::Eof);
+    }
+
+    #[test]
+    fn scans_unicode_string_literal() {
+        let tokens = scan("\"茶\"");
+
+        assert_eq!(tokens[0].type_, TokenType::String);
+        assert_eq!(tokens[0].lexeme.as_ref(), "\"茶\"");
+        assert_eq!(tokens[0].literal, Some(Literal::String("茶".into())));
     }
 
     #[test]
