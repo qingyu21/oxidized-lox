@@ -10,17 +10,16 @@ code.
 flowchart LR
     Source["source code (&str)"]
     Scanner["Scanner"]
-    Tokens["Vec<Token>"]
     Parser["Parser"]
-    Program["Vec<Stmt>"]
-    ReplExpr["Expr"]
+    Program["ParsedProgram"]
+    ReplExpr["ParsedExpression"]
     Resolver["Resolver"]
     Interpreter["Interpreter"]
     Env["EnvironmentRef -> Environment"]
     Value["Value"]
     RuntimeError["RuntimeError"]
 
-    Source --> Scanner --> Tokens --> Parser
+    Source --> Scanner --> Parser
     Parser --> Program --> Resolver --> Interpreter
     Parser --> ReplExpr --> Resolver
     Interpreter --> Env
@@ -30,9 +29,10 @@ flowchart LR
 
 The same pipeline is reused in both modes:
 
-- script mode: source text is parsed into `Vec<Stmt>`, resolved, and executed
-- REPL bare-expression mode: source text is parsed into one `Expr`, resolved,
-  and evaluated directly
+- script mode: source text is parsed into `ParsedProgram`, resolved, and
+  executed
+- REPL bare-expression mode: source text is parsed into
+  `ParsedExpression`, resolved, and evaluated directly
 
 ## Directory Layout vs. Theory
 
@@ -69,9 +69,13 @@ flowchart TD
     Scanner["Scanner"]
     ParseError["ParseError"]
     Parser["Parser"]
+    ParsedProgram["ParsedProgram"]
+    ParsedExpression["ParsedExpression"]
     ResolveError["ResolveError"]
     Resolver["Resolver"]
     Expr["Expr"]
+    ExprArena["ExprArena"]
+    ExprRef["ExprRef"]
     Stmt["Stmt"]
     Interpreter["Interpreter"]
     EnvironmentRef["EnvironmentRef = Rc<RefCell<Environment>>"]
@@ -82,10 +86,17 @@ flowchart TD
     TokenType --> Token
     Literal --> Token
     Scanner --> Token
+    Scanner --> Parser
     Token --> Parser
     Parser --> ParseError
+    Parser --> ParsedProgram
+    Parser --> ParsedExpression
     Parser --> Expr
     Parser --> Stmt
+    ExprArena --> ExprRef
+    ExprRef --> Expr
+    ParsedProgram --> Stmt
+    ParsedExpression --> Expr
     Token --> Resolver
     Expr --> Resolver
     Stmt --> Resolver
@@ -132,7 +143,11 @@ flowchart TD
 `Scanner`
 
 - Reads source text one character at a time.
-- Produces a `Vec<Token>`.
+- Produces `Token`s incrementally through `next_token()`, so the main
+  parse/execute pipeline does not need to materialize a full `Vec<Token>`
+  first.
+- Stores each token lexeme as a shared source buffer plus byte span, rather
+  than allocating a fresh standalone string per token.
 - Owns the lexical rules of the language.
 
 `ParseError`
@@ -151,7 +166,10 @@ flowchart TD
 
 `Parser`
 
-- Consumes `Vec<Token>` and produces either `Vec<Stmt>` or one `Expr`.
+- Owns a `Scanner` plus the current and previous `Token`, consuming the token
+  stream incrementally while parsing.
+- Produces either `ParsedProgram` or `ParsedExpression`, lightweight wrappers
+  that keep the shared expression arena alive alongside the parsed syntax.
 - Is split into a small root module plus `statements.rs` and
   `expressions.rs`, so statement parsing and expression precedence logic stay
   separated as the grammar grows.
@@ -162,6 +180,13 @@ flowchart TD
 - Tracks loop and function nesting so `break` and `return` can be validated
   against the current parsing context.
 - Performs local error recovery with `synchronize()`.
+
+`ParsedProgram` and `ParsedExpression`
+
+- Own parsed syntax plus the shared `ExprArenaRef` that backs any nested
+  expression references.
+- Let later stages borrow parsed statements/expressions normally without
+  copying the tree or manually threading arena lifetimes everywhere.
 
 `Resolver`
 
@@ -187,8 +212,17 @@ flowchart TD
 - Represents syntax that evaluates to a value: literals, variables, unary and
   binary operators, assignment, logical operators, `?:`, call expressions,
   `this`, `super`, and instance property get/set expressions.
+- Stores most child links as `ExprRef`, so nested expressions point into a
+  stable arena instead of recursively owning boxed child nodes.
 - Call expressions already evaluate through the interpreter's runtime call
   dispatch, which handles callable values and class construction in one place.
+
+`ExprArena` and `ExprRef`
+
+- `ExprArena` stores boxed expression nodes at stable addresses for the life of
+  one parsed input.
+- `ExprRef` is a lightweight handle into that arena and is what most nested
+  expression fields store.
 
 `Stmt`
 
@@ -242,7 +276,7 @@ flowchart TD
 `LoxInstance`
 
 - Runtime object created by calling a `LoxClass`.
-- Stores its class reference plus an open `HashMap<String, Value>` of fields,
+- Stores its class reference plus an open `HashMap<Rc<str>, Value>` of fields,
   matching the book's "instances are bags of state" model.
 - Property reads first check instance fields and then fall back to class
   methods, binding `this` to the original receiver when a method is retrieved.
@@ -276,7 +310,8 @@ flowchart TD
 
 `Environment`
 
-- Stores lexical bindings as `HashMap<String, Value>`.
+- Stores lexical bindings in two layers: a `HashMap<Rc<str>, usize>` from name
+  to slot index, plus a parallel `Vec<Value>` that holds the actual values.
 - Optionally points to an enclosing environment to implement lexical scope and
   shadowing.
 - Handles `define`, `assign`, and `get`.
@@ -346,9 +381,13 @@ flowchart TD
 
 - `run_file()` handles script execution
 - `run_prompt()` handles the REPL
-- `run_program_tokens()` feeds parsed statements through the resolver and then
-  into the interpreter
+- `run()` parses a source string into `ParsedProgram`, then feeds it through
+  the resolver and into the interpreter
+- `run_repl()` classifies REPL input, then either parses a `ParsedExpression`
+  for bare-expression echoing or parses a `ParsedProgram` for statement mode
 - error flags and reporting helpers keep parse/runtime failures separated
 
 The REPL reuses the same interpreter instance across inputs, so state such as
-defined variables survives between prompt entries.
+defined variables survives between prompt entries, and it can buffer
+multi-line inputs until braces, strings, comments, and obvious continuation
+operators are balanced enough to run.

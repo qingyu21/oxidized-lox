@@ -52,11 +52,11 @@ cargo fmt --all
 - `src/lib.rs`: library crate root and compatibility re-exports for frontend modules
 - `src/main.rs`: CLI entry point for script mode and the REPL
 - `src/frontend.rs`: small aggregation module for frontend-only pieces
-- `src/frontend/scanner.rs`: turns source text into `Vec<Token>`
-- `src/frontend/parser.rs`: parser entry points, declarations, token helpers, and error recovery
+- `src/frontend/scanner.rs`: streams tokens from source text, reusing shared source backing for lexemes
+- `src/frontend/parser.rs`: parser entry points, scanner-backed token consumption, declaration parsing, and error recovery
 - `src/frontend/parser/statements.rs`: statement parsing, including `if`, `while`, `for`, `break`, and `return`
 - `src/frontend/parser/expressions.rs`: expression parsing and precedence handling, including call and property access syntax
-- `src/frontend/expr.rs`: expression AST definitions
+- `src/frontend/expr.rs`: expression AST definitions plus arena-backed child storage (`ExprArena` / `ExprRef`)
 - `src/frontend/stmt.rs`: statement AST definitions, including function declarations and `return`
 - `src/frontend/token.rs`: token and literal data types
 - `src/resolver.rs`: resolver entry point and shared resolver state
@@ -72,7 +72,7 @@ cargo fmt --all
 - `src/interpreter/evaluate.rs`: expression evaluation and runtime operator semantics
 - `src/interpreter/callable.rs`: native/user-defined callable runtime objects
 - `src/environment.rs`: lexical scope chain and variable storage
-- `src/lox.rs`: top-level run modes, REPL flow, and error reporting
+- `src/lox.rs`: top-level run modes, REPL flow, bare-expression handling, and error reporting
 - `src/diagnostics.rs`: shared syntax/runtime diagnostic flags and reporting helpers
 - `src/test_support.rs`: shared parser/resolver helpers for unit tests
 
