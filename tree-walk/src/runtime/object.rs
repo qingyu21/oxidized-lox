@@ -125,7 +125,7 @@ impl LoxInstance {
     }
 
     pub(crate) fn set(&self, name: &Token, value: Value) {
-        self.fields.borrow_mut().insert(name.lexeme.clone(), value);
+        self.fields.borrow_mut().insert(name.lexeme.to_rc(), value);
     }
 }
 

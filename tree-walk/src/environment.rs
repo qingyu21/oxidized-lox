@@ -40,7 +40,7 @@ impl Environment {
 
     // Update the value stored for an existing variable.
     pub(crate) fn assign(&mut self, name: &Token, value: Value) -> Result<(), RuntimeError> {
-        if let Some(slot) = self.values.get_mut(&name.lexeme) {
+        if let Some(slot) = self.values.get_mut(name.lexeme.as_ref()) {
             *slot = value;
             Ok(())
         } else if let Some(enclosing) = &self.enclosing {

@@ -10,7 +10,7 @@ impl AstPrinter {
                 left,
                 operator,
                 right,
-            } => self.parenthesize(&operator.lexeme, [left.as_ref(), right.as_ref()]),
+            } => self.parenthesize(operator.lexeme.as_ref(), [left.as_ref(), right.as_ref()]),
             Expr::Call {
                 callee, arguments, ..
             } => self.parenthesize(
@@ -24,7 +24,7 @@ impl AstPrinter {
                 left,
                 operator,
                 right,
-            } => self.parenthesize(&operator.lexeme, [left.as_ref(), right.as_ref()]),
+            } => self.parenthesize(operator.lexeme.as_ref(), [left.as_ref(), right.as_ref()]),
             Expr::Set {
                 object,
                 name,
@@ -53,7 +53,7 @@ impl AstPrinter {
             Expr::This { keyword } => keyword.lexeme.to_string(),
             Expr::Variable { name } => name.lexeme.to_string(),
             Expr::Unary { operator, right } => {
-                self.parenthesize(&operator.lexeme, [right.as_ref()])
+                self.parenthesize(operator.lexeme.as_ref(), [right.as_ref()])
             }
         }
     }

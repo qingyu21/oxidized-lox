@@ -84,7 +84,7 @@ impl Interpreter {
                 };
                 self.current_environment()
                     .borrow_mut()
-                    .define(name.lexeme.clone(), value);
+                    .define(name.lexeme.to_rc(), value);
                 Ok(ControlFlow::None)
             }
             Stmt::While { condition, body } => self.execute_while(condition, body),
@@ -114,7 +114,7 @@ impl Interpreter {
         );
         self.current_environment()
             .borrow_mut()
-            .define(function.name.lexeme.clone(), value);
+            .define(function.name.lexeme.to_rc(), value);
         Ok(ControlFlow::None)
     }
 
@@ -149,7 +149,7 @@ impl Interpreter {
         // later class chapters can support self-references from methods.
         self.current_environment()
             .borrow_mut()
-            .define(name.lexeme.clone(), Value::Nil);
+            .define(name.lexeme.to_rc(), Value::Nil);
 
         // Subclass methods capture an extra environment where `super` points
         // at the declared superclass. Methods on classes without a superclass
@@ -175,13 +175,13 @@ impl Interpreter {
                 method_closure.clone(),
                 method.name.lexeme.as_ref() == "init",
             );
-            method_table.insert(method.name.lexeme.clone(), function);
+            method_table.insert(method.name.lexeme.to_rc(), function);
         }
 
         // The runtime class object stores behavior in its method table, then
         // replaces the temporary nil binding we inserted above.
         let klass = Value::Class(Rc::new(LoxClass::new(
-            name.lexeme.clone(),
+            name.lexeme.to_rc(),
             superclass,
             method_table,
         )));

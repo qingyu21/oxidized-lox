@@ -1,5 +1,6 @@
 use std::{
-    fmt::{self, Display},
+    fmt::{self, Debug, Display},
+    ops::Range,
     rc::Rc,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -68,11 +69,17 @@ pub(crate) enum Literal {
     Nil,
 }
 
+#[derive(Clone)]
+pub(crate) struct Lexeme {
+    source: Rc<String>,
+    span: Range<usize>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Token {
     pub(crate) id: u64,
     pub(crate) type_: TokenType,
-    pub(crate) lexeme: Rc<str>,
+    pub(crate) lexeme: Lexeme,
     pub(crate) literal: Option<Literal>,
     pub(crate) line: u32,
 }
@@ -94,17 +101,71 @@ impl Display for Literal {
     }
 }
 
+impl Lexeme {
+    fn new(source: Rc<String>, span: Range<usize>) -> Self {
+        Self { source, span }
+    }
+
+    pub(crate) fn to_rc(&self) -> Rc<str> {
+        self.as_ref().into()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_backing_with(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.source, &other.source)
+    }
+}
+
+impl AsRef<str> for Lexeme {
+    fn as_ref(&self) -> &str {
+        &self.source[self.span.clone()]
+    }
+}
+
+impl Display for Lexeme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
+
+impl Debug for Lexeme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_ref(), f)
+    }
+}
+
+impl PartialEq for Lexeme {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+impl Eq for Lexeme {}
+
 impl Token {
     pub(crate) fn new(
         type_: TokenType,
-        lexeme: impl Into<Rc<str>>,
+        lexeme: impl Into<String>,
+        literal: Option<Literal>,
+        line: u32,
+    ) -> Self {
+        let source = Rc::new(lexeme.into());
+        let span = 0..source.len();
+
+        Self::from_source_span(type_, source, span, literal, line)
+    }
+
+    pub(crate) fn from_source_span(
+        type_: TokenType,
+        source: Rc<String>,
+        span: Range<usize>,
         literal: Option<Literal>,
         line: u32,
     ) -> Self {
         Token {
             id: NEXT_TOKEN_ID.fetch_add(1, Ordering::Relaxed),
             type_,
-            lexeme: lexeme.into(),
+            lexeme: Lexeme::new(source, span),
             literal,
             line,
         }

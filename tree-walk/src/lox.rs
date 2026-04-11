@@ -26,7 +26,7 @@ pub fn run_file(path: &str) -> io::Result<()> {
     let source = fs::read_to_string(path)?;
     clear_error();
     clear_runtime_error();
-    run(&source);
+    run(source);
 
     if had_error() {
         process::exit(EX_DATAERR);
@@ -52,7 +52,7 @@ pub fn run_prompt() -> io::Result<()> {
 
         if bytes_read == 0 {
             if !pending_input.is_empty() {
-                run_repl(&pending_input);
+                run_repl(std::mem::take(&mut pending_input));
             }
             break;
         }
@@ -68,7 +68,7 @@ pub fn run_prompt() -> io::Result<()> {
     Ok(())
 }
 
-fn run(source: &str) {
+fn run(source: impl Into<String>) {
     // TODO(perf): This pipeline materializes both the full token stream and
     // the full AST before evaluation. A bytecode VM or arena-backed frontend
     // could cut allocation and traversal overhead later on.
@@ -78,7 +78,7 @@ fn run(source: &str) {
 
 // REPL input may be either a full statement or a bare expression whose value
 // should be echoed back to the user.
-fn run_repl(source: &str) {
+fn run_repl(source: impl Into<String>) {
     // TODO(perf): This pipeline materializes both the full token stream and
     // the full AST before evaluation. A bytecode VM or arena-backed frontend
     // could cut allocation and traversal overhead later on.
@@ -118,8 +118,7 @@ fn run_repl_line(pending_input: &mut String, line: &str) {
         return;
     }
 
-    run_repl(pending_input);
-    pending_input.clear();
+    run_repl(std::mem::take(pending_input));
 }
 
 fn append_repl_line(pending_input: &mut String, line: &str) {
@@ -257,7 +256,7 @@ fn last_significant_token(tokens: &[Token]) -> Option<&Token> {
         .find(|token| token.type_ != TokenType::Eof)
 }
 
-fn scan_tokens(source: &str) -> Vec<Token> {
+fn scan_tokens(source: impl Into<String>) -> Vec<Token> {
     Scanner::new(source).scan_tokens()
 }
 

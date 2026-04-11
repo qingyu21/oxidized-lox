@@ -3,9 +3,6 @@ use crate::token::{Literal, Token};
 #[derive(Debug, Clone)]
 pub(crate) enum Expr {
     Assign {
-        // TODO(perf): Storing the full token is convenient, but it carries
-        // owned lexeme/literal data. A leaner AST could store only the token
-        // kind plus source span information.
         name: Token,
         value: Box<Expr>,
     },
@@ -14,9 +11,6 @@ pub(crate) enum Expr {
         // it also adds heap allocations per node. An arena/index-based AST
         // can reduce allocation overhead for larger trees.
         left: Box<Expr>,
-        // TODO(perf): Storing the full token is convenient, but it carries
-        // owned lexeme/literal data. A leaner AST could store only the token
-        // kind plus source span information.
         operator: Token,
         right: Box<Expr>,
     },
@@ -61,9 +55,6 @@ pub(crate) enum Expr {
         else_branch: Box<Expr>,
     },
     Unary {
-        // TODO(perf): Storing the full token is convenient, but it carries
-        // owned lexeme/literal data. A leaner AST could store only the token
-        // kind plus source span information.
         operator: Token,
         right: Box<Expr>,
     },

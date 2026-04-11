@@ -143,7 +143,7 @@ impl LoxCallable for LoxFunction {
         for (param, argument) in self.code.params.iter().zip(arguments) {
             environment
                 .borrow_mut()
-                .define(param.lexeme.clone(), argument);
+                .define(param.lexeme.to_rc(), argument);
         }
 
         // Run the function body in that call environment. An explicit

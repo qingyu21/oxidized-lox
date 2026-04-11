@@ -15,7 +15,7 @@ impl<'a> Resolver<'a> {
 
         let token = Token::new(TokenType::This, "this", None, line);
         scope.insert(
-            token.lexeme.clone(),
+            token.lexeme.to_rc(),
             BindingInfo {
                 token,
                 kind: BindingKind::This,
@@ -32,7 +32,7 @@ impl<'a> Resolver<'a> {
 
         let token = Token::new(TokenType::Super, "super", None, line);
         scope.insert(
-            token.lexeme.clone(),
+            token.lexeme.to_rc(),
             BindingInfo {
                 token,
                 kind: BindingKind::Super,
@@ -100,7 +100,7 @@ impl<'a> Resolver<'a> {
         }
 
         scope.insert(
-            name.lexeme.clone(),
+            name.lexeme.to_rc(),
             BindingInfo {
                 token: name.clone(),
                 kind,

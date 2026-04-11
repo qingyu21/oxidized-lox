@@ -227,7 +227,7 @@ impl Interpreter {
 
         // Look up the method starting at the superclass, then bind it back to
         // the current instance before returning it to the caller.
-        let Some(method) = superclass.find_method(&method_name.lexeme) else {
+        let Some(method) = superclass.find_method(method_name.lexeme.as_ref()) else {
             return Err(RuntimeError::new(
                 method_name.clone(),
                 format!("Undefined property '{}'.", method_name.lexeme),

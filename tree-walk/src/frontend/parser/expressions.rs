@@ -13,9 +13,6 @@ impl Parser {
         let mut expr = self.assignment()?;
 
         while self.match_token(&[TokenType::Comma]) {
-            // TODO(perf): Cloning the full operator token copies its owned
-            // lexeme/literal data. A leaner AST could store only the token
-            // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.assignment()?;
             expr = Expr::binary(expr, operator, right);
@@ -92,9 +89,6 @@ impl Parser {
         let mut expr = self.comparison()?;
 
         while self.match_token(&[TokenType::BangEqual, TokenType::EqualEqual]) {
-            // TODO(perf): Cloning the full operator token copies its owned
-            // lexeme/literal data. A leaner AST could store only the token
-            // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.comparison()?;
             expr = Expr::binary(expr, operator, right);
@@ -113,9 +107,6 @@ impl Parser {
             TokenType::Less,
             TokenType::LessEqual,
         ]) {
-            // TODO(perf): Cloning the full operator token copies its owned
-            // lexeme/literal data. A leaner AST could store only the token
-            // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.term()?;
             expr = Expr::binary(expr, operator, right);
@@ -129,9 +120,6 @@ impl Parser {
         let mut expr = self.factor()?;
 
         while self.match_token(&[TokenType::Minus, TokenType::Plus]) {
-            // TODO(perf): Cloning the full operator token copies its owned
-            // lexeme/literal data. A leaner AST could store only the token
-            // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.factor()?;
             expr = Expr::binary(expr, operator, right);
@@ -145,9 +133,6 @@ impl Parser {
         let mut expr = self.unary()?;
 
         while self.match_token(&[TokenType::Slash, TokenType::Star]) {
-            // TODO(perf): Cloning the full operator token copies its owned
-            // lexeme/literal data. A leaner AST could store only the token
-            // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.unary()?;
             expr = Expr::binary(expr, operator, right);
@@ -159,9 +144,6 @@ impl Parser {
     // unary -> ( "!" | "-" ) unary | call ;
     pub(super) fn unary(&mut self) -> Result<Expr, ParseError> {
         if self.match_token(&[TokenType::Bang, TokenType::Minus]) {
-            // TODO(perf): Cloning the full operator token copies its owned
-            // lexeme/literal data. A leaner AST could store only the token
-            // kind plus source span information.
             let operator = self.previous().clone();
             let right = self.unary()?;
             return Ok(Expr::unary(operator, right));
@@ -241,9 +223,6 @@ impl Parser {
         }
 
         if self.match_token(&[TokenType::Number, TokenType::String]) {
-            // TODO(perf): Cloning literal payloads duplicates owned data such
-            // as string contents. A leaner AST could store spans or interned
-            // values instead of copying each literal.
             let value = self
                 .previous()
                 .literal

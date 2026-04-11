@@ -1,6 +1,6 @@
 use crate::diagnostics;
 use crate::token::{Literal, Token, TokenType};
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, rc::Rc, sync::LazyLock};
 
 static KEYWORDS: LazyLock<HashMap<&'static str, TokenType>> = LazyLock::new(|| {
     let mut keywords = HashMap::new();
@@ -25,9 +25,9 @@ static KEYWORDS: LazyLock<HashMap<&'static str, TokenType>> = LazyLock::new(|| {
 });
 
 pub(crate) struct Scanner {
-    // TODO(perf): Borrow `&str` here instead of owning a `String` to avoid
-    // copying the entire source text when constructing the scanner.
-    source: String,
+    // Every token now points back into this shared source buffer by span,
+    // which avoids allocating a fresh lexeme string for each token.
+    source: Rc<String>,
     // TODO(perf): Preallocate token capacity once token density is clearer.
     tokens: Vec<Token>,
     // Byte offset of the current lexeme's first byte in `source`.
@@ -39,9 +39,9 @@ pub(crate) struct Scanner {
 }
 
 impl Scanner {
-    pub(crate) fn new(source: &str) -> Self {
+    pub(crate) fn new(source: impl Into<String>) -> Self {
         Self {
-            source: source.to_string(),
+            source: Rc::new(source.into()),
             tokens: Vec::new(),
             start: 0,
             current: 0,
@@ -56,8 +56,13 @@ impl Scanner {
             self.scan_token();
         }
 
-        self.tokens
-            .push(Token::new(TokenType::Eof, String::new(), None, self.line));
+        self.tokens.push(Token::from_source_span(
+            TokenType::Eof,
+            self.source.clone(),
+            self.current..self.current,
+            None,
+            self.line,
+        ));
 
         self.tokens
     }
@@ -211,11 +216,13 @@ impl Scanner {
     }
 
     fn add_token_literal(&mut self, type_: TokenType, literal: Option<Literal>) {
-        // TODO(perf): This allocates a new `String` for every token lexeme.
-        // A performance-oriented design could store spans or `&str` slices.
-        let text = self.source[self.start..self.current].to_string();
-        self.tokens
-            .push(Token::new(type_, text, literal, self.line));
+        self.tokens.push(Token::from_source_span(
+            type_,
+            self.source.clone(),
+            self.start..self.current,
+            literal,
+            self.line,
+        ));
     }
 
     fn is_at_end(&self) -> bool {
@@ -382,5 +389,19 @@ mod tests {
             Some(Literal::Number(value)) => assert_eq!(*value, 123.0),
             other => panic!("expected number literal, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn tokens_share_the_same_source_backing() {
+        let tokens = scan("print tea;");
+
+        assert!(
+            tokens[0].lexeme.shares_backing_with(&tokens[1].lexeme),
+            "scanner tokens should reference the same shared source buffer"
+        );
+        assert!(
+            tokens[1].lexeme.shares_backing_with(&tokens[2].lexeme),
+            "punctuation tokens should also reuse the shared source buffer"
+        );
     }
 }
