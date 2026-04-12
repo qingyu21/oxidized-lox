@@ -36,8 +36,19 @@ impl Environment {
     }
 
     // Bind a value to a name in the current environment.
+    //
+    // The global environment intentionally allows redefinition so top-level
+    // declarations can overwrite earlier bindings, matching Lox's globals.
+    // Nested scopes rely on the resolver to reject duplicate declarations
+    // before execution reaches this storage layer, so redefining a local here
+    // would indicate an internal bug or a caller bypassing that contract.
     pub(crate) fn define(&mut self, name: impl Into<Rc<str>>, value: Value) {
         let name = name.into();
+        debug_assert!(
+            self.enclosing.is_none() || self.slot_for_name(name.as_ref()).is_none(),
+            "nested scope should not redefine '{}'",
+            name.as_ref()
+        );
 
         if let Some(slot) = self.slot_for_name(name.as_ref()) {
             self.values[slot] = value;
