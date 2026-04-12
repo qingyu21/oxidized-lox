@@ -565,6 +565,9 @@ impl Interpreter {
         match (left, right) {
             (Value::Nil, Value::Nil) => true,
             (Value::Nil, _) | (_, Value::Nil) => false,
+            // Numeric equality intentionally follows Rust `f64` / IEEE 754
+            // behavior through `Value::PartialEq`: `NaN != NaN`, while
+            // `+0.0 == -0.0`.
             _ => left == right,
         }
     }

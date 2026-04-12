@@ -85,6 +85,48 @@ fn evaluates_equality() {
 }
 
 #[test]
+fn equality_treats_nan_as_not_equal_to_itself() {
+    let huge = huge_number_literal();
+    let value = interpret_script_result(&format!(
+        "var nan = {huge} - {huge};
+         nan == nan"
+    ));
+
+    assert_eq!(value, Value::Bool(false));
+}
+
+#[test]
+fn inequality_treats_nan_as_not_equal_to_itself() {
+    let huge = huge_number_literal();
+    let value = interpret_script_result(&format!(
+        "var nan = {huge} - {huge};
+         nan != nan"
+    ));
+
+    assert_eq!(value, Value::Bool(true));
+}
+
+#[test]
+fn scanner_can_parse_huge_number_literals_as_infinity() {
+    let huge = huge_number_literal();
+    let value = interpret_script_result(&format!("var huge = {huge}; huge"));
+
+    match value {
+        Value::Number(value) => assert!(
+            value.is_infinite() && value.is_sign_positive(),
+            "expected a positive infinity from an overflowing number literal, got {value}"
+        ),
+        other => panic!("expected a numeric value, got {other:?}"),
+    }
+}
+
+#[test]
+fn equality_treats_positive_and_negative_zero_as_equal() {
+    assert_eq!(interpret("0 == -0"), Value::Bool(true));
+    assert_eq!(interpret("0 != -0"), Value::Bool(false));
+}
+
+#[test]
 fn evaluates_conditional_expression() {
     assert_eq!(interpret("false ? 1 : 2"), Value::Number(2.0));
 }
@@ -1298,4 +1340,8 @@ fn invalid_statement(line: u32) -> (Rc<ExprArena>, Stmt) {
     });
 
     (exprs.into_shared(), statement)
+}
+
+fn huge_number_literal() -> String {
+    "9".repeat(400)
 }
