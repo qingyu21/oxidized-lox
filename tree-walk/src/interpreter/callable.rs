@@ -57,7 +57,7 @@ impl LoxFunctionCode {
 pub(super) fn install_native_globals(globals: &EnvironmentRef) {
     globals
         .borrow_mut()
-        .define("clock".to_string(), Value::Callable(Rc::new(ClockFunction)));
+        .define("clock", Value::Callable(Rc::new(ClockFunction)));
 }
 
 pub(super) fn make_function(
@@ -100,7 +100,7 @@ impl LoxFunction {
         let environment = Environment::new_enclosed_ref(self.closure.clone());
         environment
             .borrow_mut()
-            .define("this".to_string(), Value::Instance(instance));
+            .define("this", Value::Instance(instance));
 
         Rc::new(LoxFunction::new(self.code.clone(), environment))
     }

@@ -90,7 +90,7 @@ impl Parser {
 
     // declaration -> classDecl | funDecl | varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_token(&[TokenType::Class]) {
+        if self.match_one(TokenType::Class) {
             return self.class_declaration();
         }
 
@@ -99,11 +99,11 @@ impl Parser {
         // `fun` followed by an identifier stays a declaration, while `fun`
         // followed by `(` should fall through to expression parsing so
         // statement forms like `fun () {};` are treated as expression statements.
-        if self.match_token(&[TokenType::Fun]) {
+        if self.match_one(TokenType::Fun) {
             return Ok(Stmt::function(self.function_declaration("function")?));
         }
 
-        if self.match_token(&[TokenType::Var]) {
+        if self.match_one(TokenType::Var) {
             return self.var_declaration();
         }
 
@@ -115,7 +115,7 @@ impl Parser {
         let name = self
             .consume(TokenType::Identifier, "Expect class name.")?
             .clone();
-        let superclass = if self.match_token(&[TokenType::Less]) {
+        let superclass = if self.match_one(TokenType::Less) {
             let name = self
                 .consume(TokenType::Identifier, "Expect superclass name.")?
                 .clone();
@@ -162,7 +162,7 @@ impl Parser {
                         .clone(),
                 );
 
-                if !self.match_token(&[TokenType::Comma]) {
+                if !self.match_one(TokenType::Comma) {
                     break;
                 }
             }
@@ -185,7 +185,7 @@ impl Parser {
             .consume(TokenType::Identifier, "Expect variable name.")?
             .clone();
 
-        let initializer = if self.match_token(&[TokenType::Equal]) {
+        let initializer = if self.match_one(TokenType::Equal) {
             Some(self.expression()?)
         } else {
             None
@@ -282,11 +282,19 @@ impl Parser {
         )
     }
 
+    fn match_one(&mut self, type_: TokenType) -> bool {
+        if self.check(type_) {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
     // If the current token matches any candidate, consume it.
     fn match_token(&mut self, types: &[TokenType]) -> bool {
         for &type_ in types {
-            if self.check(type_) {
-                self.advance();
+            if self.match_one(type_) {
                 return true;
             }
         }

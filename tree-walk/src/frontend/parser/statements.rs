@@ -6,31 +6,31 @@ use crate::token::{Literal, TokenType};
 impl Parser {
     // statement -> breakStmt | forStmt | ifStmt | printStmt | returnStmt | whileStmt | block | exprStmt ;
     pub(super) fn statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_token(&[TokenType::Break]) {
+        if self.match_one(TokenType::Break) {
             return self.break_statement();
         }
 
-        if self.match_token(&[TokenType::For]) {
+        if self.match_one(TokenType::For) {
             return self.for_statement();
         }
 
-        if self.match_token(&[TokenType::If]) {
+        if self.match_one(TokenType::If) {
             return self.if_statement();
         }
 
-        if self.match_token(&[TokenType::Print]) {
+        if self.match_one(TokenType::Print) {
             return self.print_statement();
         }
 
-        if self.match_token(&[TokenType::Return]) {
+        if self.match_one(TokenType::Return) {
             return self.return_statement();
         }
 
-        if self.match_token(&[TokenType::While]) {
+        if self.match_one(TokenType::While) {
             return self.while_statement();
         }
 
-        if self.match_token(&[TokenType::LeftBrace]) {
+        if self.match_one(TokenType::LeftBrace) {
             return Ok(Stmt::block(self.block()?));
         }
 
@@ -55,9 +55,9 @@ impl Parser {
 
         // Parse the initializer clause, which may be omitted, a `var`
         // declaration, or a plain expression statement.
-        let initializer = if self.match_token(&[TokenType::Semicolon]) {
+        let initializer = if self.match_one(TokenType::Semicolon) {
             None
-        } else if self.match_token(&[TokenType::Var]) {
+        } else if self.match_one(TokenType::Var) {
             Some(self.var_declaration()?)
         } else {
             Some(self.expression_statement()?)
@@ -108,7 +108,7 @@ impl Parser {
         self.consume(TokenType::RightParen, "Expect ')' after if condition.")?;
 
         let then_branch = self.statement()?;
-        let else_branch = if self.match_token(&[TokenType::Else]) {
+        let else_branch = if self.match_one(TokenType::Else) {
             Some(self.statement()?)
         } else {
             None

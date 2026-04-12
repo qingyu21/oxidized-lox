@@ -171,7 +171,7 @@ impl Interpreter {
             let environment = Environment::new_enclosed_ref(self.current_environment());
             environment
                 .borrow_mut()
-                .define("super".to_string(), Value::Class(superclass.clone()));
+                .define("super", Value::Class(superclass.clone()));
             environment
         } else {
             self.current_environment()

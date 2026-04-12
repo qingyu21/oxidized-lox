@@ -12,7 +12,7 @@ impl Parser {
     pub(super) fn comma(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.assignment()?;
 
-        while self.match_token(&[TokenType::Comma]) {
+        while self.match_one(TokenType::Comma) {
             let operator = self.previous().clone();
             let right = self.assignment()?;
             expr = Expr::binary(&mut self.exprs, expr, operator, right);
@@ -25,7 +25,7 @@ impl Parser {
     pub(super) fn assignment(&mut self) -> Result<Expr, ParseError> {
         let expr = self.conditional()?;
 
-        if self.match_token(&[TokenType::Equal]) {
+        if self.match_one(TokenType::Equal) {
             let equals = self.previous().clone();
             let value = self.assignment()?;
 
@@ -47,7 +47,7 @@ impl Parser {
     pub(super) fn conditional(&mut self) -> Result<Expr, ParseError> {
         let expr = self.logic_or()?;
 
-        if self.match_token(&[TokenType::Question]) {
+        if self.match_one(TokenType::Question) {
             let then_branch = self.expression()?;
             self.consume(
                 TokenType::Colon,
@@ -69,7 +69,7 @@ impl Parser {
     pub(super) fn logic_or(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.logic_and()?;
 
-        while self.match_token(&[TokenType::Or]) {
+        while self.match_one(TokenType::Or) {
             let operator = self.previous().clone();
             let right = self.logic_and()?;
             expr = Expr::logical(&mut self.exprs, expr, operator, right);
@@ -82,7 +82,7 @@ impl Parser {
     pub(super) fn logic_and(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.equality()?;
 
-        while self.match_token(&[TokenType::And]) {
+        while self.match_one(TokenType::And) {
             let operator = self.previous().clone();
             let right = self.equality()?;
             expr = Expr::logical(&mut self.exprs, expr, operator, right);
@@ -164,9 +164,9 @@ impl Parser {
         let mut expr = self.primary()?;
 
         loop {
-            if self.match_token(&[TokenType::LeftParen]) {
+            if self.match_one(TokenType::LeftParen) {
                 expr = self.finish_call(expr)?;
-            } else if self.match_token(&[TokenType::Dot]) {
+            } else if self.match_one(TokenType::Dot) {
                 let name = self
                     .consume(TokenType::Identifier, "Expect property name after '.'.")?
                     .clone();
@@ -195,7 +195,7 @@ impl Parser {
                 }
                 arguments.push(self.assignment()?);
 
-                if !self.match_token(&[TokenType::Comma]) {
+                if !self.match_one(TokenType::Comma) {
                     break;
                 }
             }
@@ -217,15 +217,15 @@ impl Parser {
             return self.missing_left_operand(right_operand);
         }
 
-        if self.match_token(&[TokenType::False]) {
+        if self.match_one(TokenType::False) {
             return Ok(Expr::literal(Literal::Bool(false)));
         }
 
-        if self.match_token(&[TokenType::True]) {
+        if self.match_one(TokenType::True) {
             return Ok(Expr::literal(Literal::Bool(true)));
         }
 
-        if self.match_token(&[TokenType::Nil]) {
+        if self.match_one(TokenType::Nil) {
             return Ok(Expr::literal(Literal::Nil));
         }
 
@@ -239,13 +239,13 @@ impl Parser {
             return Ok(Expr::literal(value));
         }
 
-        if self.match_token(&[TokenType::LeftParen]) {
+        if self.match_one(TokenType::LeftParen) {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::grouping(&mut self.exprs, expr));
         }
 
-        if self.match_token(&[TokenType::Super]) {
+        if self.match_one(TokenType::Super) {
             let keyword = self.previous().clone();
             self.consume(TokenType::Dot, "Expect '.' after 'super'.")?;
             let method = self
@@ -254,11 +254,11 @@ impl Parser {
             return Ok(Expr::super_(keyword, method));
         }
 
-        if self.match_token(&[TokenType::This]) {
+        if self.match_one(TokenType::This) {
             return Ok(Expr::this(self.previous().clone()));
         }
 
-        if self.match_token(&[TokenType::Identifier]) {
+        if self.match_one(TokenType::Identifier) {
             return Ok(Expr::variable(self.previous().clone()));
         }
 
