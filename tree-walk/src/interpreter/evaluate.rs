@@ -322,33 +322,13 @@ impl Interpreter {
         // type mismatch.
         match callee {
             Value::Callable(callable) => {
-                // Enforce arity in one shared place so every callable kind gets the
-                // same argument-count validation.
-                if arguments.len() != callable.arity() {
-                    return Err(RuntimeError::new(
-                        paren.clone(),
-                        format!(
-                            "Expected {} arguments but got {}.",
-                            callable.arity(),
-                            arguments.len()
-                        ),
-                    ));
-                }
+                Self::check_call_arity(paren, callable.arity(), arguments.len())?;
 
                 // Hand off to the concrete callable implementation.
                 callable.call(self, arguments)
             }
             Value::Class(class) => {
-                if arguments.len() != class.arity() {
-                    return Err(RuntimeError::new(
-                        paren.clone(),
-                        format!(
-                            "Expected {} arguments but got {}.",
-                            class.arity(),
-                            arguments.len()
-                        ),
-                    ));
-                }
+                Self::check_call_arity(paren, class.arity(), arguments.len())?;
 
                 LoxClass::call(class, self, arguments)
             }
@@ -356,6 +336,24 @@ impl Interpreter {
                 paren.clone(),
                 "Can only call functions and classes.",
             )),
+        }
+    }
+
+    fn check_call_arity(
+        paren: &Token,
+        expected_arguments: usize,
+        actual_arguments: usize,
+    ) -> Result<(), RuntimeError> {
+        if actual_arguments == expected_arguments {
+            Ok(())
+        } else {
+            Err(RuntimeError::new(
+                paren.clone(),
+                format!(
+                    "Expected {} arguments but got {}.",
+                    expected_arguments, actual_arguments
+                ),
+            ))
         }
     }
 
