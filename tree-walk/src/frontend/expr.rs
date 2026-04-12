@@ -1,13 +1,23 @@
 use std::{
+    cell::Cell,
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use crate::token::{Literal, Token};
 
 pub(crate) type ExprArenaRef = Rc<ExprArena>;
 
-static NEXT_EXPR_ARENA_ID: AtomicUsize = AtomicUsize::new(1);
+thread_local! {
+    static NEXT_EXPR_ARENA_ID: Cell<usize> = const { Cell::new(1) };
+}
+
+fn next_expr_arena_id() -> usize {
+    NEXT_EXPR_ARENA_ID.with(|next_id| {
+        let id = next_id.get();
+        next_id.set(id + 1);
+        id
+    })
+}
 
 #[derive(Debug)]
 pub(crate) struct ExprArena {
@@ -225,7 +235,7 @@ impl ExprArena {
 impl Default for ExprArena {
     fn default() -> Self {
         Self {
-            id: NEXT_EXPR_ARENA_ID.fetch_add(1, Ordering::Relaxed),
+            id: next_expr_arena_id(),
             nodes: Vec::new(),
         }
     }

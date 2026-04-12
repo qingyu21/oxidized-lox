@@ -1,11 +1,21 @@
 use std::{
+    cell::Cell,
     fmt::{self, Debug, Display},
     ops::Range,
     rc::Rc,
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-static NEXT_TOKEN_ID: AtomicU64 = AtomicU64::new(1);
+thread_local! {
+    static NEXT_TOKEN_ID: Cell<u64> = const { Cell::new(1) };
+}
+
+fn next_token_id() -> u64 {
+    NEXT_TOKEN_ID.with(|next_id| {
+        let id = next_id.get();
+        next_id.set(id + 1);
+        id
+    })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TokenType {
@@ -158,7 +168,7 @@ impl Token {
         line: u32,
     ) -> Self {
         Token {
-            id: NEXT_TOKEN_ID.fetch_add(1, Ordering::Relaxed),
+            id: next_token_id(),
             type_,
             lexeme: Lexeme::new(source, span),
             literal,
