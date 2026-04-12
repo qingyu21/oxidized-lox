@@ -17,6 +17,10 @@ const EX_DATAERR: i32 = 65;
 const EX_SOFTWARE: i32 = 70;
 
 thread_local! {
+    // Keep the interpreter in a replaceable slot, not just behind its own
+    // interior mutability. Production code only borrows it immutably through
+    // `with_interpreter`, but tests reset the whole interpreter instance
+    // between cases so REPL state does not leak across assertions.
     static INTERPRETER: RefCell<Interpreter> = RefCell::new(Interpreter::new());
 }
 

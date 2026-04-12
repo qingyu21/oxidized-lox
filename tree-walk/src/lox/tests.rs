@@ -324,6 +324,8 @@ fn token(type_: TokenType, lexeme: &str, line: u32) -> Token {
 }
 
 fn reset_interpreter() {
+    // Tests replace the entire interpreter so globals, environments, and
+    // resolver caches all return to a clean REPL state at once.
     INTERPRETER.with(|interpreter| {
         *interpreter.borrow_mut() = Interpreter::new();
     });
