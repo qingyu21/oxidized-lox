@@ -133,12 +133,15 @@ flowchart TD
 
 `Token`
 
-- Bundles `type_`, `lexeme`, optional `literal`, `line`, and a stable token id.
+- Bundles `type_`, `lexeme`, optional `literal`, `line`, and a stable token id
+  for the current thread.
 - Acts as the common unit passed from scanner to parser.
 - Is also kept inside AST nodes and runtime errors so later stages still know
   which source token they came from.
-- The token id lets the resolver and interpreter associate lexical-binding
-  results with variable-use sites without reshaping the AST.
+- The token id is assigned from a thread-local counter, which matches the
+  crate's single-threaded `Rc` / `RefCell` design while still letting the
+  resolver and interpreter associate lexical-binding results with variable-use
+  sites without reshaping the AST.
 
 `Scanner`
 
@@ -197,8 +200,9 @@ flowchart TD
 - Semantically it sits just after parsing: it does not execute code, but it is
   no longer part of raw syntax construction either.
 - Tracks local lexical scopes with a stack of
-  `HashMap<String, BindingInfo>`, where each entry remembers the binding's
-  token, kind, definition state, and whether it was ever read.
+  `HashMap<Rc<str>, BindingInfo>`-backed `Scope` values, where each entry
+  remembers the binding's token, kind, slot, definition state, and whether it
+  was ever read.
 - Detects semantic errors such as reading a local variable inside its own
   initializer, redeclaring a local name in the same scope, using `this`
   outside of a class, using `super` outside of a subclass, returning a value
@@ -213,16 +217,18 @@ flowchart TD
   binary operators, assignment, logical operators, `?:`, call expressions,
   `this`, `super`, and instance property get/set expressions.
 - Stores most child links as `ExprRef`, so nested expressions point into a
-  stable arena instead of recursively owning boxed child nodes.
+  shared arena by handle instead of recursively owning boxed child nodes.
 - Call expressions already evaluate through the interpreter's runtime call
   dispatch, which handles callable values and class construction in one place.
 
 `ExprArena` and `ExprRef`
 
-- `ExprArena` stores boxed expression nodes at stable addresses for the life of
-  one parsed input.
-- `ExprRef` is a lightweight handle into that arena and is what most nested
-  expression fields store.
+- `ExprArena` stores expression nodes in a `Vec<Expr>` for the life of one
+  parsed input and tags each arena with its own id.
+- `ExprRef` is a lightweight `{ arena_id, index }` handle into that arena, and
+  is what most nested expression fields store.
+- `ExprArena::get` asserts that a handle is being resolved against its
+  originating arena before indexing into the backing node vector.
 
 `Stmt`
 
