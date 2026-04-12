@@ -1,15 +1,19 @@
 use super::{BindingKind, ClassType, FunctionType, ResolveError, Resolver};
 use crate::{
-    expr::Expr,
+    expr::{Expr, ExprArena},
     stmt::{FunctionDecl, Stmt},
     token::Token,
 };
 
 impl<'a> Resolver<'a> {
     // Public entry point for resolving a parsed statement list before execution.
-    pub(crate) fn resolve_statements(&mut self, statements: &[Stmt]) -> Result<(), ResolveError> {
+    pub(crate) fn resolve_statements(
+        &mut self,
+        statements: &[Stmt],
+        expr_arena: &ExprArena,
+    ) -> Result<(), ResolveError> {
         for statement in statements {
-            self.resolve_statement_node(statement)?;
+            self.resolve_statement_node(statement, expr_arena)?;
         }
 
         Ok(())
@@ -17,11 +21,15 @@ impl<'a> Resolver<'a> {
 
     // Recursively walk one statement node, creating or discarding scopes when
     // the syntax introduces them.
-    pub(super) fn resolve_statement_node(&mut self, statement: &Stmt) -> Result<(), ResolveError> {
+    pub(super) fn resolve_statement_node(
+        &mut self,
+        statement: &Stmt,
+        expr_arena: &ExprArena,
+    ) -> Result<(), ResolveError> {
         match statement {
             Stmt::Block { statements } => {
                 self.begin_scope();
-                let result = self.resolve_statements(statements);
+                let result = self.resolve_statements(statements, expr_arena);
                 self.finish_scope(result)
             }
             Stmt::Break => Ok(()),
@@ -29,8 +37,8 @@ impl<'a> Resolver<'a> {
                 name,
                 superclass,
                 methods,
-            } => self.resolve_class_statement(name, superclass.as_ref(), methods),
-            Stmt::Expression { expression } => self.resolve_expression_node(expression),
+            } => self.resolve_class_statement(name, superclass.as_ref(), methods, expr_arena),
+            Stmt::Expression { expression } => self.resolve_expression_node(expression, expr_arena),
             Stmt::Function(function) => {
                 self.declare(&function.name, BindingKind::Function)?;
                 self.define(&function.name);
@@ -41,14 +49,14 @@ impl<'a> Resolver<'a> {
                 then_branch,
                 else_branch,
             } => {
-                self.resolve_expression_node(condition)?;
-                self.resolve_statement_node(then_branch)?;
+                self.resolve_expression_node(condition, expr_arena)?;
+                self.resolve_statement_node(then_branch, expr_arena)?;
                 if let Some(else_branch) = else_branch {
-                    self.resolve_statement_node(else_branch)?;
+                    self.resolve_statement_node(else_branch, expr_arena)?;
                 }
                 Ok(())
             }
-            Stmt::Print { expression } => self.resolve_expression_node(expression),
+            Stmt::Print { expression } => self.resolve_expression_node(expression, expr_arena),
             Stmt::Return { keyword, value } => {
                 if let Some(value) = value {
                     if self.current_function == FunctionType::Initializer {
@@ -56,21 +64,21 @@ impl<'a> Resolver<'a> {
                             self.error(keyword, "Can't return a value from an initializer.")
                         );
                     }
-                    self.resolve_expression_node(value)?;
+                    self.resolve_expression_node(value, expr_arena)?;
                 }
                 Ok(())
             }
             Stmt::Var { name, initializer } => {
                 self.declare(name, BindingKind::Variable)?;
                 if let Some(initializer) = initializer {
-                    self.resolve_expression_node(initializer)?;
+                    self.resolve_expression_node(initializer, expr_arena)?;
                 }
                 self.define(name);
                 Ok(())
             }
             Stmt::While { condition, body } => {
-                self.resolve_expression_node(condition)?;
-                self.resolve_statement_node(body)
+                self.resolve_expression_node(condition, expr_arena)?;
+                self.resolve_statement_node(body, expr_arena)
             }
         }
     }
@@ -80,6 +88,7 @@ impl<'a> Resolver<'a> {
         name: &Token,
         superclass: Option<&Expr>,
         methods: &[FunctionDecl],
+        expr_arena: &ExprArena,
     ) -> Result<(), ResolveError> {
         // Class names behave like declarations in the surrounding scope.
         // Class methods then reuse the existing function-body resolver so
@@ -90,7 +99,7 @@ impl<'a> Resolver<'a> {
         } else {
             ClassType::Class
         };
-        let result = self.resolve_class_declaration(name, superclass, methods);
+        let result = self.resolve_class_declaration(name, superclass, methods, expr_arena);
 
         self.current_class = enclosing_class;
         result
@@ -101,11 +110,12 @@ impl<'a> Resolver<'a> {
         name: &Token,
         superclass: Option<&Expr>,
         methods: &[FunctionDecl],
+        expr_arena: &ExprArena,
     ) -> Result<(), ResolveError> {
         self.declare(name, BindingKind::Class)?;
         self.define(name);
 
-        self.resolve_declared_superclass(name, superclass)?;
+        self.resolve_declared_superclass(name, superclass, expr_arena)?;
 
         if superclass.is_some() {
             self.begin_scope();
@@ -129,6 +139,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         name: &Token,
         superclass: Option<&Expr>,
+        expr_arena: &ExprArena,
     ) -> Result<(), ResolveError> {
         let Some(superclass) = superclass else {
             return Ok(());
@@ -145,7 +156,7 @@ impl<'a> Resolver<'a> {
             return Err(self.error(superclass_name, "A class can't inherit from itself."));
         }
 
-        self.resolve_expression_node(superclass)
+        self.resolve_expression_node(superclass, expr_arena)
     }
 
     fn resolve_class_methods(&mut self, methods: &[FunctionDecl]) -> Result<(), ResolveError> {
@@ -178,7 +189,7 @@ impl<'a> Resolver<'a> {
                 self.define(param);
             }
 
-            self.resolve_statements(&function.body)
+            self.resolve_statements(&function.body, function.expr_arena())
         })();
 
         let result = self.finish_scope(result);

@@ -2,33 +2,31 @@ use std::rc::Rc;
 
 use crate::{
     interpreter::Interpreter,
+    parser::Parser,
     runtime::Value,
-    stmt::Stmt,
     test_support::{parse_statements, resolve_statements},
 };
 
 #[test]
 fn bound_methods_share_the_same_function_definition() {
-    let statements = parse_statements(
+    let interpreter = Interpreter::new();
+
+    let setup = parse_statements(
         "class Greeter {
            greet(name) {
              return \"hi, \" + name;
            }
          }
 
-         var greeter = Greeter();
-         Greeter;
-         greeter;",
+         var greeter = Greeter();",
     );
-    let interpreter = Interpreter::new();
-    resolve_statements(&interpreter, &statements);
-
+    resolve_statements(&interpreter, &setup);
     interpreter
-        .interpret(&statements[..2])
+        .interpret(&setup)
         .expect("class declaration and instance creation should succeed");
 
-    let class = evaluate_expression_statement(&interpreter, &statements[2]);
-    let instance = evaluate_expression_statement(&interpreter, &statements[3]);
+    let class = evaluate_expression(&interpreter, "Greeter");
+    let instance = evaluate_expression(&interpreter, "greeter");
 
     let Value::Class(class) = class else {
         panic!("expected the class expression to evaluate to a class");
@@ -48,11 +46,13 @@ fn bound_methods_share_the_same_function_definition() {
     );
 }
 
-fn evaluate_expression_statement(interpreter: &Interpreter, stmt: &Stmt) -> Value {
-    match stmt {
-        Stmt::Expression { expression } => interpreter
-            .interpret_expression(expression)
-            .expect("test expression should evaluate successfully"),
-        _ => panic!("expected an expression statement"),
-    }
+fn evaluate_expression(interpreter: &Interpreter, source: &str) -> Value {
+    let mut parser = Parser::new(source);
+    let expression = parser
+        .parse_expression_input()
+        .expect("test expression should parse");
+
+    interpreter
+        .interpret_expression(&expression)
+        .expect("test expression should evaluate successfully")
 }

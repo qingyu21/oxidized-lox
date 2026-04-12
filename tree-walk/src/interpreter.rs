@@ -6,9 +6,9 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::{
     environment::{Environment, EnvironmentRef},
-    expr::Expr,
+    expr::{Expr, ExprArena},
+    parser::{ParsedExpression, ParsedProgram},
     runtime::{RuntimeError, Value},
-    stmt::Stmt,
     token::Token,
 };
 
@@ -57,8 +57,8 @@ impl Interpreter {
 
     // Execute a parsed statement list and return the first runtime error, if any.
     // The outer driver decides how to surface that error to users.
-    pub(crate) fn interpret(&self, statements: &[Stmt]) -> Result<(), RuntimeError> {
-        match self.execute_all(statements) {
+    pub(crate) fn interpret(&self, program: &ParsedProgram) -> Result<(), RuntimeError> {
+        match self.execute_all(program.as_slice(), program.expr_arena()) {
             Ok(ControlFlow::None) => Ok(()),
             Ok(ControlFlow::Break) => {
                 unreachable!("parser should reject break statements outside loops");
@@ -71,8 +71,11 @@ impl Interpreter {
     }
 
     // Evaluate a single expression and return its runtime value to the caller.
-    pub(crate) fn interpret_expression(&self, expr: &Expr) -> Result<Value, RuntimeError> {
-        self.evaluate(expr)
+    pub(crate) fn interpret_expression(
+        &self,
+        expr: &ParsedExpression,
+    ) -> Result<Value, RuntimeError> {
+        self.evaluate(expr.as_expr(), expr.expr_arena())
     }
 
     // Record the resolver's binding decision for a variable-use token so
@@ -101,6 +104,10 @@ impl Interpreter {
             .get(&name.id)
             .copied()
             .unwrap_or(ResolvedBinding::Unresolved)
+    }
+
+    fn expr<'a>(&self, expr_arena: &'a ExprArena, expr_ref: crate::expr::ExprRef) -> &'a Expr {
+        expr_arena.get(expr_ref)
     }
 }
 

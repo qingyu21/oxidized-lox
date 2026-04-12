@@ -1,19 +1,28 @@
-use std::{fmt, ops::Deref, rc::Rc};
+use std::{
+    rc::Rc,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use crate::token::{Literal, Token};
 
 pub(crate) type ExprArenaRef = Rc<ExprArena>;
 
-#[allow(clippy::vec_box)]
-#[derive(Debug, Default)]
+static NEXT_EXPR_ARENA_ID: AtomicUsize = AtomicUsize::new(1);
+
+#[derive(Debug)]
 pub(crate) struct ExprArena {
-    // Box each node so arena growth never relocates previously stored
-    // expressions; child ExprRefs rely on those stable addresses.
-    nodes: Vec<Box<Expr>>,
+    id: usize,
+    nodes: Vec<Expr>,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ExprRef(*const Expr);
+// Arena-local handle to a child expression stored inside an `ExprArena`.
+// Handles stay safe to copy around on their own, but they must always be
+// resolved through the same arena that created them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ExprRef {
+    arena_id: usize,
+    index: usize,
+}
 
 #[derive(Debug, Clone)]
 pub(crate) enum Expr {
@@ -189,13 +198,23 @@ impl ExprArena {
     }
 
     pub(crate) fn alloc(&mut self, expr: Expr) -> ExprRef {
-        self.nodes.push(Box::new(expr));
-        ExprRef(
-            self.nodes
-                .last()
-                .expect("arena should contain the expression that was just inserted")
-                .as_ref() as *const Expr,
-        )
+        let index = self.nodes.len();
+        self.nodes.push(expr);
+        ExprRef {
+            arena_id: self.id,
+            index,
+        }
+    }
+
+    pub(crate) fn get(&self, expr_ref: ExprRef) -> &Expr {
+        assert_eq!(
+            expr_ref.arena_id, self.id,
+            "expression handle should be resolved against its originating arena"
+        );
+
+        self.nodes
+            .get(expr_ref.index)
+            .expect("expression handle should refer to a valid arena slot")
     }
 
     pub(crate) fn into_shared(self) -> ExprArenaRef {
@@ -203,32 +222,11 @@ impl ExprArena {
     }
 }
 
-impl ExprRef {
-    fn as_expr(&self) -> &Expr {
-        // SAFETY: `ExprRef` points at an `Expr` owned by a boxed node inside an
-        // `ExprArena`. The arena stores each node at a stable address, and all
-        // parser outputs carrying these refs keep the arena alive for at least
-        // as long as the expression tree is traversed.
-        unsafe { &*self.0 }
-    }
-}
-
-impl Deref for ExprRef {
-    type Target = Expr;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_expr()
-    }
-}
-
-impl AsRef<Expr> for ExprRef {
-    fn as_ref(&self) -> &Expr {
-        self.as_expr()
-    }
-}
-
-impl fmt::Debug for ExprRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.as_expr().fmt(f)
+impl Default for ExprArena {
+    fn default() -> Self {
+        Self {
+            id: NEXT_EXPR_ARENA_ID.fetch_add(1, Ordering::Relaxed),
+            nodes: Vec::new(),
+        }
     }
 }

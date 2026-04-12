@@ -1,30 +1,50 @@
-use crate::expr::Expr;
+use crate::expr::{Expr, ExprArena};
 
 pub(crate) struct AstPrinter;
 
 impl AstPrinter {
-    pub(crate) fn print(&self, expr: &Expr) -> String {
+    pub(crate) fn print(&self, expr: &Expr, expr_arena: &ExprArena) -> String {
         match expr {
-            Expr::Assign { name, value } => format!("(= {} {})", name.lexeme, self.print(value)),
+            Expr::Assign { name, value } => format!(
+                "(= {} {})",
+                name.lexeme,
+                self.print(expr_arena.get(*value), expr_arena)
+            ),
             Expr::Binary {
                 left,
                 operator,
                 right,
-            } => self.parenthesize(operator.lexeme.as_ref(), [left.as_ref(), right.as_ref()]),
+            } => self.parenthesize(
+                operator.lexeme.as_ref(),
+                [expr_arena.get(*left), expr_arena.get(*right)],
+                expr_arena,
+            ),
             Expr::Call {
                 callee, arguments, ..
             } => self.parenthesize(
                 "call",
-                std::iter::once(callee.as_ref()).chain(arguments.iter().map(AsRef::as_ref)),
+                std::iter::once(expr_arena.get(*callee))
+                    .chain(arguments.iter().map(|argument| expr_arena.get(*argument))),
+                expr_arena,
             ),
-            Expr::Get { object, name } => format!("(. {} {})", self.print(object), name.lexeme),
-            Expr::Grouping { expression } => self.parenthesize("group", [expression.as_ref()]),
+            Expr::Get { object, name } => format!(
+                "(. {} {})",
+                self.print(expr_arena.get(*object), expr_arena),
+                name.lexeme
+            ),
+            Expr::Grouping { expression } => {
+                self.parenthesize("group", [expr_arena.get(*expression)], expr_arena)
+            }
             Expr::Literal { value } => value.to_string(),
             Expr::Logical {
                 left,
                 operator,
                 right,
-            } => self.parenthesize(operator.lexeme.as_ref(), [left.as_ref(), right.as_ref()]),
+            } => self.parenthesize(
+                operator.lexeme.as_ref(),
+                [expr_arena.get(*left), expr_arena.get(*right)],
+                expr_arena,
+            ),
             Expr::Set {
                 object,
                 name,
@@ -32,9 +52,9 @@ impl AstPrinter {
             } => {
                 format!(
                     "(set {} {} {})",
-                    self.print(object),
+                    self.print(expr_arena.get(*object), expr_arena),
                     name.lexeme,
-                    self.print(value)
+                    self.print(expr_arena.get(*value), expr_arena)
                 )
             }
             Expr::Super { method, .. } => format!("(super {})", method.lexeme),
@@ -45,26 +65,34 @@ impl AstPrinter {
             } => self.parenthesize(
                 "?:",
                 [
-                    condition.as_ref(),
-                    then_branch.as_ref(),
-                    else_branch.as_ref(),
+                    expr_arena.get(*condition),
+                    expr_arena.get(*then_branch),
+                    expr_arena.get(*else_branch),
                 ],
+                expr_arena,
             ),
             Expr::This { keyword } => keyword.lexeme.to_string(),
             Expr::Variable { name } => name.lexeme.to_string(),
-            Expr::Unary { operator, right } => {
-                self.parenthesize(operator.lexeme.as_ref(), [right.as_ref()])
-            }
+            Expr::Unary { operator, right } => self.parenthesize(
+                operator.lexeme.as_ref(),
+                [expr_arena.get(*right)],
+                expr_arena,
+            ),
         }
     }
 
-    fn parenthesize<'a>(&self, name: &str, exprs: impl IntoIterator<Item = &'a Expr>) -> String {
+    fn parenthesize<'a>(
+        &self,
+        name: &str,
+        exprs: impl IntoIterator<Item = &'a Expr>,
+        expr_arena: &ExprArena,
+    ) -> String {
         let mut result = String::from("(");
         result.push_str(name);
 
         for expr in exprs {
             result.push(' ');
-            result.push_str(&self.print(expr));
+            result.push_str(&self.print(expr, expr_arena));
         }
 
         result.push(')');
@@ -101,7 +129,10 @@ mod tests {
         };
 
         let printer = AstPrinter;
-        assert_eq!(printer.print(&expression), "(* (- 123) (group 45.67))");
+        assert_eq!(
+            printer.print(&expression, &exprs),
+            "(* (- 123) (group 45.67))"
+        );
     }
 
     fn token(type_: TokenType, lexeme: &str) -> Token {

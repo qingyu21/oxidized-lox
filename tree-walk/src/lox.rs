@@ -1,11 +1,9 @@
 use crate::{
     diagnostics::{clear_error, clear_runtime_error, had_error, had_runtime_error, runtime_error},
-    expr::Expr,
     interpreter::Interpreter,
     parser::{ParsedExpression, ParsedProgram, Parser},
     resolver::Resolver,
     scanner::Scanner,
-    stmt::Stmt,
     token::TokenType,
 };
 use std::{
@@ -286,14 +284,20 @@ fn with_interpreter<R>(f: impl FnOnce(&Interpreter) -> R) -> R {
     })
 }
 
-fn resolve_statements(interpreter: &Interpreter, statements: &[Stmt]) -> bool {
+fn resolve_statements(interpreter: &Interpreter, statements: &ParsedProgram) -> bool {
     let mut resolver = Resolver::new(interpreter);
-    resolver.resolve_statements(statements).is_ok() && !had_error()
+    resolver
+        .resolve_statements(statements.as_slice(), statements.expr_arena())
+        .is_ok()
+        && !had_error()
 }
 
-fn resolve_expression(interpreter: &Interpreter, expr: &Expr) -> bool {
+fn resolve_expression(interpreter: &Interpreter, expr: &ParsedExpression) -> bool {
     let mut resolver = Resolver::new(interpreter);
-    resolver.resolve_expression(expr).is_ok() && !had_error()
+    resolver
+        .resolve_expression(expr.as_expr(), expr.expr_arena())
+        .is_ok()
+        && !had_error()
 }
 
 fn stop_after_error() -> bool {

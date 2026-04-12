@@ -22,7 +22,10 @@ struct LoxFunctionCode {
     name: Token,
     params: Vec<Token>,
     body: Vec<Stmt>,
-    _exprs: ExprArenaRef,
+    // Keeps the shared expression arena alive so this function body can keep
+    // resolving nested child-expression handles after the original parse
+    // result is dropped.
+    expr_arena: ExprArenaRef,
     is_initializer: bool,
 }
 
@@ -38,14 +41,14 @@ impl LoxFunctionCode {
         name: Token,
         params: Vec<Token>,
         body: Vec<Stmt>,
-        exprs: ExprArenaRef,
+        expr_arena: ExprArenaRef,
         is_initializer: bool,
     ) -> Self {
         Self {
             name,
             params,
             body,
-            _exprs: exprs,
+            expr_arena,
             is_initializer,
         }
     }
@@ -58,17 +61,19 @@ pub(super) fn install_native_globals(globals: &EnvironmentRef) {
 }
 
 pub(super) fn make_function(
-    exprs: &ExprArenaRef,
+    expr_arena: ExprArenaRef,
     name: &Token,
     params: &[Token],
     body: &[Stmt],
     closure: EnvironmentRef,
 ) -> Value {
-    Value::Callable(make_function_ref(exprs, name, params, body, closure, false))
+    Value::Callable(make_function_ref(
+        expr_arena, name, params, body, closure, false,
+    ))
 }
 
 pub(super) fn make_function_ref(
-    exprs: &ExprArenaRef,
+    expr_arena: ExprArenaRef,
     name: &Token,
     params: &[Token],
     body: &[Stmt],
@@ -79,7 +84,7 @@ pub(super) fn make_function_ref(
         name.clone(),
         params.to_vec(),
         body.to_vec(),
-        exprs.clone(),
+        expr_arena,
         is_initializer,
     ));
 
@@ -166,7 +171,11 @@ impl LoxCallable for LoxFunction {
         // execute `return;`, the call still evaluates to the bound instance
         // (`this`). The resolver rejects `return value;` in init methods, and
         // this runtime branch preserves the same rule as a final backstop.
-        match interpreter.execute_block(&self.code.body, environment)? {
+        match interpreter.execute_block(
+            &self.code.body,
+            self.code.expr_arena.as_ref(),
+            environment,
+        )? {
             ControlFlow::None => {
                 if self.code.is_initializer {
                     Ok(self.bound_this())

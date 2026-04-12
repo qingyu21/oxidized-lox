@@ -1,10 +1,14 @@
 use super::{ClassType, ResolveError, Resolver};
-use crate::expr::Expr;
+use crate::expr::{Expr, ExprArena};
 
 impl<'a> Resolver<'a> {
     // Public entry point for resolving a standalone expression, mainly for the REPL.
-    pub(crate) fn resolve_expression(&mut self, expression: &Expr) -> Result<(), ResolveError> {
-        self.resolve_expression_node(expression)
+    pub(crate) fn resolve_expression(
+        &mut self,
+        expression: &Expr,
+        expr_arena: &ExprArena,
+    ) -> Result<(), ResolveError> {
+        self.resolve_expression_node(expression, expr_arena)
     }
 
     // Recursively walk one expression node and resolve any variable reads or
@@ -12,36 +16,41 @@ impl<'a> Resolver<'a> {
     pub(super) fn resolve_expression_node(
         &mut self,
         expression: &Expr,
+        expr_arena: &ExprArena,
     ) -> Result<(), ResolveError> {
         match expression {
             Expr::Assign { name, value } => {
-                self.resolve_expression_node(value)?;
+                self.resolve_expression_node(expr_arena.get(*value), expr_arena)?;
                 self.resolve_local(name, false);
                 Ok(())
             }
             Expr::Binary { left, right, .. } => {
-                self.resolve_expression_node(left)?;
-                self.resolve_expression_node(right)
+                self.resolve_expression_node(expr_arena.get(*left), expr_arena)?;
+                self.resolve_expression_node(expr_arena.get(*right), expr_arena)
             }
             Expr::Call {
                 callee, arguments, ..
             } => {
-                self.resolve_expression_node(callee)?;
+                self.resolve_expression_node(expr_arena.get(*callee), expr_arena)?;
                 for argument in arguments {
-                    self.resolve_expression_node(argument)?;
+                    self.resolve_expression_node(expr_arena.get(*argument), expr_arena)?;
                 }
                 Ok(())
             }
-            Expr::Get { object, .. } => self.resolve_expression_node(object),
-            Expr::Grouping { expression } => self.resolve_expression_node(expression),
+            Expr::Get { object, .. } => {
+                self.resolve_expression_node(expr_arena.get(*object), expr_arena)
+            }
+            Expr::Grouping { expression } => {
+                self.resolve_expression_node(expr_arena.get(*expression), expr_arena)
+            }
             Expr::Literal { .. } => Ok(()),
             Expr::Logical { left, right, .. } => {
-                self.resolve_expression_node(left)?;
-                self.resolve_expression_node(right)
+                self.resolve_expression_node(expr_arena.get(*left), expr_arena)?;
+                self.resolve_expression_node(expr_arena.get(*right), expr_arena)
             }
             Expr::Set { object, value, .. } => {
-                self.resolve_expression_node(value)?;
-                self.resolve_expression_node(object)
+                self.resolve_expression_node(expr_arena.get(*value), expr_arena)?;
+                self.resolve_expression_node(expr_arena.get(*object), expr_arena)
             }
             Expr::Super { keyword, .. } => {
                 if self.current_class == ClassType::None {
@@ -84,11 +93,13 @@ impl<'a> Resolver<'a> {
                 then_branch,
                 else_branch,
             } => {
-                self.resolve_expression_node(condition)?;
-                self.resolve_expression_node(then_branch)?;
-                self.resolve_expression_node(else_branch)
+                self.resolve_expression_node(expr_arena.get(*condition), expr_arena)?;
+                self.resolve_expression_node(expr_arena.get(*then_branch), expr_arena)?;
+                self.resolve_expression_node(expr_arena.get(*else_branch), expr_arena)
             }
-            Expr::Unary { right, .. } => self.resolve_expression_node(right),
+            Expr::Unary { right, .. } => {
+                self.resolve_expression_node(expr_arena.get(*right), expr_arena)
+            }
         }
     }
 }

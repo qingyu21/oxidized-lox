@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     environment::Environment,
-    expr::{Expr, ExprRef},
+    expr::{Expr, ExprArena, ExprRef},
     runtime::{LoxClass, RuntimeError, Value},
     token::{Token, TokenType},
 };
@@ -109,46 +109,83 @@ impl ConcatenatedString {
 }
 
 impl Interpreter {
-    pub(super) fn evaluate(&self, expr: &Expr) -> Result<Value, RuntimeError> {
+    pub(super) fn evaluate(
+        &self,
+        expr: &Expr,
+        expr_arena: &ExprArena,
+    ) -> Result<Value, RuntimeError> {
         match expr {
-            Expr::Assign { name, value } => self.evaluate_assign(name, value),
+            Expr::Assign { name, value } => {
+                self.evaluate_assign(name, self.expr(expr_arena, *value), expr_arena)
+            }
             Expr::Call {
                 callee,
                 paren,
                 arguments,
-            } => self.evaluate_call(callee, paren, arguments),
-            Expr::Get { object, name } => self.evaluate_get(object, name),
+            } => self.evaluate_call(self.expr(expr_arena, *callee), paren, arguments, expr_arena),
+            Expr::Get { object, name } => {
+                self.evaluate_get(self.expr(expr_arena, *object), name, expr_arena)
+            }
             Expr::Literal { value } => Ok(value.clone().into()),
             Expr::Logical {
                 left,
                 operator,
                 right,
-            } => self.evaluate_logical(left, operator, right),
+            } => self.evaluate_logical(
+                self.expr(expr_arena, *left),
+                operator,
+                self.expr(expr_arena, *right),
+                expr_arena,
+            ),
             Expr::Set {
                 object,
                 name,
                 value,
-            } => self.evaluate_set(object, name, value),
+            } => self.evaluate_set(
+                self.expr(expr_arena, *object),
+                name,
+                self.expr(expr_arena, *value),
+                expr_arena,
+            ),
             Expr::Super { keyword, method } => self.evaluate_super(keyword, method),
             Expr::Variable { name } => self.look_up_variable(name),
-            Expr::Grouping { expression } => self.evaluate(expression),
+            Expr::Grouping { expression } => {
+                self.evaluate(self.expr(expr_arena, *expression), expr_arena)
+            }
             Expr::Conditional {
                 condition,
                 then_branch,
                 else_branch,
-            } => self.evaluate_conditional(condition, then_branch, else_branch),
+            } => self.evaluate_conditional(
+                self.expr(expr_arena, *condition),
+                self.expr(expr_arena, *then_branch),
+                self.expr(expr_arena, *else_branch),
+                expr_arena,
+            ),
             Expr::This { keyword } => self.look_up_variable(keyword),
-            Expr::Unary { operator, right } => self.evaluate_unary(operator, right),
+            Expr::Unary { operator, right } => {
+                self.evaluate_unary(operator, self.expr(expr_arena, *right), expr_arena)
+            }
             Expr::Binary {
                 left,
                 operator,
                 right,
-            } => self.evaluate_binary(left, operator, right),
+            } => self.evaluate_binary(
+                self.expr(expr_arena, *left),
+                operator,
+                self.expr(expr_arena, *right),
+                expr_arena,
+            ),
         }
     }
 
-    fn evaluate_assign(&self, name: &Token, value_expr: &Expr) -> Result<Value, RuntimeError> {
-        let value = self.evaluate(value_expr)?;
+    fn evaluate_assign(
+        &self,
+        name: &Token,
+        value_expr: &Expr,
+        expr_arena: &ExprArena,
+    ) -> Result<Value, RuntimeError> {
+        let value = self.evaluate(value_expr, expr_arena)?;
         match self.resolved_binding(name) {
             ResolvedBinding::Local { distance, slot } => Environment::assign_at(
                 &self.current_environment(),
@@ -166,8 +203,13 @@ impl Interpreter {
         Ok(value)
     }
 
-    fn evaluate_get(&self, object_expr: &Expr, name: &Token) -> Result<Value, RuntimeError> {
-        let object = self.evaluate(object_expr)?;
+    fn evaluate_get(
+        &self,
+        object_expr: &Expr,
+        name: &Token,
+        expr_arena: &ExprArena,
+    ) -> Result<Value, RuntimeError> {
+        let object = self.evaluate(object_expr, expr_arena)?;
 
         if let Value::Instance(instance) = object {
             instance.get(name)
@@ -184,11 +226,12 @@ impl Interpreter {
         object_expr: &Expr,
         name: &Token,
         value_expr: &Expr,
+        expr_arena: &ExprArena,
     ) -> Result<Value, RuntimeError> {
-        let object = self.evaluate(object_expr)?;
+        let object = self.evaluate(object_expr, expr_arena)?;
 
         if let Value::Instance(instance) = object {
-            let value = self.evaluate(value_expr)?;
+            let value = self.evaluate(value_expr, expr_arena)?;
             instance.set(name, value.clone());
             Ok(value)
         } else {
@@ -260,17 +303,18 @@ impl Interpreter {
         callee_expr: &Expr,
         paren: &Token,
         argument_exprs: &[ExprRef],
+        expr_arena: &ExprArena,
     ) -> Result<Value, RuntimeError> {
         // Evaluate the callee expression first. This may be a simple variable
         // lookup like `clock`, but the grammar allows any higher-precedence
         // expression to appear before the call parentheses.
-        let callee = self.evaluate(callee_expr)?;
+        let callee = self.evaluate(callee_expr, expr_arena)?;
 
         // Lox evaluates call arguments from left to right before dispatching
         // to the callee.
         let mut arguments = Vec::with_capacity(argument_exprs.len());
         for argument_expr in argument_exprs {
-            arguments.push(self.evaluate(argument_expr)?);
+            arguments.push(self.evaluate(self.expr(expr_arena, *argument_expr), expr_arena)?);
         }
 
         // Convert the runtime value into the callable interface or report a
@@ -320,13 +364,14 @@ impl Interpreter {
         left_expr: &Expr,
         operator: &Token,
         right_expr: &Expr,
+        expr_arena: &ExprArena,
     ) -> Result<Value, RuntimeError> {
-        let left = self.evaluate(left_expr)?;
+        let left = self.evaluate(left_expr, expr_arena)?;
 
         match operator.type_ {
             TokenType::Or if Self::is_truthy(&left) => Ok(left),
             TokenType::And if !Self::is_truthy(&left) => Ok(left),
-            TokenType::Or | TokenType::And => self.evaluate(right_expr),
+            TokenType::Or | TokenType::And => self.evaluate(right_expr, expr_arena),
             _ => unreachable!("parser should only build valid logical operators"),
         }
     }
@@ -336,16 +381,22 @@ impl Interpreter {
         condition: &Expr,
         then_branch: &Expr,
         else_branch: &Expr,
+        expr_arena: &ExprArena,
     ) -> Result<Value, RuntimeError> {
-        if Self::is_truthy(&self.evaluate(condition)?) {
-            self.evaluate(then_branch)
+        if Self::is_truthy(&self.evaluate(condition, expr_arena)?) {
+            self.evaluate(then_branch, expr_arena)
         } else {
-            self.evaluate(else_branch)
+            self.evaluate(else_branch, expr_arena)
         }
     }
 
-    fn evaluate_unary(&self, operator: &Token, right_expr: &Expr) -> Result<Value, RuntimeError> {
-        let right = self.evaluate(right_expr)?;
+    fn evaluate_unary(
+        &self,
+        operator: &Token,
+        right_expr: &Expr,
+        expr_arena: &ExprArena,
+    ) -> Result<Value, RuntimeError> {
+        let right = self.evaluate(right_expr, expr_arena)?;
 
         match operator.type_ {
             TokenType::Bang => Ok(Value::Bool(!Self::is_truthy(&right))),
@@ -359,13 +410,14 @@ impl Interpreter {
         left_expr: &Expr,
         operator: &Token,
         right_expr: &Expr,
+        expr_arena: &ExprArena,
     ) -> Result<Value, RuntimeError> {
         if operator.type_ == TokenType::Plus {
-            return self.evaluate_plus(operator, left_expr, right_expr);
+            return self.evaluate_plus(operator, left_expr, right_expr, expr_arena);
         }
 
-        let left = self.evaluate(left_expr)?;
-        let right = self.evaluate(right_expr)?;
+        let left = self.evaluate(left_expr, expr_arena)?;
+        let right = self.evaluate(right_expr, expr_arena)?;
 
         match operator.type_ {
             TokenType::Comma => Ok(right),
@@ -405,16 +457,21 @@ impl Interpreter {
         operator: &Token,
         left_expr: &Expr,
         right_expr: &Expr,
+        expr_arena: &ExprArena,
     ) -> Result<Value, RuntimeError> {
         Ok(Self::combine_plus_values(
             operator,
-            self.evaluate_plus_operand(left_expr)?,
-            self.evaluate_plus_operand(right_expr)?,
+            self.evaluate_plus_operand(left_expr, expr_arena)?,
+            self.evaluate_plus_operand(right_expr, expr_arena)?,
         )?
         .into_value())
     }
 
-    fn evaluate_plus_operand(&self, expr: &Expr) -> Result<PlusValue, RuntimeError> {
+    fn evaluate_plus_operand(
+        &self,
+        expr: &Expr,
+        expr_arena: &ExprArena,
+    ) -> Result<PlusValue, RuntimeError> {
         if let Expr::Binary {
             left,
             operator,
@@ -424,12 +481,12 @@ impl Interpreter {
         {
             return Self::combine_plus_values(
                 operator,
-                self.evaluate_plus_operand(left)?,
-                self.evaluate_plus_operand(right)?,
+                self.evaluate_plus_operand(self.expr(expr_arena, *left), expr_arena)?,
+                self.evaluate_plus_operand(self.expr(expr_arena, *right), expr_arena)?,
             );
         }
 
-        Ok(PlusValue::from(self.evaluate(expr)?))
+        Ok(PlusValue::from(self.evaluate(expr, expr_arena)?))
     }
 
     fn combine_plus_values(

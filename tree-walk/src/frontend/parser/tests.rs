@@ -116,7 +116,7 @@ fn parses_property_get_after_call() {
         [Stmt::Expression { expression }] => match expression {
             crate::expr::Expr::Get { object, name } => {
                 assert_eq!(name.lexeme.as_ref(), "flavor");
-                assert_eq!(AstPrinter.print(object), "(call Bagel)");
+                assert_eq!(print_expr(&statements, object), "(call Bagel)");
             }
             _ => panic!("expected a property get expression"),
         },
@@ -136,8 +136,8 @@ fn parses_property_set_assignment() {
                 value,
             } => {
                 assert_eq!(name.lexeme.as_ref(), "flavor");
-                assert_eq!(AstPrinter.print(object), "bagel");
-                assert_eq!(AstPrinter.print(value), "sesame");
+                assert_eq!(print_expr(&statements, object), "bagel");
+                assert_eq!(print_expr(&statements, value), "sesame");
             }
             _ => panic!("expected a property set expression"),
         },
@@ -191,7 +191,7 @@ fn parses_function_declaration_with_parameters_and_body() {
 
             match function.body.as_slice() {
                 [Stmt::Print { expression }] => {
-                    assert_eq!(AstPrinter.print(expression), "(+ first last)");
+                    assert_eq!(print_expr(&statements, expression), "(+ first last)");
                 }
                 _ => panic!("expected a single print statement in the function body"),
             }
@@ -233,14 +233,14 @@ fn parses_class_declaration_with_methods() {
 
                     match cook.body.as_slice() {
                         [Stmt::Print { expression }] => {
-                            assert_eq!(AstPrinter.print(expression), "Eggs");
+                            assert_eq!(print_expr(&statements, expression), "Eggs");
                         }
                         _ => panic!("expected a single print statement in the first method body"),
                     }
 
                     match serve.body.as_slice() {
                         [Stmt::Print { expression }] => {
-                            assert_eq!(AstPrinter.print(expression), "who");
+                            assert_eq!(print_expr(&statements, expression), "who");
                         }
                         _ => panic!("expected a single print statement in the second method body"),
                     }
@@ -291,7 +291,7 @@ fn parses_return_statement_with_value_inside_function() {
                 },
             ] => {
                 assert_eq!(keyword.lexeme.as_ref(), "return");
-                assert_eq!(AstPrinter.print(value), "value");
+                assert_eq!(print_expr(&statements, value), "value");
             }
             _ => panic!("expected a single valued return statement in the function body"),
         },
@@ -325,7 +325,7 @@ fn parses_break_statement_inside_a_loop() {
 
     match statements.as_slice() {
         [Stmt::While { condition, body }] => {
-            assert_eq!(AstPrinter.print(condition), "true");
+            assert_eq!(print_expr(&statements, condition), "true");
             match body.as_ref() {
                 Stmt::Block { statements } => match statements.as_slice() {
                     [Stmt::Break] => {}
@@ -350,10 +350,10 @@ fn parses_if_statement_without_else() {
                 else_branch: None,
             },
         ] => {
-            assert_eq!(AstPrinter.print(condition), "true");
+            assert_eq!(print_expr(&statements, condition), "true");
             match then_branch.as_ref() {
                 Stmt::Print { expression } => {
-                    assert_eq!(AstPrinter.print(expression), "1");
+                    assert_eq!(print_expr(&statements, expression), "1");
                 }
                 _ => panic!("expected a print statement in the then branch"),
             }
@@ -374,13 +374,13 @@ fn parses_if_statement_with_else() {
                 else_branch: Some(else_branch),
             },
         ] => {
-            assert_eq!(AstPrinter.print(condition), "true");
+            assert_eq!(print_expr(&statements, condition), "true");
             match then_branch.as_ref() {
-                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "1"),
+                Stmt::Print { expression } => assert_eq!(print_expr(&statements, expression), "1"),
                 _ => panic!("expected a print statement in the then branch"),
             }
             match else_branch.as_ref() {
-                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "2"),
+                Stmt::Print { expression } => assert_eq!(print_expr(&statements, expression), "2"),
                 _ => panic!("expected a print statement in the else branch"),
             }
         }
@@ -394,9 +394,9 @@ fn parses_while_statement_with_expression_body() {
 
     match statements.as_slice() {
         [Stmt::While { condition, body }] => {
-            assert_eq!(AstPrinter.print(condition), "true");
+            assert_eq!(print_expr(&statements, condition), "true");
             match body.as_ref() {
-                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "1"),
+                Stmt::Print { expression } => assert_eq!(print_expr(&statements, expression), "1"),
                 _ => panic!("expected a print statement in the while body"),
             }
         }
@@ -410,10 +410,14 @@ fn parses_while_statement_with_block_body() {
 
     match statements.as_slice() {
         [Stmt::While { condition, body }] => {
-            assert_eq!(AstPrinter.print(condition), "beverage");
+            assert_eq!(print_expr(&statements, condition), "beverage");
             match body.as_ref() {
-                Stmt::Block { statements } => match statements.as_slice() {
-                    [Stmt::Print { expression }] => assert_eq!(AstPrinter.print(expression), "1"),
+                Stmt::Block {
+                    statements: body_statements,
+                } => match body_statements.as_slice() {
+                    [Stmt::Print { expression }] => {
+                        assert_eq!(print_expr(&statements, expression), "1")
+                    }
                     _ => panic!("expected one print statement inside the while block"),
                 },
                 _ => panic!("expected a block statement in the while body"),
@@ -441,19 +445,21 @@ fn parses_for_statement_by_desugaring_to_block_and_while() {
                 Stmt::While { condition, body },
             ] => {
                 assert_eq!(name.lexeme.as_ref(), "i");
-                assert_eq!(AstPrinter.print(initializer), "0");
-                assert_eq!(AstPrinter.print(condition), "(< i 3)");
+                assert_eq!(print_expr(&statements, initializer), "0");
+                assert_eq!(print_expr(&statements, condition), "(< i 3)");
 
                 match body.as_ref() {
-                    Stmt::Block { statements } => match statements.as_slice() {
+                    Stmt::Block {
+                        statements: body_statements,
+                    } => match body_statements.as_slice() {
                         [
                             Stmt::Print { expression },
                             Stmt::Expression {
                                 expression: increment,
                             },
                         ] => {
-                            assert_eq!(AstPrinter.print(expression), "i");
-                            assert_eq!(AstPrinter.print(increment), "(= i (+ i 1))");
+                            assert_eq!(print_expr(&statements, expression), "i");
+                            assert_eq!(print_expr(&statements, increment), "(= i (+ i 1))");
                         }
                         _ => panic!(
                             "expected the while body to contain the original body plus increment"
@@ -474,9 +480,9 @@ fn parses_for_statement_without_clauses_as_infinite_while() {
 
     match statements.as_slice() {
         [Stmt::While { condition, body }] => {
-            assert_eq!(AstPrinter.print(condition), "true");
+            assert_eq!(print_expr(&statements, condition), "true");
             match body.as_ref() {
-                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "1"),
+                Stmt::Print { expression } => assert_eq!(print_expr(&statements, expression), "1"),
                 _ => panic!("expected the while body to be the original loop body"),
             }
         }
@@ -502,19 +508,21 @@ fn parses_for_statement_without_condition_as_true_while() {
                 Stmt::While { condition, body },
             ] => {
                 assert_eq!(name.lexeme.as_ref(), "i");
-                assert_eq!(AstPrinter.print(initializer), "0");
-                assert_eq!(AstPrinter.print(condition), "true");
+                assert_eq!(print_expr(&statements, initializer), "0");
+                assert_eq!(print_expr(&statements, condition), "true");
 
                 match body.as_ref() {
-                    Stmt::Block { statements } => match statements.as_slice() {
+                    Stmt::Block {
+                        statements: body_statements,
+                    } => match body_statements.as_slice() {
                         [
                             Stmt::Print { expression },
                             Stmt::Expression {
                                 expression: increment,
                             },
                         ] => {
-                            assert_eq!(AstPrinter.print(expression), "i");
-                            assert_eq!(AstPrinter.print(increment), "(= i (+ i 1))");
+                            assert_eq!(print_expr(&statements, expression), "i");
+                            assert_eq!(print_expr(&statements, increment), "(= i (+ i 1))");
                         }
                         _ => panic!(
                             "expected the while body to contain the original body plus increment"
@@ -547,11 +555,13 @@ fn parses_for_statement_without_increment_preserving_the_original_body() {
                 Stmt::While { condition, body },
             ] => {
                 assert_eq!(name.lexeme.as_ref(), "i");
-                assert_eq!(AstPrinter.print(initializer), "0");
-                assert_eq!(AstPrinter.print(condition), "(< i 3)");
+                assert_eq!(print_expr(&statements, initializer), "0");
+                assert_eq!(print_expr(&statements, condition), "(< i 3)");
 
                 match body.as_ref() {
-                    Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "i"),
+                    Stmt::Print { expression } => {
+                        assert_eq!(print_expr(&statements, expression), "i")
+                    }
                     _ => panic!("expected the original loop body to be preserved without wrapping"),
                 }
             }
@@ -573,20 +583,24 @@ fn dangling_else_binds_to_the_nearest_if() {
                 else_branch: None,
             },
         ] => {
-            assert_eq!(AstPrinter.print(condition), "first");
+            assert_eq!(print_expr(&statements, condition), "first");
             match then_branch.as_ref() {
                 Stmt::If {
                     condition,
                     then_branch,
                     else_branch: Some(else_branch),
                 } => {
-                    assert_eq!(AstPrinter.print(condition), "second");
+                    assert_eq!(print_expr(&statements, condition), "second");
                     match then_branch.as_ref() {
-                        Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "1"),
+                        Stmt::Print { expression } => {
+                            assert_eq!(print_expr(&statements, expression), "1")
+                        }
                         _ => panic!("expected a print statement in the inner then branch"),
                     }
                     match else_branch.as_ref() {
-                        Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "2"),
+                        Stmt::Print { expression } => {
+                            assert_eq!(print_expr(&statements, expression), "2")
+                        }
                         _ => panic!("expected a print statement in the inner else branch"),
                     }
                 }
@@ -615,8 +629,8 @@ fn parses_block_statement() {
                 Stmt::Print { expression },
             ] => {
                 assert_eq!(name.lexeme.as_ref(), "beverage");
-                assert_eq!(AstPrinter.print(initializer), "1");
-                assert_eq!(AstPrinter.print(expression), "beverage");
+                assert_eq!(print_expr(&statements, initializer), "1");
+                assert_eq!(print_expr(&statements, expression), "beverage");
             }
             _ => panic!("expected a variable declaration followed by a print inside the block"),
         },
@@ -636,7 +650,7 @@ fn parses_var_declaration_with_initializer() {
             },
         ] => {
             assert_eq!(name.lexeme.as_ref(), "beverage");
-            assert_eq!(AstPrinter.print(initializer), "(+ 1 2)");
+            assert_eq!(print_expr(&statements, initializer), "(+ 1 2)");
         }
         _ => panic!("expected a single variable declaration with an initializer"),
     }
@@ -707,7 +721,7 @@ fn synchronizes_to_next_statement_after_error() {
         _ => panic!("expected the parser to recover to the next print statement"),
     };
 
-    assert_eq!(AstPrinter.print(expr), "2");
+    assert_eq!(print_expr(&statements, expr), "2");
 }
 
 #[test]
@@ -723,7 +737,7 @@ fn synchronizes_to_var_declaration_after_error() {
             },
         ] => {
             assert_eq!(name.lexeme.as_ref(), "beverage");
-            assert_eq!(AstPrinter.print(initializer), "tea");
+            assert_eq!(print_expr(&statements, initializer), "tea");
         }
         _ => panic!("expected the parser to recover to the next variable declaration"),
     }
@@ -735,7 +749,7 @@ fn reports_break_outside_loop_and_recovers() {
     let statements = parser.parse();
 
     match statements.as_slice() {
-        [Stmt::Print { expression }] => assert_eq!(AstPrinter.print(expression), "1"),
+        [Stmt::Print { expression }] => assert_eq!(print_expr(&statements, expression), "1"),
         _ => panic!("expected the parser to recover after break outside a loop"),
     }
 }
@@ -746,7 +760,7 @@ fn reports_return_outside_function_and_recovers() {
     let statements = parser.parse();
 
     match statements.as_slice() {
-        [Stmt::Print { expression }] => assert_eq!(AstPrinter.print(expression), "2"),
+        [Stmt::Print { expression }] => assert_eq!(print_expr(&statements, expression), "2"),
         _ => panic!("expected the parser to recover after return outside a function"),
     }
 }
@@ -758,9 +772,9 @@ fn synchronizes_to_while_statement_after_error() {
 
     match statements.as_slice() {
         [Stmt::While { condition, body }] => {
-            assert_eq!(AstPrinter.print(condition), "true");
+            assert_eq!(print_expr(&statements, condition), "true");
             match body.as_ref() {
-                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "2"),
+                Stmt::Print { expression } => assert_eq!(print_expr(&statements, expression), "2"),
                 _ => panic!("expected a print statement in the recovered while body"),
             }
         }
@@ -792,9 +806,9 @@ fn synchronizes_to_for_statement_after_error() {
 
     match statements.as_slice() {
         [Stmt::While { condition, body }] => {
-            assert_eq!(AstPrinter.print(condition), "true");
+            assert_eq!(print_expr(&statements, condition), "true");
             match body.as_ref() {
-                Stmt::Print { expression } => assert_eq!(AstPrinter.print(expression), "2"),
+                Stmt::Print { expression } => assert_eq!(print_expr(&statements, expression), "2"),
                 _ => panic!("expected a print statement in the recovered for body"),
             }
         }
@@ -850,8 +864,8 @@ fn reports_invalid_assignment_target_and_recovers() {
                 expression: printed,
             },
         ] => {
-            assert_eq!(AstPrinter.print(expression), "(+ a b)");
-            assert_eq!(AstPrinter.print(printed), "1");
+            assert_eq!(print_expr(&statements, expression), "(+ a b)");
+            assert_eq!(print_expr(&statements, printed), "1");
         }
         _ => panic!("expected the parser to continue after an invalid assignment target"),
     }
@@ -865,7 +879,7 @@ fn keeps_valid_statements_before_and_after_an_invalid_one() {
     let printed = statements
         .iter()
         .map(|stmt| match stmt {
-            Stmt::Print { expression } => AstPrinter.print(expression),
+            Stmt::Print { expression } => print_expr(&statements, expression),
             _ => panic!("expected only print statements"),
         })
         .collect::<Vec<_>>();
@@ -881,7 +895,7 @@ fn synchronizes_to_next_print_after_missing_semicolon() {
     let printed = statements
         .iter()
         .map(|stmt| match stmt {
-            Stmt::Print { expression } => AstPrinter.print(expression),
+            Stmt::Print { expression } => print_expr(&statements, expression),
             _ => panic!("expected only print statements"),
         })
         .collect::<Vec<_>>();
@@ -897,7 +911,7 @@ fn synchronizes_after_missing_right_paren() {
     let printed = statements
         .iter()
         .map(|stmt| match stmt {
-            Stmt::Print { expression } => AstPrinter.print(expression),
+            Stmt::Print { expression } => print_expr(&statements, expression),
             _ => panic!("expected only print statements"),
         })
         .collect::<Vec<_>>();
@@ -915,7 +929,7 @@ fn synchronizes_to_next_expression_statement_after_missing_semicolon() {
         _ => panic!("expected recovery to the next expression statement"),
     };
 
-    assert_eq!(AstPrinter.print(expr), "2");
+    assert_eq!(print_expr(&statements, expr), "2");
 }
 
 #[test]
@@ -968,7 +982,7 @@ fn synchronizes_within_block_without_skipping_the_closing_brace() {
             Stmt::Print { expression },
         ] => {
             assert!(block_statements.is_empty());
-            assert_eq!(AstPrinter.print(expression), "2");
+            assert_eq!(print_expr(&statements, expression), "2");
         }
         _ => panic!("expected recovery to preserve the enclosing block boundary"),
     }
@@ -981,7 +995,7 @@ fn parse_expression_to_string(source: &str) -> String {
         _ => panic!("expected a single expression statement"),
     };
 
-    AstPrinter.print(expr)
+    print_expr(&statements, expr)
 }
 
 fn parse_print_to_string(source: &str) -> String {
@@ -991,7 +1005,7 @@ fn parse_print_to_string(source: &str) -> String {
         _ => panic!("expected a single print statement"),
     };
 
-    AstPrinter.print(expr)
+    print_expr(&statements, expr)
 }
 
 fn assert_parse_error_consumes_to_end(source: &str) {
@@ -1004,7 +1018,34 @@ fn recover_to_expression_statement_string(source: &str) -> String {
     let statements = parse_statements(source);
 
     match statements.as_slice() {
-        [Stmt::Expression { expression }] => AstPrinter.print(expression),
+        [Stmt::Expression { expression }] => print_expr(&statements, expression),
         _ => panic!("expected recovery to a single expression statement"),
     }
+}
+
+trait ParsedPrintable {
+    fn as_expr<'a>(&'a self, statements: &'a crate::parser::ParsedProgram)
+    -> &'a crate::expr::Expr;
+}
+
+impl ParsedPrintable for crate::expr::Expr {
+    fn as_expr<'a>(
+        &'a self,
+        _statements: &'a crate::parser::ParsedProgram,
+    ) -> &'a crate::expr::Expr {
+        self
+    }
+}
+
+impl ParsedPrintable for crate::expr::ExprRef {
+    fn as_expr<'a>(
+        &'a self,
+        statements: &'a crate::parser::ParsedProgram,
+    ) -> &'a crate::expr::Expr {
+        statements.expr_arena().get(*self)
+    }
+}
+
+fn print_expr(statements: &crate::parser::ParsedProgram, expr: &impl ParsedPrintable) -> String {
+    AstPrinter.print(expr.as_expr(statements), statements.expr_arena())
 }

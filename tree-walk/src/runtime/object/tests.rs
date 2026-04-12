@@ -2,23 +2,23 @@ use std::rc::Rc;
 
 use crate::{
     interpreter::Interpreter,
+    parser::Parser,
     runtime::Value,
-    stmt::Stmt,
     test_support::{parse_statements, resolve_statements},
 };
 
 #[test]
 fn instances_share_the_declared_class_handle() {
-    let statements = parse_statements("class Bagel {} var bagel = Bagel(); Bagel; bagel;");
     let interpreter = Interpreter::new();
-    resolve_statements(&interpreter, &statements);
 
+    let setup = parse_statements("class Bagel {} var bagel = Bagel();");
+    resolve_statements(&interpreter, &setup);
     interpreter
-        .interpret(&statements[..2])
+        .interpret(&setup)
         .expect("class declaration and instance creation should succeed");
 
-    let class = evaluate_expression_statement(&interpreter, &statements[2]);
-    let instance = evaluate_expression_statement(&interpreter, &statements[3]);
+    let class = evaluate_expression(&interpreter, "Bagel");
+    let instance = evaluate_expression(&interpreter, "bagel");
 
     let Value::Class(class) = class else {
         panic!("expected the class expression to evaluate to a class");
@@ -33,11 +33,13 @@ fn instances_share_the_declared_class_handle() {
     );
 }
 
-fn evaluate_expression_statement(interpreter: &Interpreter, stmt: &Stmt) -> Value {
-    match stmt {
-        Stmt::Expression { expression } => interpreter
-            .interpret_expression(expression)
-            .expect("test expression should evaluate successfully"),
-        _ => panic!("expected an expression statement"),
-    }
+fn evaluate_expression(interpreter: &Interpreter, source: &str) -> Value {
+    let mut parser = Parser::new(source);
+    let expression = parser
+        .parse_expression_input()
+        .expect("test expression should parse");
+
+    interpreter
+        .interpret_expression(&expression)
+        .expect("test expression should evaluate successfully")
 }

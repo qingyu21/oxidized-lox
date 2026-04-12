@@ -7,6 +7,7 @@ use super::Interpreter;
 use crate::environment::Environment;
 use crate::expr::Expr;
 use crate::expr::ExprArena;
+use crate::parser::ParsedProgram;
 use crate::runtime::{RuntimeError, Value};
 use crate::stmt::Stmt;
 use crate::test_support::{parse_statements, resolve_statements};
@@ -16,6 +17,25 @@ use crate::token::{Literal, Token, TokenType};
 impl Interpreter {
     pub(crate) fn resolved_bindings_len(&self) -> usize {
         self.locals.borrow().len()
+    }
+
+    fn execute_in(
+        &self,
+        statements: &ParsedProgram,
+        stmt: &Stmt,
+    ) -> Result<super::ControlFlow, RuntimeError> {
+        self.execute(stmt, statements.expr_arena())
+    }
+
+    fn execute_all_in(
+        &self,
+        statements: &ParsedProgram,
+    ) -> Result<super::ControlFlow, RuntimeError> {
+        self.execute_all(statements.as_slice(), statements.expr_arena())
+    }
+
+    fn evaluate_in(&self, statements: &ParsedProgram, expr: &Expr) -> Result<Value, RuntimeError> {
+        self.evaluate(expr, statements.expr_arena())
     }
 }
 
@@ -123,11 +143,11 @@ fn declares_and_calls_a_user_defined_function() {
     let statements = parse_statements("fun noop() {} noop();");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let value = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("declared function should be callable"),
         _ => panic!("expected a function call expression statement"),
     };
@@ -142,13 +162,13 @@ fn user_defined_function_binds_parameters_and_closure() {
     );
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
-    assert!(interpreter.execute(&statements[2]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[2]).is_ok());
 
     let value = match &statements[3] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("function call should update the captured outer variable"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -161,11 +181,11 @@ fn displays_user_defined_function_values_with_their_name() {
     let statements = parse_statements("fun greet() {} greet;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let value = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("function name should resolve to the callable value"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -303,10 +323,10 @@ fn subclass_declaration_requires_a_class_superclass() {
     let interpreter = Interpreter::new();
     resolve_statements(&interpreter, &statements);
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let error = interpreter
-        .execute(&statements[1])
+        .execute_in(&statements, &statements[1])
         .expect_err("subclass declarations should reject non-class superclasses");
 
     assert_eq!(error.message, "Superclass must be a class.");
@@ -318,11 +338,11 @@ fn class_calls_have_zero_arity_before_initializers_exist() {
     let interpreter = Interpreter::new();
     resolve_statements(&interpreter, &statements);
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let error = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect_err("class calls should reject arguments before constructors exist"),
         _ => panic!("expected a class call expression statement"),
     };
@@ -352,11 +372,11 @@ fn class_call_arity_matches_initializer_parameters() {
     let interpreter = Interpreter::new();
     resolve_statements(&interpreter, &statements);
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let error = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect_err("class calls should use init() arity once initializers exist"),
         _ => panic!("expected a class call expression statement"),
     };
@@ -586,11 +606,11 @@ fn reports_runtime_error_for_missing_instance_property() {
     let interpreter = Interpreter::new();
     resolve_statements(&interpreter, &statements);
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let error = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect_err("reading a missing property should fail"),
         _ => panic!("expected a property access expression statement"),
     };
@@ -741,12 +761,12 @@ fn executes_if_then_branch_when_condition_is_truthy() {
         parse_statements("var beverage = \"before\";\nif (true) beverage = \"after\";\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("truthy if branch should update the variable"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -761,12 +781,12 @@ fn executes_if_else_branch_when_condition_is_falsey() {
     );
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("falsey if branch should execute the else branch"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -780,12 +800,12 @@ fn executes_while_loop_until_condition_becomes_false() {
         parse_statements("var count = 0;\nwhile (count < 3) count = count + 1;\ncount;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("while loop should keep updating the variable"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -799,7 +819,7 @@ fn skips_while_body_when_condition_is_falsey() {
     let interpreter = Interpreter::new();
 
     assert!(
-        interpreter.execute(&statements[0]).is_ok(),
+        interpreter.execute_in(&statements, &statements[0]).is_ok(),
         "false condition should skip the erroneous while body"
     );
 }
@@ -811,12 +831,12 @@ fn break_exits_the_nearest_enclosing_loop() {
     );
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("break should exit the loop after the nested if/block"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -831,12 +851,12 @@ fn executes_for_loop_desugared_by_the_parser() {
     );
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("for loop should update the outer variable through each iteration"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -851,12 +871,12 @@ fn break_in_a_for_loop_skips_the_increment_clause() {
     );
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("breaking from a for loop should bypass the increment clause"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -869,11 +889,11 @@ fn for_initializer_is_scoped_to_the_loop() {
     let statements = parse_statements("for (var i = 0; i < 1; i = i + 1) print i;\ni;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let error = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect_err("for initializer variable should not leak outside the loop"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -888,12 +908,12 @@ fn for_loop_without_initializer_reuses_existing_binding() {
     );
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("for loop without initializer should keep using the existing variable"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -907,7 +927,7 @@ fn skips_unselected_if_branch_runtime_errors() {
     let interpreter = Interpreter::new();
 
     assert!(
-        interpreter.execute(&statements[0]).is_ok(),
+        interpreter.execute_in(&statements, &statements[0]).is_ok(),
         "false condition should skip the erroneous then branch"
     );
 }
@@ -918,7 +938,7 @@ fn skips_unselected_else_branch_runtime_errors() {
     let interpreter = Interpreter::new();
 
     assert!(
-        interpreter.execute(&statements[0]).is_ok(),
+        interpreter.execute_in(&statements, &statements[0]).is_ok(),
         "true condition should skip the erroneous else branch"
     );
 }
@@ -986,11 +1006,11 @@ fn executes_var_declaration_and_reads_back_the_value() {
     let statements = parse_statements("var beverage = \"tea\";\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let value = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("variable lookup should succeed after declaration"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1003,9 +1023,9 @@ fn block_can_read_a_variable_from_its_enclosing_scope() {
     let statements = parse_statements("var beverage = \"tea\";\n{ beverage; }");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
     assert!(
-        interpreter.execute(&statements[1]).is_ok(),
+        interpreter.execute_in(&statements, &statements[1]).is_ok(),
         "inner block should be able to read the outer variable"
     );
 }
@@ -1015,11 +1035,11 @@ fn initializes_variables_to_nil_when_no_initializer_is_present() {
     let statements = parse_statements("var beverage;\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let value = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("variable lookup should succeed after declaration"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1033,12 +1053,12 @@ fn redeclaring_a_global_variable_overwrites_the_previous_value() {
         parse_statements("var beverage = \"before\";\nvar beverage = \"after\";\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("variable lookup should use the most recent binding"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1052,12 +1072,12 @@ fn block_assignment_updates_an_enclosing_variable() {
         parse_statements("var beverage = \"before\";\n{ beverage = \"after\"; }\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("assignment in an inner block should update the outer binding"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1071,12 +1091,12 @@ fn block_local_variable_shadows_outer_variable_without_leaking() {
         parse_statements("var beverage = \"outer\";\n{ var beverage = \"inner\"; }\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
-    assert!(interpreter.execute(&statements[1]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[1]).is_ok());
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("outer variable should still be visible after the block ends"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1089,11 +1109,11 @@ fn block_local_variable_is_not_visible_after_the_block_ends() {
     let statements = parse_statements("{ var beverage = \"tea\"; }\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let error = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect_err("block-local variables should not outlive their block"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1109,17 +1129,17 @@ fn block_runtime_errors_restore_the_enclosing_environment() {
     let interpreter = Interpreter::new();
     resolve_statements(&interpreter, &statements);
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let error = interpreter
-        .execute(&statements[1])
+        .execute_in(&statements, &statements[1])
         .expect_err("runtime errors inside blocks should not leak the block environment");
 
     assert_eq!(error.message, "Undefined variable 'missing'.");
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("outer environment should still be active after the block fails"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1133,13 +1153,13 @@ fn block_panics_restore_the_enclosing_environment() {
     let lookup = parse_statements("beverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&setup[0]).is_ok());
+    assert!(interpreter.execute_in(&setup, &setup[0]).is_ok());
 
     let block_environment = Environment::new_enclosed_ref(interpreter.current_environment());
-    let (_invalid_exprs, invalid) = invalid_statement(2);
+    let (invalid_exprs, invalid) = invalid_statement(2);
     let panic_result = catch_unwind(AssertUnwindSafe(|| {
         interpreter
-            .execute_block(&[invalid], block_environment)
+            .execute_block(&[invalid], invalid_exprs.as_ref(), block_environment)
             .expect("invalid test statement should panic before returning");
     }));
 
@@ -1147,7 +1167,7 @@ fn block_panics_restore_the_enclosing_environment() {
 
     let value = match &lookup[0] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&lookup, expression)
             .expect("outer environment should still be active after the block panics"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1161,11 +1181,11 @@ fn assignment_updates_an_existing_variable_and_returns_the_new_value() {
         parse_statements("var beverage = \"before\";\nbeverage = \"after\";\nbeverage;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute(&statements[0]).is_ok());
+    assert!(interpreter.execute_in(&statements, &statements[0]).is_ok());
 
     let assigned = match &statements[1] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("assignment should succeed for an existing variable"),
         _ => panic!("expected an assignment expression statement"),
     };
@@ -1174,7 +1194,7 @@ fn assignment_updates_an_existing_variable_and_returns_the_new_value() {
 
     let value = match &statements[2] {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("variable lookup should see the assigned value"),
         _ => panic!("expected a variable expression statement"),
     };
@@ -1201,23 +1221,30 @@ fn executes_multiple_statements_in_order() {
     let statements = parse_statements("1 + 2;\nprint 3;");
     let interpreter = Interpreter::new();
 
-    assert!(interpreter.execute_all(&statements).is_ok());
+    assert!(interpreter.execute_all_in(&statements).is_ok());
 }
 
 #[test]
 fn stops_executing_after_the_first_runtime_error() {
-    let statements = parse_statements("1 + 2;\n1 / 0;");
-    let (_invalid_exprs, invalid) = invalid_statement(3);
-    let mut execution_order = statements.as_slice().to_vec();
-    execution_order.push(invalid);
+    let statements = parse_statements("var marker = 0;\n1 / 0;\nmarker = 1;");
+    let lookup = parse_statements("marker;");
     let interpreter = Interpreter::new();
 
     let error = interpreter
-        .execute_all(&execution_order)
+        .execute_all_in(&statements)
         .expect_err("execution should stop at division by zero");
 
     assert_eq!(error.message, "Division by zero.");
     assert_eq!(error.token.line, 2);
+
+    let marker = match &lookup[0] {
+        Stmt::Expression { expression } => interpreter
+            .evaluate_in(&lookup, expression)
+            .expect("the first statement should still have initialized marker"),
+        _ => panic!("expected a variable expression statement"),
+    };
+
+    assert_eq!(marker, Value::Number(0.0));
 }
 
 fn interpret(source: &str) -> Value {
@@ -1235,13 +1262,13 @@ fn interpret_script_result(source: &str) -> Value {
 
     for statement in prefix {
         interpreter
-            .execute(statement)
+            .execute_in(&statements, statement)
             .expect("setup statements should execute successfully");
     }
 
     match last {
         Stmt::Expression { expression } => interpreter
-            .evaluate(expression)
+            .evaluate_in(&statements, expression)
             .expect("final expression should evaluate successfully"),
         _ => panic!("expected the final statement to be an expression statement"),
     }
@@ -1257,7 +1284,7 @@ fn evaluate_result(source: &str) -> Result<Value, RuntimeError> {
         _ => panic!("expected a single expression statement"),
     };
 
-    interpreter.evaluate(expr)
+    interpreter.evaluate_in(&statements, expr)
 }
 
 fn invalid_statement(line: u32) -> (Rc<ExprArena>, Stmt) {

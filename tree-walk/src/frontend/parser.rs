@@ -14,12 +14,16 @@ struct ParseError;
 const MAX_ARITY: usize = 255;
 
 pub(crate) struct ParsedProgram {
-    _exprs: ExprArenaRef,
+    // Owns the arena that backs every nested `ExprRef` inside this statement
+    // list, so later resolver/interpreter passes can traverse safely.
+    expr_arena: ExprArenaRef,
     statements: Vec<Stmt>,
 }
 
 pub(crate) struct ParsedExpression {
-    _exprs: ExprArenaRef,
+    // Owns the arena that backs every nested `ExprRef` inside this root
+    // expression, so later passes can resolve child handles safely.
+    expr_arena: ExprArenaRef,
     expression: Expr,
 }
 
@@ -335,13 +339,17 @@ impl Parser {
 impl ParsedProgram {
     fn new(exprs: ExprArenaRef, statements: Vec<Stmt>) -> Self {
         Self {
-            _exprs: exprs,
+            expr_arena: exprs,
             statements,
         }
     }
 
     pub(crate) fn as_slice(&self) -> &[Stmt] {
         &self.statements
+    }
+
+    pub(crate) fn expr_arena(&self) -> &crate::expr::ExprArena {
+        self.expr_arena.as_ref()
     }
 }
 
@@ -356,9 +364,17 @@ impl Deref for ParsedProgram {
 impl ParsedExpression {
     fn new(exprs: ExprArenaRef, expression: Expr) -> Self {
         Self {
-            _exprs: exprs,
+            expr_arena: exprs,
             expression,
         }
+    }
+
+    pub(crate) fn as_expr(&self) -> &Expr {
+        &self.expression
+    }
+
+    pub(crate) fn expr_arena(&self) -> &crate::expr::ExprArena {
+        self.expr_arena.as_ref()
     }
 }
 
@@ -397,7 +413,7 @@ fn attach_exprs_to_statement(exprs: &ExprArenaRef, statement: &mut Stmt) {
 }
 
 fn attach_exprs_to_function(exprs: &ExprArenaRef, function: &mut FunctionDecl) {
-    function.exprs = Some(exprs.clone());
+    function.expr_arena = Some(exprs.clone());
     attach_exprs_to_statements(exprs, &mut function.body);
 }
 
@@ -405,7 +421,7 @@ impl Deref for ParsedExpression {
     type Target = Expr;
 
     fn deref(&self) -> &Self::Target {
-        &self.expression
+        self.as_expr()
     }
 }
 

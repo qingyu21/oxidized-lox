@@ -6,7 +6,9 @@ pub(crate) struct FunctionDecl {
     pub(crate) name: Token,
     pub(crate) params: Vec<Token>,
     pub(crate) body: Vec<Stmt>,
-    pub(crate) exprs: Option<ExprArenaRef>,
+    // Keeps the shared expression arena alive so nested `ExprRef` handles in
+    // this function body can always be resolved safely.
+    pub(crate) expr_arena: Option<ExprArenaRef>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,8 +56,20 @@ impl FunctionDecl {
             name,
             params,
             body,
-            exprs: None,
+            expr_arena: None,
         }
+    }
+
+    pub(crate) fn expr_arena(&self) -> &crate::expr::ExprArena {
+        self.expr_arena
+            .as_deref()
+            .expect("function declarations should carry their expression arena")
+    }
+
+    pub(crate) fn expr_arena_ref(&self) -> ExprArenaRef {
+        self.expr_arena
+            .clone()
+            .expect("function declarations should carry their expression arena")
     }
 }
 
