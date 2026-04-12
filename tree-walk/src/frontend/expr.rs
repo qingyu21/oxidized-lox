@@ -1,7 +1,4 @@
-use std::{
-    cell::Cell,
-    rc::Rc,
-};
+use std::{cell::Cell, rc::Rc};
 
 use crate::token::{Literal, Token};
 
