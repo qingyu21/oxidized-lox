@@ -3,6 +3,14 @@ use std::cell::Cell;
 use crate::token::{Token, TokenType};
 
 thread_local! {
+    // Front-end and resolver passes currently report diagnostics through
+    // thread-local flags plus stderr output, mirroring the book's
+    // process-global `hadError` style while still isolating parallel tests and
+    // future per-thread entry points. This keeps scanner/parser APIs lean for
+    // now, but it also means diagnostics are an implicit side effect rather
+    // than an injected dependency. If the project later needs nested parsing
+    // attempts or shared front-end components across runtimes, a structured
+    // diagnostic sink would be the natural next step.
     // Diagnostics are tracked per thread so tests and future parallel entry
     // points do not leak syntax/runtime flags into one another.
     static HAD_ERROR: Cell<bool> = const { Cell::new(false) };

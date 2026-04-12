@@ -238,6 +238,11 @@ fn parse_program(source: impl Into<String>) -> Option<ParsedProgram> {
     let mut parser = Parser::new(source);
     let statements = parser.parse();
 
+    // The scanner/parser currently surface syntax errors through the
+    // thread-local diagnostics module instead of returning a structured
+    // collector. That keeps the front-end APIs compact for this tree-walk
+    // interpreter, while leaving room for a future refactor toward an
+    // injected diagnostic sink if parser/scanner reuse becomes a priority.
     if stop_after_error() {
         None
     } else {
