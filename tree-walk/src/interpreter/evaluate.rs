@@ -470,6 +470,16 @@ impl Interpreter {
         expr: &Expr,
         expr_arena: &ExprArena,
     ) -> Result<PlusValue, RuntimeError> {
+        // Fold nested `+` subtrees into `PlusValue` segments so string-heavy
+        // chains can postpone allocation until the final materialization step.
+        //
+        // This still preserves the parsed tree shape and left-to-right
+        // evaluation order: we recurse through the existing left and right
+        // children exactly as they appear in the AST, rather than flattening
+        // across grouping boundaries. The optimization is only sound because
+        // the current `+` rules remain equivalent under that tree-preserving
+        // fold. If the language later adds richer concatenation behavior,
+        // revisit this path together with its grouping-sensitive tests.
         if let Expr::Binary {
             left,
             operator,
@@ -511,14 +521,12 @@ impl Interpreter {
         }
     }
 
-    // Divide two numeric operands and reject division by zero.
+    // Divide two numeric operands using the host `f64` / IEEE 754 rules.
+    // This matches the book's Java-style numeric behavior, so non-zero / 0.0
+    // yields signed infinity and 0.0 / 0.0 yields NaN instead of a runtime
+    // error.
     fn apply_divide(operator: &Token, left: &Value, right: &Value) -> Result<Value, RuntimeError> {
         let (left, right) = Self::expect_number_operands(operator, left, right)?;
-
-        if right == 0.0 {
-            return Err(RuntimeError::new(operator.clone(), "Division by zero."));
-        }
-
         Ok(Value::Number(left / right))
     }
 

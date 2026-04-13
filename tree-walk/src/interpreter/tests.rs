@@ -73,6 +73,26 @@ fn concatenates_longer_plus_chains_without_changing_results() {
 }
 
 #[test]
+fn plus_respects_grouping_when_a_right_subtree_stringifies_early() {
+    assert_eq!(interpret("1 + (2 + \"3\")"), Value::String("123".into()));
+}
+
+#[test]
+fn plus_keeps_grouping_sensitive_errors_and_success_cases_distinct() {
+    let error = evaluate_result("true + false + \"x\"")
+        .expect_err("left-grouped boolean addition should still fail before any stringification");
+    assert_eq!(
+        error.message,
+        "Operands must be two numbers or at least one string."
+    );
+
+    assert_eq!(
+        interpret("true + (false + \"x\")"),
+        Value::String("truefalsex".into())
+    );
+}
+
+#[test]
 fn evaluates_truthiness_for_bang() {
     assert_eq!(interpret("!nil"), Value::Bool(true));
     assert_eq!(interpret("!0"), Value::Bool(false));
@@ -141,12 +161,12 @@ fn evaluates_logical_or_and_and() {
 
 #[test]
 fn logical_and_short_circuits_unselected_right_operand() {
-    assert_eq!(interpret("false and 1 / 0"), Value::Bool(false));
+    assert_eq!(interpret("false and missing"), Value::Bool(false));
 }
 
 #[test]
 fn logical_or_short_circuits_unselected_right_operand() {
-    assert_eq!(interpret("true or 1 / 0"), Value::Bool(true));
+    assert_eq!(interpret("true or missing"), Value::Bool(true));
 }
 
 #[test]
@@ -168,9 +188,9 @@ fn reports_runtime_error_for_non_callable_callee() {
 
 #[test]
 fn call_evaluates_arguments_before_arity_checks() {
-    let error = evaluate_result("clock(1 / 0)")
+    let error = evaluate_result("clock(missing)")
         .expect_err("arguments should be evaluated before the call is attempted");
-    assert_eq!(error.message, "Division by zero.");
+    assert_eq!(error.message, "Undefined variable 'missing'.");
 }
 
 #[test]
@@ -992,18 +1012,18 @@ fn evaluates_comma_expression() {
 
 #[test]
 fn conditional_skips_unselected_else_branch_errors() {
-    assert_eq!(interpret("true ? 1 : 1 / 0"), Value::Number(1.0));
+    assert_eq!(interpret("true ? 1 : missing"), Value::Number(1.0));
 }
 
 #[test]
 fn conditional_skips_unselected_then_branch_errors() {
-    assert_eq!(interpret("false ? 1 / 0 : 2"), Value::Number(2.0));
+    assert_eq!(interpret("false ? missing : 2"), Value::Number(2.0));
 }
 
 #[test]
 fn comma_still_evaluates_left_operand() {
-    let error = evaluate_result("1 / 0, 2").expect_err("comma should evaluate its left operand");
-    assert_eq!(error.message, "Division by zero.");
+    let error = evaluate_result("missing, 2").expect_err("comma should evaluate its left operand");
+    assert_eq!(error.message, "Undefined variable 'missing'.");
 }
 
 #[test]
@@ -1038,9 +1058,39 @@ fn reports_runtime_error_for_non_numeric_minus() {
 }
 
 #[test]
-fn reports_runtime_error_for_division_by_zero() {
-    let error = evaluate_result("1 / 0").expect_err("division by zero should fail");
-    assert_eq!(error.message, "Division by zero.");
+fn division_by_zero_yields_positive_infinity() {
+    let value = evaluate_result("1 / 0").expect("division should follow IEEE 754 semantics");
+
+    match value {
+        Value::Number(value) => assert!(
+            value.is_infinite() && value.is_sign_positive(),
+            "expected positive infinity from 1 / 0, got {value}"
+        ),
+        other => panic!("expected a numeric value, got {other:?}"),
+    }
+}
+
+#[test]
+fn negative_division_by_zero_yields_negative_infinity() {
+    let value = evaluate_result("-1 / 0").expect("division should follow IEEE 754 semantics");
+
+    match value {
+        Value::Number(value) => assert!(
+            value.is_infinite() && value.is_sign_negative(),
+            "expected negative infinity from -1 / 0, got {value}"
+        ),
+        other => panic!("expected a numeric value, got {other:?}"),
+    }
+}
+
+#[test]
+fn zero_divided_by_zero_yields_nan() {
+    let value = evaluate_result("0 / 0").expect("division should follow IEEE 754 semantics");
+
+    match value {
+        Value::Number(value) => assert!(value.is_nan(), "expected NaN from 0 / 0, got {value}"),
+        other => panic!("expected a numeric value, got {other:?}"),
+    }
 }
 
 #[test]
@@ -1268,15 +1318,15 @@ fn executes_multiple_statements_in_order() {
 
 #[test]
 fn stops_executing_after_the_first_runtime_error() {
-    let statements = parse_statements("var marker = 0;\n1 / 0;\nmarker = 1;");
+    let statements = parse_statements("var marker = 0;\nmissing;\nmarker = 1;");
     let lookup = parse_statements("marker;");
     let interpreter = Interpreter::new();
 
     let error = interpreter
         .execute_all_in(&statements)
-        .expect_err("execution should stop at division by zero");
+        .expect_err("execution should stop at the first runtime error");
 
-    assert_eq!(error.message, "Division by zero.");
+    assert_eq!(error.message, "Undefined variable 'missing'.");
     assert_eq!(error.token.line, 2);
 
     let marker = match &lookup[0] {

@@ -16,7 +16,7 @@ fn run_marks_syntax_errors_without_runtime_errors() {
 
 #[test]
 fn run_marks_runtime_errors_without_syntax_errors() {
-    assert_run_runtime_error("1 / 0;");
+    assert_run_runtime_error("missing;");
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn repl_style_runs_share_the_same_interpreter_state() {
 
 #[test]
 fn repl_evaluates_bare_expressions() {
-    assert_repl_runtime_error("1 / 0");
+    assert_repl_runtime_error("missing");
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn repl_clears_resolved_bindings_after_each_input() {
 
 #[test]
 fn repl_keeps_expression_statements_as_statements() {
-    assert_repl_runtime_error("1 / 0;");
+    assert_repl_runtime_error("missing;");
 }
 
 #[test]
@@ -298,11 +298,11 @@ fn repl_waits_to_run_bare_expressions_until_they_are_complete() {
     with_clean_error_state(|| {
         let mut pending = String::new();
 
-        run_repl_line(&mut pending, "1 /");
-        assert_eq!(pending, "1 /");
+        run_repl_line(&mut pending, "missing +");
+        assert_eq!(pending, "missing +");
         assert_flags(false, false);
 
-        run_repl_line(&mut pending, "0");
+        run_repl_line(&mut pending, "1");
         assert!(pending.is_empty());
         assert_flags(false, true);
     });
