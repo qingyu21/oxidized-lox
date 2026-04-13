@@ -12,7 +12,8 @@ thread_local! {
 fn next_token_id() -> u64 {
     NEXT_TOKEN_ID.with(|next_id| {
         let id = next_id.get();
-        next_id.set(id + 1);
+        let next = id.checked_add(1).expect("token id overflow");
+        next_id.set(next);
         id
     })
 }
@@ -81,6 +82,9 @@ pub(crate) enum Literal {
 
 #[derive(Clone)]
 pub(crate) struct Lexeme {
+    // Tokens keep sharing one owned source buffer and refer back into it by
+    // byte span, so scanning does not allocate a fresh lexeme string for
+    // every token.
     source: Rc<String>,
     span: Range<usize>,
 }

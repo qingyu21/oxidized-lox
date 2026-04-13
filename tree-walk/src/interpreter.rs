@@ -33,6 +33,8 @@ pub(crate) struct Interpreter {
     // Fixed handle to the outermost global scope so resolved global lookups
     // do not depend on whatever the current environment happens to be.
     globals: EnvironmentRef,
+    // This outer RefCell swaps which environment handle is "current" as block
+    // and call execution enter and leave nested scopes.
     environment: RefCell<EnvironmentRef>,
     // Maps a variable-use token id to the lexical binding chosen by the
     // resolver so local reads and writes can jump straight to an environment
