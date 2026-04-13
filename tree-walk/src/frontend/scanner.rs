@@ -412,6 +412,19 @@ mod tests {
     }
 
     #[test]
+    fn nested_block_comments_end_at_the_first_closing_delimiter() {
+        let tokens = scan("/* outer /* inner */ */");
+        let types = tokens.iter().map(|token| token.type_).collect::<Vec<_>>();
+
+        assert_eq!(
+            types,
+            vec![TokenType::Star, TokenType::Slash, TokenType::Eof]
+        );
+        assert_eq!(tokens[0].lexeme.as_ref(), "*");
+        assert_eq!(tokens[1].lexeme.as_ref(), "/");
+    }
+
+    #[test]
     fn peek_returns_none_at_end_of_input() {
         let scanner = Scanner::new("");
 
