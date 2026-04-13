@@ -1,6 +1,7 @@
 use crate::ast_printer::AstPrinter;
 use crate::stmt::Stmt;
 use crate::test_support::{parse_statements, parser_for};
+use std::rc::Rc;
 
 #[test]
 fn parses_binary_precedence() {
@@ -197,6 +198,40 @@ fn parses_function_declaration_with_parameters_and_body() {
             }
         }
         _ => panic!("expected a single function declaration"),
+    }
+}
+
+#[test]
+fn parsed_functions_and_methods_carry_the_program_expression_arena() {
+    let statements = parse_statements(
+        "fun top_level() { print 1; }
+         class Breakfast { cook() { print 2; } }",
+    );
+
+    match statements.as_slice() {
+        [Stmt::Function(function), Stmt::Class { methods, .. }] => {
+            let function_arena = function
+                .expr_arena
+                .as_ref()
+                .expect("top-level function should carry the parser arena");
+            assert!(
+                Rc::ptr_eq(function_arena, &statements.expr_arena),
+                "top-level functions should keep the same shared arena as the parsed program"
+            );
+
+            let [method] = methods.as_slice() else {
+                panic!("expected exactly one parsed method");
+            };
+            let method_arena = method
+                .expr_arena
+                .as_ref()
+                .expect("methods should carry the parser arena");
+            assert!(
+                Rc::ptr_eq(method_arena, &statements.expr_arena),
+                "methods should keep the same shared arena as the parsed program"
+            );
+        }
+        _ => panic!("expected one top-level function and one class declaration"),
     }
 }
 

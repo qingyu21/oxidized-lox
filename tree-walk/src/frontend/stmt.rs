@@ -6,8 +6,11 @@ pub(crate) struct FunctionDecl {
     pub(crate) name: Token,
     pub(crate) params: Vec<Token>,
     pub(crate) body: Vec<Stmt>,
-    // Keeps the shared expression arena alive so nested `ExprRef` handles in
-    // this function body can always be resolved safely.
+    // Parser construction is two-phase here: it first builds the function body
+    // while owning a mutable `ExprArena`, then `attach_exprs_to_function()`
+    // fills this handle in before the parsed program escapes the parser.
+    // Later passes rely on every parsed function carrying that shared arena so
+    // nested `ExprRef` handles in the body can always be resolved safely.
     pub(crate) expr_arena: Option<ExprArenaRef>,
 }
 
@@ -63,13 +66,13 @@ impl FunctionDecl {
     pub(crate) fn expr_arena(&self) -> &crate::expr::ExprArena {
         self.expr_arena
             .as_deref()
-            .expect("function declarations should carry their expression arena")
+            .expect("parsed function declarations should carry their expression arena")
     }
 
     pub(crate) fn expr_arena_ref(&self) -> ExprArenaRef {
         self.expr_arena
             .clone()
-            .expect("function declarations should carry their expression arena")
+            .expect("parsed function declarations should carry their expression arena")
     }
 }
 

@@ -421,6 +421,10 @@ fn attach_exprs_to_statement(exprs: &ExprArenaRef, statement: &mut Stmt) {
 }
 
 fn attach_exprs_to_function(exprs: &ExprArenaRef, function: &mut FunctionDecl) {
+    debug_assert!(
+        function.expr_arena.is_none(),
+        "parser should attach each function arena exactly once before later passes run"
+    );
     function.expr_arena = Some(exprs.clone());
     attach_exprs_to_statements(exprs, &mut function.body);
 }
