@@ -1,5 +1,6 @@
 pub(crate) mod chunk;
 pub(crate) mod debug;
+pub(crate) mod value;
 
 /// Returns the current implementation status of the bytecode VM crate.
 pub fn status() -> &'static str {
