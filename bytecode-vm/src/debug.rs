@@ -16,6 +16,7 @@ pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
 
     match OpCode::try_from(instruction) {
         Ok(opcode @ OpCode::Constant) => constant_instruction(opcode, chunk, offset),
+        Ok(opcode @ OpCode::ConstantLong) => constant_long_instruction(opcode, chunk, offset),
         Ok(opcode @ OpCode::Return) => simple_instruction(opcode, offset),
         Err(unknown) => {
             println!("Unknown opcode {unknown}");
@@ -56,6 +57,35 @@ fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
     offset + 2
 }
 
+/// Disassembles an instruction encoded as opcode + 24-bit constant index.
+fn constant_long_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
+    let Some((&low, tail)) = chunk
+        .code()
+        .get(offset + 1)
+        .zip(chunk.code().get(offset + 2..))
+    else {
+        println!("{:<16} <missing constant index>", opcode.mnemonic());
+        return offset + 1;
+    };
+
+    let [mid, high, ..] = tail else {
+        println!("{:<16} <missing constant index>", opcode.mnemonic());
+        return offset + 1;
+    };
+
+    let constant_index = (low as usize) | ((*mid as usize) << 8) | ((*high as usize) << 16);
+
+    match chunk.constants().get(constant_index) {
+        Some(value) => println!("{:<16} {constant_index:>4} '{value}'", opcode.mnemonic()),
+        None => println!(
+            "{:<16} {constant_index:>4} <invalid constant index>",
+            opcode.mnemonic()
+        ),
+    }
+
+    offset + 4
+}
+
 fn simple_instruction(opcode: OpCode, offset: usize) -> usize {
     println!("{}", opcode.mnemonic());
     offset + 1
@@ -94,9 +124,31 @@ mod tests {
     }
 
     #[test]
+    fn constant_long_instruction_advances_by_opcode_and_three_byte_operand() {
+        let mut chunk = Chunk::new();
+        for index in 0..=u8::MAX {
+            chunk.add_constant(index as f64);
+        }
+
+        chunk.write_constant(256.0, 7).unwrap();
+
+        assert_eq!(disassemble_instruction(&chunk, 0), 4);
+    }
+
+    #[test]
     fn malformed_constant_without_operand_advances_safely() {
         let mut chunk = Chunk::new();
         chunk.write_opcode(OpCode::Constant, 9);
+
+        assert_eq!(disassemble_instruction(&chunk, 0), 1);
+    }
+
+    #[test]
+    fn malformed_constant_long_without_full_operand_advances_safely() {
+        let mut chunk = Chunk::new();
+        chunk.write_opcode(OpCode::ConstantLong, 10);
+        chunk.write_byte(1, 10);
+        chunk.write_byte(2, 10);
 
         assert_eq!(disassemble_instruction(&chunk, 0), 1);
     }
@@ -108,5 +160,16 @@ mod tests {
         chunk.write_byte(7, 11);
 
         assert_eq!(disassemble_instruction(&chunk, 0), 2);
+    }
+
+    #[test]
+    fn constant_long_with_invalid_index_does_not_panic() {
+        let mut chunk = Chunk::new();
+        chunk.write_opcode(OpCode::ConstantLong, 12);
+        chunk.write_byte(7, 12);
+        chunk.write_byte(0, 12);
+        chunk.write_byte(0, 12);
+
+        assert_eq!(disassemble_instruction(&chunk, 0), 4);
     }
 }

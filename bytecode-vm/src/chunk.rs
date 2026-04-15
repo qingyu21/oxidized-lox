@@ -1,5 +1,8 @@
 use crate::value::Value;
 
+const SHORT_CONSTANT_MAX_INDEX: usize = u8::MAX as usize;
+const LONG_CONSTANT_MAX_INDEX: usize = 0xFF_FFFF;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum OpCode {
@@ -7,6 +10,11 @@ pub(crate) enum OpCode {
     /// Stack: pushes constants[constant_index].
     /// Meaning: load a literal value from the chunk's constant table.
     Constant,
+
+    /// Encoding: [OP_CONSTANT_LONG][index_low:u8][index_mid:u8][index_high:u8]
+    /// Stack: pushes constants[constant_index].
+    /// Meaning: load a literal value when the constant table index needs 24 bits.
+    ConstantLong,
 
     /// Encoding: [OP_RETURN]
     /// Stack: finishes the current chunk.
@@ -19,6 +27,7 @@ impl OpCode {
     pub(crate) fn mnemonic(self) -> &'static str {
         match self {
             Self::Constant => "OP_CONSTANT",
+            Self::ConstantLong => "OP_CONSTANT_LONG",
             Self::Return => "OP_RETURN",
         }
     }
@@ -36,18 +45,51 @@ impl TryFrom<u8> for OpCode {
     fn try_from(byte: u8) -> Result<Self, Self::Error> {
         match byte {
             value if value == u8::from(Self::Constant) => Ok(Self::Constant),
+            value if value == u8::from(Self::ConstantLong) => Ok(Self::ConstantLong),
             value if value == u8::from(Self::Return) => Ok(Self::Return),
             _ => Err(byte),
         }
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ConstantIndexTooLarge {
+    pub(crate) index: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConstantEncoding {
+    Short(u8),
+    Long([u8; 3]),
+}
+
+fn encode_constant_index(index: usize) -> Result<ConstantEncoding, ConstantIndexTooLarge> {
+    if index <= SHORT_CONSTANT_MAX_INDEX {
+        return Ok(ConstantEncoding::Short(index as u8));
+    }
+
+    if index <= LONG_CONSTANT_MAX_INDEX {
+        return Ok(ConstantEncoding::Long([
+            (index & 0xFF) as u8,
+            ((index >> 8) & 0xFF) as u8,
+            ((index >> 16) & 0xFF) as u8,
+        ]));
+    }
+
+    Err(ConstantIndexTooLarge { index })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LineRun {
+    line: usize,
+    count: usize,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Chunk {
-    // `code` and `lines` stay in lockstep: each byte in the instruction stream
-    // records the source line it came from.
     code: Vec<u8>,
-    lines: Vec<usize>,
+    // Each run stores a source line plus how many consecutive bytes came from it.
+    line_runs: Vec<LineRun>,
     constants: Vec<Value>,
 }
 
@@ -58,11 +100,40 @@ impl Chunk {
 
     pub(crate) fn write_byte(&mut self, byte: u8, line: usize) {
         self.code.push(byte);
-        self.lines.push(line);
+        match self.line_runs.last_mut() {
+            Some(run) if run.line == line => run.count += 1,
+            _ => self.line_runs.push(LineRun { line, count: 1 }),
+        }
     }
 
     pub(crate) fn write_opcode(&mut self, opcode: OpCode, line: usize) {
         self.write_byte(opcode.into(), line)
+    }
+
+    /// Adds a constant and emits the matching load instruction for its index width.
+    pub(crate) fn write_constant(
+        &mut self,
+        value: Value,
+        line: usize,
+    ) -> Result<(), ConstantIndexTooLarge> {
+        let index = self.constants.len();
+        let encoding = encode_constant_index(index)?;
+
+        self.constants.push(value);
+        match encoding {
+            ConstantEncoding::Short(index) => {
+                self.write_opcode(OpCode::Constant, line);
+                self.write_byte(index, line);
+            }
+            ConstantEncoding::Long(bytes) => {
+                self.write_opcode(OpCode::ConstantLong, line);
+                for byte in bytes {
+                    self.write_byte(byte, line);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub(crate) fn code(&self) -> &[u8] {
@@ -71,7 +142,16 @@ impl Chunk {
 
     /// Returns the source line recorded for the byte at `offset`.
     pub(crate) fn line_at(&self, offset: usize) -> Option<usize> {
-        self.lines.get(offset).copied()
+        let mut seen = 0;
+
+        for run in &self.line_runs {
+            if offset < seen + run.count {
+                return Some(run.line);
+            }
+            seen += run.count;
+        }
+
+        None
     }
 
     pub(crate) fn constants(&self) -> &[Value] {
@@ -87,7 +167,7 @@ impl Chunk {
 
 #[cfg(test)]
 mod tests {
-    use super::{Chunk, OpCode};
+    use super::{Chunk, ConstantEncoding, ConstantIndexTooLarge, OpCode, encode_constant_index};
 
     #[test]
     fn new_chunk_starts_with_no_code() {
@@ -111,6 +191,24 @@ mod tests {
     }
 
     #[test]
+    fn line_at_walks_across_compressed_line_runs() {
+        let mut chunk = Chunk::new();
+
+        chunk.write_byte(1, 10);
+        chunk.write_byte(2, 10);
+        chunk.write_byte(3, 20);
+        chunk.write_byte(4, 20);
+        chunk.write_byte(5, 30);
+
+        assert_eq!(chunk.line_at(0), Some(10));
+        assert_eq!(chunk.line_at(1), Some(10));
+        assert_eq!(chunk.line_at(2), Some(20));
+        assert_eq!(chunk.line_at(3), Some(20));
+        assert_eq!(chunk.line_at(4), Some(30));
+        assert_eq!(chunk.line_at(5), None);
+    }
+
+    #[test]
     fn add_constant_returns_the_inserted_index_and_stores_the_value() {
         let mut chunk = Chunk::new();
 
@@ -123,10 +221,67 @@ mod tests {
     }
 
     #[test]
+    fn write_constant_uses_short_instruction_with_one_byte_index() {
+        let mut chunk = Chunk::new();
+
+        chunk.write_constant(1.2, 7).unwrap();
+
+        assert_eq!(chunk.code(), &[u8::from(OpCode::Constant), 0]);
+        assert_eq!(chunk.constants(), &[1.2]);
+        assert_eq!(chunk.line_at(0), Some(7));
+        assert_eq!(chunk.line_at(1), Some(7));
+    }
+
+    #[test]
+    fn write_constant_uses_long_instruction_after_short_index_range() {
+        let mut chunk = Chunk::new();
+        for index in 0..=u8::MAX {
+            chunk.add_constant(index as f64);
+        }
+
+        chunk.write_constant(256.0, 9).unwrap();
+
+        assert_eq!(chunk.code(), &[u8::from(OpCode::ConstantLong), 0, 1, 0]);
+        assert_eq!(chunk.constants()[256], 256.0);
+        assert_eq!(chunk.line_at(0), Some(9));
+        assert_eq!(chunk.line_at(1), Some(9));
+        assert_eq!(chunk.line_at(2), Some(9));
+        assert_eq!(chunk.line_at(3), Some(9));
+    }
+
+    #[test]
+    fn encode_constant_index_rejects_indexes_that_do_not_fit_in_24_bits() {
+        assert_eq!(
+            encode_constant_index(0x1_00_00_00),
+            Err(ConstantIndexTooLarge {
+                index: 0x1_00_00_00
+            })
+        );
+    }
+
+    #[test]
+    fn encode_constant_index_switches_between_short_and_long_forms() {
+        assert_eq!(encode_constant_index(0), Ok(ConstantEncoding::Short(0)));
+        assert_eq!(encode_constant_index(255), Ok(ConstantEncoding::Short(255)));
+        assert_eq!(
+            encode_constant_index(256),
+            Ok(ConstantEncoding::Long([0, 1, 0]))
+        );
+        assert_eq!(
+            encode_constant_index(0xFF_FFFF),
+            Ok(ConstantEncoding::Long([0xFF, 0xFF, 0xFF]))
+        );
+    }
+
+    #[test]
     fn opcode_round_trips_through_its_byte_encoding() {
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::Constant)),
             Ok(OpCode::Constant)
+        );
+        assert_eq!(
+            OpCode::try_from(u8::from(OpCode::ConstantLong)),
+            Ok(OpCode::ConstantLong)
         );
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::Return)),
