@@ -1,3 +1,5 @@
+// These modules are still being wired into the executable path, so we suppress
+// dead-code noise while the VM scaffold is taking shape.
 #[allow(dead_code)]
 pub(crate) mod chunk;
 #[allow(dead_code)]
