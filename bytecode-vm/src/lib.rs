@@ -6,8 +6,10 @@ pub(crate) mod chunk;
 pub(crate) mod debug;
 #[allow(dead_code)]
 pub(crate) mod value;
+#[allow(dead_code)]
+pub(crate) mod vm;
 
 /// Returns the current implementation status of the bytecode VM crate.
 pub fn status() -> &'static str {
-    "bytecode-vm scaffold: chunk support in progress"
+    "bytecode-vm scaffold: vm execution support in progress"
 }

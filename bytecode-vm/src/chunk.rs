@@ -63,6 +63,7 @@ enum ConstantEncoding {
     Long([u8; 3]),
 }
 
+/// Chooses the most compact operand encoding that can represent `index`.
 fn encode_constant_index(index: usize) -> Result<ConstantEncoding, ConstantIndexTooLarge> {
     if index <= SHORT_CONSTANT_MAX_INDEX {
         return Ok(ConstantEncoding::Short(index as u8));
