@@ -1,4 +1,9 @@
-use crate::chunk::{Chunk, OpCode};
+use crate::{
+    chunk::{Chunk, OpCode},
+    debug::disassemble_instruction,
+};
+
+const DEBUG_TRACE_EXECUTION: bool = false;
 
 #[derive(Debug, Default)]
 pub(crate) struct Vm {
@@ -25,6 +30,10 @@ impl Vm {
 
     fn run(&mut self, chunk: &Chunk) -> InterpretResult {
         loop {
+            if DEBUG_TRACE_EXECUTION {
+                let _ = disassemble_instruction(chunk, self.ip);
+            }
+
             let Some(instruction) = self.read_byte(chunk) else {
                 return InterpretResult::InterpretRuntimeError;
             };
