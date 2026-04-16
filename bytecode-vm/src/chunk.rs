@@ -16,6 +16,11 @@ pub(crate) enum OpCode {
     /// Meaning: load a literal value when the constant table index needs 24 bits.
     ConstantLong,
 
+    /// Encoding: [OP_NEGATE]
+    /// Stack: pops one value, then pushes its arithmetic negation.
+    /// Meaning: implement unary minus for numeric values.
+    Negate,
+
     /// Encoding: [OP_RETURN]
     /// Stack: finishes the current chunk.
     /// Meaning: return from the current function or script.
@@ -28,6 +33,7 @@ impl OpCode {
         match self {
             Self::Constant => "OP_CONSTANT",
             Self::ConstantLong => "OP_CONSTANT_LONG",
+            Self::Negate => "OP_NEGATE",
             Self::Return => "OP_RETURN",
         }
     }
@@ -46,6 +52,7 @@ impl TryFrom<u8> for OpCode {
         match byte {
             value if value == u8::from(Self::Constant) => Ok(Self::Constant),
             value if value == u8::from(Self::ConstantLong) => Ok(Self::ConstantLong),
+            value if value == u8::from(Self::Negate) => Ok(Self::Negate),
             value if value == u8::from(Self::Return) => Ok(Self::Return),
             _ => Err(byte),
         }
@@ -283,6 +290,10 @@ mod tests {
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::ConstantLong)),
             Ok(OpCode::ConstantLong)
+        );
+        assert_eq!(
+            OpCode::try_from(u8::from(OpCode::Negate)),
+            Ok(OpCode::Negate)
         );
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::Return)),

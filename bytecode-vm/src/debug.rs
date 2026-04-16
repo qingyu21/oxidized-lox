@@ -21,6 +21,7 @@ pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
     match OpCode::try_from(instruction) {
         Ok(opcode @ OpCode::Constant) => constant_instruction(opcode, chunk, offset),
         Ok(opcode @ OpCode::ConstantLong) => constant_long_instruction(opcode, chunk, offset),
+        Ok(opcode @ OpCode::Negate) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Return) => simple_instruction(opcode, offset),
         Err(unknown) => {
             println!("Unknown opcode {unknown}");
@@ -106,6 +107,14 @@ mod tests {
     fn return_instruction_advances_by_one_byte() {
         let mut chunk = Chunk::new();
         chunk.write_opcode(OpCode::Return, 1);
+
+        assert_eq!(disassemble_instruction(&chunk, 0), 1);
+    }
+
+    #[test]
+    fn negate_instruction_advances_by_one_byte() {
+        let mut chunk = Chunk::new();
+        chunk.write_opcode(OpCode::Negate, 1);
 
         assert_eq!(disassemble_instruction(&chunk, 0), 1);
     }

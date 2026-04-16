@@ -63,6 +63,10 @@ impl Vm {
                     };
                     self.push(constant);
                 }
+                Ok(OpCode::Negate) => {
+                    let value = self.pop();
+                    self.push(-value);
+                }
                 Ok(OpCode::Return) => {
                     let value = self.pop();
                     print_value(value);
@@ -155,6 +159,18 @@ mod tests {
             chunk.add_constant(index as f64);
         }
         chunk.write_constant(256.0, 1).unwrap();
+        chunk.write_opcode(OpCode::Return, 1);
+
+        assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
+        assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn negate_opcode_negates_the_top_stack_value_before_return() {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new();
+        chunk.write_constant(1.2, 1).unwrap();
+        chunk.write_opcode(OpCode::Negate, 1);
         chunk.write_opcode(OpCode::Return, 1);
 
         assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
