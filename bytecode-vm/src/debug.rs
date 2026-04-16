@@ -10,7 +10,11 @@ pub(crate) fn disassemble_chunk(chunk: &Chunk, name: &str) {
 }
 
 pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
-    let instruction = chunk.code()[offset];
+    let Some(&instruction) = chunk.code().get(offset) else {
+        print_line_prefix(chunk, offset);
+        println!("<no instruction>");
+        return offset + 1;
+    };
 
     print_line_prefix(chunk, offset);
 
@@ -173,5 +177,12 @@ mod tests {
         chunk.write_byte(0, 12);
 
         assert_eq!(disassemble_instruction(&chunk, 0), 4);
+    }
+
+    #[test]
+    fn out_of_bounds_offset_does_not_panic() {
+        let chunk = Chunk::new();
+
+        assert_eq!(disassemble_instruction(&chunk, 0), 1);
     }
 }
