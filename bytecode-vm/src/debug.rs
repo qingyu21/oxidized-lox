@@ -59,6 +59,7 @@ fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
 
 /// Disassembles an instruction encoded as opcode + 24-bit constant index.
 fn constant_long_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
+    // Read the three-byte operand that follows OP_CONSTANT_LONG.
     let Some((&low, tail)) = chunk
         .code()
         .get(offset + 1)
@@ -73,6 +74,7 @@ fn constant_long_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> us
         return offset + 1;
     };
 
+    // Reconstruct the little-endian 24-bit constant table index.
     let constant_index = (low as usize) | ((*mid as usize) << 8) | ((*high as usize) << 16);
 
     match chunk.constants().get(constant_index) {
