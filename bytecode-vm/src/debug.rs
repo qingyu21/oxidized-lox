@@ -97,6 +97,7 @@ fn constant_long_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> us
     offset + 4
 }
 
+/// Disassembles a single-byte instruction with no immediate operands.
 fn simple_instruction(opcode: OpCode, offset: usize) -> usize {
     println!("{}", opcode.mnemonic());
     offset + 1
@@ -107,20 +108,21 @@ mod tests {
     use super::{OpCode, disassemble_instruction};
     use crate::chunk::Chunk;
 
-    #[test]
-    fn return_instruction_advances_by_one_byte() {
+    fn assert_single_byte_instruction_advances(opcode: OpCode) {
         let mut chunk = Chunk::new();
-        chunk.write_opcode(OpCode::Return, 1);
+        chunk.write_opcode(opcode, 1);
 
         assert_eq!(disassemble_instruction(&chunk, 0), 1);
     }
 
     #[test]
-    fn negate_instruction_advances_by_one_byte() {
-        let mut chunk = Chunk::new();
-        chunk.write_opcode(OpCode::Negate, 1);
+    fn return_instruction_advances_by_one_byte() {
+        assert_single_byte_instruction_advances(OpCode::Return);
+    }
 
-        assert_eq!(disassemble_instruction(&chunk, 0), 1);
+    #[test]
+    fn negate_instruction_advances_by_one_byte() {
+        assert_single_byte_instruction_advances(OpCode::Negate);
     }
 
     #[test]
@@ -131,10 +133,7 @@ mod tests {
             OpCode::Multiply,
             OpCode::Divide,
         ] {
-            let mut chunk = Chunk::new();
-            chunk.write_opcode(opcode, 1);
-
-            assert_eq!(disassemble_instruction(&chunk, 0), 1);
+            assert_single_byte_instruction_advances(opcode);
         }
     }
 

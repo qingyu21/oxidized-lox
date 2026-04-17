@@ -53,6 +53,7 @@ impl Vm {
         self.push(op(a, b));
     }
 
+    /// Dispatches bytecode instructions until execution finishes or errors out.
     fn run(&mut self, chunk: &Chunk) -> InterpretResult {
         loop {
             if DEBUG_TRACE_EXECUTION {
@@ -94,6 +95,7 @@ impl Vm {
         }
     }
 
+    /// Prints the stack from bottom to top before the next instruction executes.
     fn trace_stack(&self) {
         print!("          ");
         for &value in &self.stack {
@@ -133,16 +135,25 @@ mod tests {
     use super::{InterpretResult, Vm};
     use crate::chunk::{Chunk, OpCode};
 
+    fn assert_interpret_ok_and_empties_stack(vm: &mut Vm, chunk: &Chunk) {
+        assert_eq!(vm.interpret(chunk), InterpretResult::InterpretOk);
+        assert!(vm.stack.is_empty());
+    }
+
+    fn returning_constant_chunk(value: f64) -> Chunk {
+        let mut chunk = Chunk::new();
+        chunk.write_constant(value, 1).unwrap();
+        chunk.write_opcode(OpCode::Return, 1);
+        chunk
+    }
+
     #[test]
     fn interpret_can_reuse_the_same_vm() {
         let mut vm = Vm::new();
-        let mut chunk = Chunk::new();
-        chunk.write_constant(1.2, 1).unwrap();
-        chunk.write_opcode(OpCode::Return, 1);
+        let chunk = returning_constant_chunk(1.2);
 
-        assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
-        assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
-        assert!(vm.stack.is_empty());
+        assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
+        assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
     }
 
     #[test]
@@ -157,12 +168,9 @@ mod tests {
     #[test]
     fn constant_opcode_pushes_a_value_that_return_can_pop() {
         let mut vm = Vm::new();
-        let mut chunk = Chunk::new();
-        chunk.write_constant(1.2, 1).unwrap();
-        chunk.write_opcode(OpCode::Return, 1);
+        let chunk = returning_constant_chunk(1.2);
 
-        assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
-        assert!(vm.stack.is_empty());
+        assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
     }
 
     #[test]
@@ -175,8 +183,7 @@ mod tests {
         chunk.write_constant(256.0, 1).unwrap();
         chunk.write_opcode(OpCode::Return, 1);
 
-        assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
-        assert!(vm.stack.is_empty());
+        assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
     }
 
     #[test]
@@ -187,8 +194,7 @@ mod tests {
         chunk.write_opcode(OpCode::Negate, 1);
         chunk.write_opcode(OpCode::Return, 1);
 
-        assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
-        assert!(vm.stack.is_empty());
+        assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
     }
 
     #[test]
@@ -229,6 +235,8 @@ mod tests {
             chunk.write_constant(right, 1).unwrap();
             chunk.write_opcode(opcode, 1);
 
+            // Leave off OP_RETURN on purpose so we can inspect the intermediate
+            // stack result after run() stops at the end of the chunk.
             vm.ip = 0;
             vm.stack.clear();
 

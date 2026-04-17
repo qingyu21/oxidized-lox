@@ -134,6 +134,7 @@ impl Chunk {
         Self::default()
     }
 
+    /// Appends one byte of code and records its source line using run-length encoding.
     pub(crate) fn write_byte(&mut self, byte: u8, line: usize) {
         self.code.push(byte);
         match self.line_runs.last_mut() {
