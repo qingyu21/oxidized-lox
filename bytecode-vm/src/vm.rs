@@ -40,6 +40,12 @@ impl Vm {
         self.stack.pop().expect("vm stack underflow")
     }
 
+    /// Negates the current top-of-stack value in place without changing stack height.
+    fn negate_top(&mut self) {
+        let value = self.stack.last_mut().expect("vm stack underflow");
+        *value = -*value;
+    }
+
     /// Pops the right operand first, then the left, matching stack-based evaluation order.
     fn binary_op(&mut self, op: impl FnOnce(Value, Value) -> Value) {
         let b = self.pop();
@@ -74,10 +80,7 @@ impl Vm {
                 Ok(OpCode::Subtract) => self.binary_op(|a, b| a - b),
                 Ok(OpCode::Multiply) => self.binary_op(|a, b| a * b),
                 Ok(OpCode::Divide) => self.binary_op(|a, b| a / b),
-                Ok(OpCode::Negate) => {
-                    let value = self.pop();
-                    self.push(-value);
-                }
+                Ok(OpCode::Negate) => self.negate_top(),
                 Ok(OpCode::Return) => {
                     let value = self.pop();
                     print_value(value);
@@ -198,6 +201,16 @@ mod tests {
 
         assert_eq!(vm.pop(), 2.0);
         assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn negate_top_keeps_stack_height_the_same() {
+        let mut vm = Vm::new();
+        vm.push(1.2);
+
+        vm.negate_top();
+
+        assert_eq!(vm.stack, vec![-1.2]);
     }
 
     #[test]
