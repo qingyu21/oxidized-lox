@@ -40,6 +40,13 @@ impl Vm {
         self.stack.pop().expect("vm stack underflow")
     }
 
+    /// Pops the right operand first, then the left, matching stack-based evaluation order.
+    fn binary_op(&mut self, op: impl FnOnce(Value, Value) -> Value) {
+        let b = self.pop();
+        let a = self.pop();
+        self.push(op(a, b));
+    }
+
     fn run(&mut self, chunk: &Chunk) -> InterpretResult {
         loop {
             if DEBUG_TRACE_EXECUTION {
@@ -63,6 +70,10 @@ impl Vm {
                     };
                     self.push(constant);
                 }
+                Ok(OpCode::Add) => self.binary_op(|a, b| a + b),
+                Ok(OpCode::Subtract) => self.binary_op(|a, b| a - b),
+                Ok(OpCode::Multiply) => self.binary_op(|a, b| a * b),
+                Ok(OpCode::Divide) => self.binary_op(|a, b| a / b),
                 Ok(OpCode::Negate) => {
                     let value = self.pop();
                     self.push(-value);
@@ -175,6 +186,42 @@ mod tests {
 
         assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretOk);
         assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn binary_op_uses_left_then_right_operand_order() {
+        let mut vm = Vm::new();
+        vm.push(3.0);
+        vm.push(1.0);
+
+        vm.binary_op(|a, b| a - b);
+
+        assert_eq!(vm.pop(), 2.0);
+        assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn binary_arithmetic_opcodes_leave_expected_result_on_stack() {
+        let cases = [
+            (OpCode::Add, 1.0, 2.0, 3.0),
+            (OpCode::Subtract, 3.0, 1.0, 2.0),
+            (OpCode::Multiply, 3.0, 2.0, 6.0),
+            (OpCode::Divide, 8.0, 2.0, 4.0),
+        ];
+
+        for (opcode, left, right, expected) in cases {
+            let mut vm = Vm::new();
+            let mut chunk = Chunk::new();
+            chunk.write_constant(left, 1).unwrap();
+            chunk.write_constant(right, 1).unwrap();
+            chunk.write_opcode(opcode, 1);
+
+            vm.ip = 0;
+            vm.stack.clear();
+
+            assert_eq!(vm.run(&chunk), InterpretResult::InterpretRuntimeError);
+            assert_eq!(vm.stack, vec![expected]);
+        }
     }
 
     #[test]

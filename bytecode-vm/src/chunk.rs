@@ -16,6 +16,26 @@ pub(crate) enum OpCode {
     /// Meaning: load a literal value when the constant table index needs 24 bits.
     ConstantLong,
 
+    /// Encoding: [OP_ADD]
+    /// Stack: pops two values, then pushes their sum.
+    /// Meaning: implement binary `+` for numeric values.
+    Add,
+
+    /// Encoding: [OP_SUBTRACT]
+    /// Stack: pops two values, then pushes left - right.
+    /// Meaning: implement binary `-` for numeric values.
+    Subtract,
+
+    /// Encoding: [OP_MULTIPLY]
+    /// Stack: pops two values, then pushes their product.
+    /// Meaning: implement binary `*` for numeric values.
+    Multiply,
+
+    /// Encoding: [OP_DIVIDE]
+    /// Stack: pops two values, then pushes left / right.
+    /// Meaning: implement binary `/` for numeric values.
+    Divide,
+
     /// Encoding: [OP_NEGATE]
     /// Stack: pops one value, then pushes its arithmetic negation.
     /// Meaning: implement unary minus for numeric values.
@@ -33,6 +53,10 @@ impl OpCode {
         match self {
             Self::Constant => "OP_CONSTANT",
             Self::ConstantLong => "OP_CONSTANT_LONG",
+            Self::Add => "OP_ADD",
+            Self::Subtract => "OP_SUBTRACT",
+            Self::Multiply => "OP_MULTIPLY",
+            Self::Divide => "OP_DIVIDE",
             Self::Negate => "OP_NEGATE",
             Self::Return => "OP_RETURN",
         }
@@ -52,6 +76,10 @@ impl TryFrom<u8> for OpCode {
         match byte {
             value if value == u8::from(Self::Constant) => Ok(Self::Constant),
             value if value == u8::from(Self::ConstantLong) => Ok(Self::ConstantLong),
+            value if value == u8::from(Self::Add) => Ok(Self::Add),
+            value if value == u8::from(Self::Subtract) => Ok(Self::Subtract),
+            value if value == u8::from(Self::Multiply) => Ok(Self::Multiply),
+            value if value == u8::from(Self::Divide) => Ok(Self::Divide),
             value if value == u8::from(Self::Negate) => Ok(Self::Negate),
             value if value == u8::from(Self::Return) => Ok(Self::Return),
             _ => Err(byte),
@@ -290,6 +318,19 @@ mod tests {
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::ConstantLong)),
             Ok(OpCode::ConstantLong)
+        );
+        assert_eq!(OpCode::try_from(u8::from(OpCode::Add)), Ok(OpCode::Add));
+        assert_eq!(
+            OpCode::try_from(u8::from(OpCode::Subtract)),
+            Ok(OpCode::Subtract)
+        );
+        assert_eq!(
+            OpCode::try_from(u8::from(OpCode::Multiply)),
+            Ok(OpCode::Multiply)
+        );
+        assert_eq!(
+            OpCode::try_from(u8::from(OpCode::Divide)),
+            Ok(OpCode::Divide)
         );
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::Negate)),

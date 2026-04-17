@@ -21,6 +21,10 @@ pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
     match OpCode::try_from(instruction) {
         Ok(opcode @ OpCode::Constant) => constant_instruction(opcode, chunk, offset),
         Ok(opcode @ OpCode::ConstantLong) => constant_long_instruction(opcode, chunk, offset),
+        Ok(opcode @ OpCode::Add) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::Subtract) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::Multiply) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::Divide) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Negate) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Return) => simple_instruction(opcode, offset),
         Err(unknown) => {
@@ -117,6 +121,21 @@ mod tests {
         chunk.write_opcode(OpCode::Negate, 1);
 
         assert_eq!(disassemble_instruction(&chunk, 0), 1);
+    }
+
+    #[test]
+    fn binary_arithmetic_instructions_advance_by_one_byte() {
+        for opcode in [
+            OpCode::Add,
+            OpCode::Subtract,
+            OpCode::Multiply,
+            OpCode::Divide,
+        ] {
+            let mut chunk = Chunk::new();
+            chunk.write_opcode(opcode, 1);
+
+            assert_eq!(disassemble_instruction(&chunk, 0), 1);
+        }
     }
 
     #[test]
