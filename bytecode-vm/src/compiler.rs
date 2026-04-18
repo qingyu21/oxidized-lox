@@ -6,13 +6,13 @@ use crate::{
 /// Temporarily drives the scanner and prints tokens until real compilation arrives.
 pub(crate) fn compile(source: &str) -> InterpretResult {
     let mut scanner = scanner::init_scanner(source);
-    let mut line = None;
+    let mut last_line = None;
 
     loop {
         let token = scanner.scan_token();
-        if line != Some(token.line) {
+        if last_line != Some(token.line) {
             print!("{:4} ", token.line);
-            line = Some(token.line);
+            last_line = Some(token.line);
         } else {
             print!("   | ");
         }
@@ -35,6 +35,11 @@ mod tests {
     #[test]
     fn compile_reports_ok_for_empty_source() {
         assert_eq!(compile(""), InterpretResult::InterpretOk);
+    }
+
+    #[test]
+    fn compile_reports_ok_for_supported_punctuation() {
+        assert_eq!(compile("(){},.-+;/*!===<=>="), InterpretResult::InterpretOk);
     }
 
     #[test]

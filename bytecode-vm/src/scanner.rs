@@ -76,18 +76,18 @@ impl<'source> Token<'source> {
 /// Tracks scanner progress through the current source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Scanner<'source> {
-    // These slices always point at suffixes of the original source, mirroring
-    // the C version's start/current pointers without owning any string data.
-    start: &'source str,
-    current: &'source str,
+    source: &'source str,
+    start: usize,
+    current: usize,
     line: usize,
 }
 
 impl<'source> Scanner<'source> {
     fn new(source: &'source str) -> Self {
         Self {
-            start: source,
-            current: source,
+            source,
+            start: 0,
+            current: 0,
             line: 1,
         }
     }
@@ -95,8 +95,8 @@ impl<'source> Scanner<'source> {
     fn make_token(&self, token_type: TokenType) -> Token<'source> {
         Token {
             token_type,
-            start: self.start,
-            length: self.start.len() - self.current.len(),
+            start: &self.source[self.start..],
+            length: self.current - self.start,
             line: self.line,
         }
     }
@@ -106,12 +106,41 @@ impl<'source> Scanner<'source> {
     }
 
     fn is_at_end(&self) -> bool {
-        self.current.is_empty()
+        self.current >= self.source.len()
+    }
+
+    fn advance(&mut self) -> char {
+        let next = self.source[self.current..].chars().next().unwrap();
+        self.current += next.len_utf8();
+        next
+    }
+
+    fn match_char(&mut self, expected: char) -> bool {
+        if self.is_at_end() || !self.source[self.current..].starts_with(expected) {
+            return false;
+        }
+
+        self.current += expected.len_utf8();
+        true
+    }
+
+    fn make_conditional_token(
+        &mut self,
+        expected: char,
+        matched: TokenType,
+        fallback: TokenType,
+    ) -> Token<'source> {
+        let token_type = if self.match_char(expected) {
+            matched
+        } else {
+            fallback
+        };
+        self.make_token(token_type)
     }
 
     /// Returns the next token in the source stream.
-    /// This is still the chapter's placeholder version: EOF at the end, and
-    /// an error token for every non-empty input until real token rules land.
+    /// This chapter stage recognizes punctuation tokens and reports everything
+    /// else as an error until whitespace and longer lexemes land.
     pub(crate) fn scan_token(&mut self) -> Token<'source> {
         self.start = self.current;
 
@@ -119,7 +148,25 @@ impl<'source> Scanner<'source> {
             return self.make_token(TokenType::Eof);
         }
 
-        self.error_token("Unexpected character.")
+        let current = self.advance();
+        match current {
+            '(' => self.make_token(TokenType::LeftParen),
+            ')' => self.make_token(TokenType::RightParen),
+            '{' => self.make_token(TokenType::LeftBrace),
+            '}' => self.make_token(TokenType::RightBrace),
+            ';' => self.make_token(TokenType::Semicolon),
+            ',' => self.make_token(TokenType::Comma),
+            '.' => self.make_token(TokenType::Dot),
+            '-' => self.make_token(TokenType::Minus),
+            '+' => self.make_token(TokenType::Plus),
+            '/' => self.make_token(TokenType::Slash),
+            '*' => self.make_token(TokenType::Star),
+            '!' => self.make_conditional_token('=', TokenType::BangEqual, TokenType::Bang),
+            '=' => self.make_conditional_token('=', TokenType::EqualEqual, TokenType::Equal),
+            '<' => self.make_conditional_token('=', TokenType::LessEqual, TokenType::Less),
+            '>' => self.make_conditional_token('=', TokenType::GreaterEqual, TokenType::Greater),
+            _ => self.error_token("Unexpected character."),
+        }
     }
 }
 
@@ -137,8 +184,9 @@ mod tests {
         let source = "print 123;";
         let scanner = init_scanner(source);
 
-        assert_eq!(scanner.start, source);
-        assert_eq!(scanner.current, source);
+        assert_eq!(scanner.source, source);
+        assert_eq!(scanner.start, 0);
+        assert_eq!(scanner.current, 0);
         assert_eq!(scanner.line, 1);
     }
 
@@ -154,12 +202,59 @@ mod tests {
     }
 
     #[test]
-    fn non_empty_input_returns_the_placeholder_error_token() {
+    fn non_punctuation_input_returns_an_error_token() {
         let mut scanner = init_scanner("print 123;");
         let token = scanner.scan_token();
 
         assert_eq!(token.token_type, TokenType::Error);
         assert_eq!(token.lexeme(), "Unexpected character.");
         assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn single_character_punctuation_scans_as_one_token() {
+        let cases = [
+            ("(", TokenType::LeftParen),
+            (")", TokenType::RightParen),
+            ("{", TokenType::LeftBrace),
+            ("}", TokenType::RightBrace),
+            (";", TokenType::Semicolon),
+            (",", TokenType::Comma),
+            (".", TokenType::Dot),
+            ("-", TokenType::Minus),
+            ("+", TokenType::Plus),
+            ("/", TokenType::Slash),
+            ("*", TokenType::Star),
+        ];
+
+        for (source, expected) in cases {
+            let mut scanner = init_scanner(source);
+            let token = scanner.scan_token();
+
+            assert_eq!(token.token_type, expected);
+            assert_eq!(token.lexeme(), source);
+        }
+    }
+
+    #[test]
+    fn one_or_two_character_punctuation_scans_correctly() {
+        let cases = [
+            ("!", TokenType::Bang),
+            ("!=", TokenType::BangEqual),
+            ("=", TokenType::Equal),
+            ("==", TokenType::EqualEqual),
+            ("<", TokenType::Less),
+            ("<=", TokenType::LessEqual),
+            (">", TokenType::Greater),
+            (">=", TokenType::GreaterEqual),
+        ];
+
+        for (source, expected) in cases {
+            let mut scanner = init_scanner(source);
+            let token = scanner.scan_token();
+
+            assert_eq!(token.token_type, expected);
+            assert_eq!(token.lexeme(), source);
+        }
     }
 }
