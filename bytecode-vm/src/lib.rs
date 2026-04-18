@@ -66,8 +66,7 @@ pub fn run_file(path: impl AsRef<Path>) -> ExitCode {
 
 /// Opens the front-end pipeline by compiling source text before execution exists.
 fn interpret(source: &str) -> vm::InterpretResult {
-    compiler::compile(source);
-    vm::InterpretResult::InterpretOk
+    compiler::compile(source)
 }
 
 /// Returns the current implementation status of the bytecode VM crate.

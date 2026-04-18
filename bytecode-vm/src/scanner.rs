@@ -58,7 +58,8 @@ pub(crate) struct Token<'source> {
 }
 
 impl<'source> Token<'source> {
-    pub(crate) fn lexeme(self) -> &'source str {
+    /// Returns the token's lexeme as a slice of the original source text.
+    pub(crate) fn lexeme(&self) -> &'source str {
         &self.start[..self.length]
     }
 
@@ -91,7 +92,7 @@ impl<'source> Scanner<'source> {
         }
     }
 
-    fn make_token(self, token_type: TokenType) -> Token<'source> {
+    fn make_token(&self, token_type: TokenType) -> Token<'source> {
         Token {
             token_type,
             start: self.start,
@@ -100,15 +101,17 @@ impl<'source> Scanner<'source> {
         }
     }
 
-    fn error_token(self, message: &'source str) -> Token<'source> {
+    fn error_token(&self, message: &'source str) -> Token<'source> {
         Token::error(self.line, message)
     }
 
-    fn is_at_end(self) -> bool {
+    fn is_at_end(&self) -> bool {
         self.current.is_empty()
     }
 
     /// Returns the next token in the source stream.
+    /// This is still the chapter's placeholder version: EOF at the end, and
+    /// an error token for every non-empty input until real token rules land.
     pub(crate) fn scan_token(&mut self) -> Token<'source> {
         self.start = self.current;
 

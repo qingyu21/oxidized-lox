@@ -1,7 +1,10 @@
-use crate::scanner::{self, TokenType};
+use crate::{
+    scanner::{self, TokenType},
+    vm::InterpretResult,
+};
 
-/// Starts the front end by initializing the scanner over the source text.
-pub(crate) fn compile(source: &str) {
+/// Temporarily drives the scanner and prints tokens until real compilation arrives.
+pub(crate) fn compile(source: &str) -> InterpretResult {
     let mut scanner = scanner::init_scanner(source);
     let mut line = None;
 
@@ -16,8 +19,26 @@ pub(crate) fn compile(source: &str) {
 
         println!("{:2} '{}'", token.token_type as u8, token.lexeme());
 
-        if matches!(token.token_type, TokenType::Eof | TokenType::Error) {
-            break;
+        match token.token_type {
+            TokenType::Eof => return InterpretResult::InterpretOk,
+            TokenType::Error => return InterpretResult::InterpretCompileError,
+            _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compile;
+    use crate::vm::InterpretResult;
+
+    #[test]
+    fn compile_reports_ok_for_empty_source() {
+        assert_eq!(compile(""), InterpretResult::InterpretOk);
+    }
+
+    #[test]
+    fn compile_reports_compile_error_for_placeholder_scanner_errors() {
+        assert_eq!(compile("print 1;"), InterpretResult::InterpretCompileError);
     }
 }
