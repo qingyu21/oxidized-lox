@@ -46,6 +46,14 @@ mod tests {
     }
 
     #[test]
+    fn compile_reports_ok_for_supported_literals() {
+        assert_eq!(
+            compile("123 45.67 \"lox\" \"multi\nline\""),
+            InterpretResult::InterpretOk
+        );
+    }
+
+    #[test]
     fn compile_reports_compile_error_for_placeholder_scanner_errors() {
         assert_eq!(compile("print 1;"), InterpretResult::InterpretCompileError);
     }

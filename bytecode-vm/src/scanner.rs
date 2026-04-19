@@ -123,6 +123,10 @@ impl<'source> Scanner<'source> {
         next
     }
 
+    fn is_digit(c: char) -> bool {
+        c.is_ascii_digit()
+    }
+
     fn match_char(&mut self, expected: char) -> bool {
         if self.is_at_end() || !self.source[self.current..].starts_with(expected) {
             return false;
@@ -146,6 +150,38 @@ impl<'source> Scanner<'source> {
         self.make_token(token_type)
     }
 
+    fn string(&mut self) -> Token<'source> {
+        while !matches!(self.peek(), Some('"') | None) {
+            if self.peek() == Some('\n') {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return self.error_token("Unterminated string.");
+        }
+
+        self.advance();
+        self.make_token(TokenType::String)
+    }
+
+    fn number(&mut self) -> Token<'source> {
+        while matches!(self.peek(), Some(c) if Self::is_digit(c)) {
+            self.advance();
+        }
+
+        if self.peek() == Some('.') && matches!(self.peek_next(), Some(c) if Self::is_digit(c)) {
+            self.advance();
+
+            while matches!(self.peek(), Some(c) if Self::is_digit(c)) {
+                self.advance();
+            }
+        }
+
+        self.make_token(TokenType::Number)
+    }
+
     fn skip_whitespace(&mut self) {
         loop {
             match self.peek() {
@@ -167,9 +203,9 @@ impl<'source> Scanner<'source> {
     }
 
     /// Returns the next token in the source stream.
-    /// This chapter stage skips leading whitespace, recognizes punctuation
-    /// tokens, and reports everything else as an error until longer lexemes
-    /// land.
+    /// This chapter stage skips leading whitespace, recognizes punctuation and
+    /// literal tokens, and reports everything else as an error until
+    /// identifiers and keywords land.
     pub(crate) fn scan_token(&mut self) -> Token<'source> {
         self.skip_whitespace();
         self.start = self.current;
@@ -179,6 +215,11 @@ impl<'source> Scanner<'source> {
         }
 
         let current = self.advance();
+
+        if Self::is_digit(current) {
+            return self.number();
+        }
+
         match current {
             '(' => self.make_token(TokenType::LeftParen),
             ')' => self.make_token(TokenType::RightParen),
@@ -195,6 +236,7 @@ impl<'source> Scanner<'source> {
             '=' => self.make_conditional_token('=', TokenType::EqualEqual, TokenType::Equal),
             '<' => self.make_conditional_token('=', TokenType::LessEqual, TokenType::Less),
             '>' => self.make_conditional_token('=', TokenType::GreaterEqual, TokenType::Greater),
+            '"' => self.string(),
             _ => self.error_token("Unexpected character."),
         }
     }
@@ -345,6 +387,69 @@ mod tests {
 
         assert_eq!(token.token_type, TokenType::Eof);
         assert_eq!(token.lexeme(), "");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn integer_numbers_scan_as_number_tokens() {
+        let mut scanner = init_scanner("123");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Number);
+        assert_eq!(token.lexeme(), "123");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn fractional_numbers_scan_as_number_tokens() {
+        let mut scanner = init_scanner("123.45");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Number);
+        assert_eq!(token.lexeme(), "123.45");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn dot_without_trailing_digit_is_not_consumed_as_part_of_a_number() {
+        let mut scanner = init_scanner("123.");
+
+        let number = scanner.scan_token();
+        let dot = scanner.scan_token();
+
+        assert_eq!(number.token_type, TokenType::Number);
+        assert_eq!(number.lexeme(), "123");
+        assert_eq!(dot.token_type, TokenType::Dot);
+        assert_eq!(dot.lexeme(), ".");
+    }
+
+    #[test]
+    fn strings_scan_as_string_tokens() {
+        let mut scanner = init_scanner("\"lox\"");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::String);
+        assert_eq!(token.lexeme(), "\"lox\"");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn multiline_strings_increment_the_scanner_line() {
+        let mut scanner = init_scanner("\"lox\nlang\"");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::String);
+        assert_eq!(token.lexeme(), "\"lox\nlang\"");
+        assert_eq!(token.line, 2);
+    }
+
+    #[test]
+    fn unterminated_strings_return_an_error_token() {
+        let mut scanner = init_scanner("\"unterminated");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Error);
+        assert_eq!(token.lexeme(), "Unterminated string.");
         assert_eq!(token.line, 1);
     }
 }
