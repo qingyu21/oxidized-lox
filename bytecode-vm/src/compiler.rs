@@ -39,7 +39,10 @@ mod tests {
 
     #[test]
     fn compile_reports_ok_for_supported_punctuation() {
-        assert_eq!(compile("(){},.-+;/*!===<=>="), InterpretResult::InterpretOk);
+        assert_eq!(
+            compile(" // comment\n(){},.-+;/*!===<=>=\n"),
+            InterpretResult::InterpretOk
+        );
     }
 
     #[test]

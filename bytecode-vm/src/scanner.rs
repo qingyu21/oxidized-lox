@@ -109,6 +109,14 @@ impl<'source> Scanner<'source> {
         self.current >= self.source.len()
     }
 
+    fn peek(&self) -> Option<char> {
+        self.source[self.current..].chars().next()
+    }
+
+    fn peek_next(&self) -> Option<char> {
+        self.source[self.current..].chars().nth(1)
+    }
+
     fn advance(&mut self) -> char {
         let next = self.source[self.current..].chars().next().unwrap();
         self.current += next.len_utf8();
@@ -138,10 +146,32 @@ impl<'source> Scanner<'source> {
         self.make_token(token_type)
     }
 
+    fn skip_whitespace(&mut self) {
+        loop {
+            match self.peek() {
+                Some(' ' | '\r' | '\t') => {
+                    self.advance();
+                }
+                Some('\n') => {
+                    self.line += 1;
+                    self.advance();
+                }
+                Some('/') if self.peek_next() == Some('/') => {
+                    while !matches!(self.peek(), Some('\n') | None) {
+                        self.advance();
+                    }
+                }
+                _ => return,
+            }
+        }
+    }
+
     /// Returns the next token in the source stream.
-    /// This chapter stage recognizes punctuation tokens and reports everything
-    /// else as an error until whitespace and longer lexemes land.
+    /// This chapter stage skips leading whitespace, recognizes punctuation
+    /// tokens, and reports everything else as an error until longer lexemes
+    /// land.
     pub(crate) fn scan_token(&mut self) -> Token<'source> {
+        self.skip_whitespace();
         self.start = self.current;
 
         if self.is_at_end() {
@@ -256,5 +286,65 @@ mod tests {
             assert_eq!(token.token_type, expected);
             assert_eq!(token.lexeme(), source);
         }
+    }
+
+    #[test]
+    fn leading_whitespace_is_skipped_before_scanning_the_next_token() {
+        let mut scanner = init_scanner(" \r\t(");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::LeftParen);
+        assert_eq!(token.lexeme(), "(");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn newlines_are_skipped_and_increment_the_token_line() {
+        let mut scanner = init_scanner(" \n\n(");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::LeftParen);
+        assert_eq!(token.lexeme(), "(");
+        assert_eq!(token.line, 3);
+    }
+
+    #[test]
+    fn input_with_only_whitespace_returns_eof_on_the_last_line() {
+        let mut scanner = init_scanner(" \n\t\n");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Eof);
+        assert_eq!(token.lexeme(), "");
+        assert_eq!(token.line, 3);
+    }
+
+    #[test]
+    fn line_comments_are_skipped_before_scanning_the_next_token() {
+        let mut scanner = init_scanner("// comment\n(");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::LeftParen);
+        assert_eq!(token.lexeme(), "(");
+        assert_eq!(token.line, 2);
+    }
+
+    #[test]
+    fn single_slash_is_still_scanned_as_a_token() {
+        let mut scanner = init_scanner("/");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Slash);
+        assert_eq!(token.lexeme(), "/");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn comment_without_trailing_newline_is_skipped_until_eof() {
+        let mut scanner = init_scanner("// comment");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Eof);
+        assert_eq!(token.lexeme(), "");
+        assert_eq!(token.line, 1);
     }
 }
