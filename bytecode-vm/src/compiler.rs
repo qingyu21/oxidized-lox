@@ -54,7 +54,15 @@ mod tests {
     }
 
     #[test]
+    fn compile_reports_ok_for_identifiers() {
+        assert_eq!(
+            compile("print foo _tmp var123"),
+            InterpretResult::InterpretOk
+        );
+    }
+
+    #[test]
     fn compile_reports_compile_error_for_placeholder_scanner_errors() {
-        assert_eq!(compile("print 1;"), InterpretResult::InterpretCompileError);
+        assert_eq!(compile("@"), InterpretResult::InterpretCompileError);
     }
 }

@@ -123,6 +123,10 @@ impl<'source> Scanner<'source> {
         next
     }
 
+    fn is_alpha(c: char) -> bool {
+        c.is_ascii_alphabetic() || c == '_'
+    }
+
     fn is_digit(c: char) -> bool {
         c.is_ascii_digit()
     }
@@ -148,6 +152,69 @@ impl<'source> Scanner<'source> {
             fallback
         };
         self.make_token(token_type)
+    }
+
+    fn check_keyword(&self, start: usize, rest: &str, token_type: TokenType) -> TokenType {
+        let length = rest.len();
+        let lexeme_length = self.current - self.start;
+        let rest_start = self.start + start;
+        let rest_end = rest_start + length;
+
+        if lexeme_length == start + length && &self.source[rest_start..rest_end] == rest {
+            return token_type;
+        }
+
+        TokenType::Identifier
+    }
+
+    fn identifier_type(&self) -> TokenType {
+        let lexeme = &self.source.as_bytes()[self.start..self.current];
+
+        match lexeme[0] {
+            b'a' => self.check_keyword(1, "nd", TokenType::And),
+            b'c' => self.check_keyword(1, "lass", TokenType::Class),
+            b'e' => self.check_keyword(1, "lse", TokenType::Else),
+            b'f' => {
+                if lexeme.len() > 1 {
+                    match lexeme[1] {
+                        b'a' => self.check_keyword(2, "lse", TokenType::False),
+                        b'o' => self.check_keyword(2, "r", TokenType::For),
+                        b'u' => self.check_keyword(2, "n", TokenType::Fun),
+                        _ => TokenType::Identifier,
+                    }
+                } else {
+                    TokenType::Identifier
+                }
+            }
+            b'i' => self.check_keyword(1, "f", TokenType::If),
+            b'n' => self.check_keyword(1, "il", TokenType::Nil),
+            b'o' => self.check_keyword(1, "r", TokenType::Or),
+            b'p' => self.check_keyword(1, "rint", TokenType::Print),
+            b'r' => self.check_keyword(1, "eturn", TokenType::Return),
+            b's' => self.check_keyword(1, "uper", TokenType::Super),
+            b't' => {
+                if lexeme.len() > 1 {
+                    match lexeme[1] {
+                        b'h' => self.check_keyword(2, "is", TokenType::This),
+                        b'r' => self.check_keyword(2, "ue", TokenType::True),
+                        _ => TokenType::Identifier,
+                    }
+                } else {
+                    TokenType::Identifier
+                }
+            }
+            b'v' => self.check_keyword(1, "ar", TokenType::Var),
+            b'w' => self.check_keyword(1, "hile", TokenType::While),
+            _ => TokenType::Identifier,
+        }
+    }
+
+    fn identifier(&mut self) -> Token<'source> {
+        while matches!(self.peek(), Some(c) if Self::is_alpha(c) || Self::is_digit(c)) {
+            self.advance();
+        }
+
+        self.make_token(self.identifier_type())
     }
 
     fn string(&mut self) -> Token<'source> {
@@ -203,9 +270,9 @@ impl<'source> Scanner<'source> {
     }
 
     /// Returns the next token in the source stream.
-    /// This chapter stage skips leading whitespace, recognizes punctuation and
-    /// literal tokens, and reports everything else as an error until
-    /// identifiers and keywords land.
+    /// This chapter stage skips leading whitespace and recognizes punctuation,
+    /// literal, and identifier tokens, including the book's trie-style
+    /// keyword matching.
     pub(crate) fn scan_token(&mut self) -> Token<'source> {
         self.skip_whitespace();
         self.start = self.current;
@@ -215,6 +282,10 @@ impl<'source> Scanner<'source> {
         }
 
         let current = self.advance();
+
+        if Self::is_alpha(current) {
+            return self.identifier();
+        }
 
         if Self::is_digit(current) {
             return self.number();
@@ -274,8 +345,8 @@ mod tests {
     }
 
     #[test]
-    fn non_punctuation_input_returns_an_error_token() {
-        let mut scanner = init_scanner("print 123;");
+    fn unsupported_character_returns_an_error_token() {
+        let mut scanner = init_scanner("@");
         let token = scanner.scan_token();
 
         assert_eq!(token.token_type, TokenType::Error);
@@ -388,6 +459,79 @@ mod tests {
         assert_eq!(token.token_type, TokenType::Eof);
         assert_eq!(token.lexeme(), "");
         assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn identifiers_scan_as_identifier_tokens() {
+        let mut scanner = init_scanner("lox");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Identifier);
+        assert_eq!(token.lexeme(), "lox");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn identifiers_can_start_with_an_underscore() {
+        let mut scanner = init_scanner("_tmp");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Identifier);
+        assert_eq!(token.lexeme(), "_tmp");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn digits_are_allowed_after_the_first_identifier_character() {
+        let mut scanner = init_scanner("var123");
+        let token = scanner.scan_token();
+
+        assert_eq!(token.token_type, TokenType::Identifier);
+        assert_eq!(token.lexeme(), "var123");
+        assert_eq!(token.line, 1);
+    }
+
+    #[test]
+    fn keywords_scan_as_their_keyword_token_types() {
+        let cases = [
+            ("and", TokenType::And),
+            ("class", TokenType::Class),
+            ("else", TokenType::Else),
+            ("false", TokenType::False),
+            ("for", TokenType::For),
+            ("fun", TokenType::Fun),
+            ("if", TokenType::If),
+            ("nil", TokenType::Nil),
+            ("or", TokenType::Or),
+            ("print", TokenType::Print),
+            ("return", TokenType::Return),
+            ("super", TokenType::Super),
+            ("this", TokenType::This),
+            ("true", TokenType::True),
+            ("var", TokenType::Var),
+            ("while", TokenType::While),
+        ];
+
+        for (source, expected) in cases {
+            let mut scanner = init_scanner(source);
+            let token = scanner.scan_token();
+
+            assert_eq!(token.token_type, expected);
+            assert_eq!(token.lexeme(), source);
+        }
+    }
+
+    #[test]
+    fn identifiers_that_extend_keywords_stay_identifiers() {
+        let cases = ["andy", "classy", "format", "superb", "trueish"];
+
+        for source in cases {
+            let mut scanner = init_scanner(source);
+            let token = scanner.scan_token();
+
+            assert_eq!(token.token_type, TokenType::Identifier);
+            assert_eq!(token.lexeme(), source);
+        }
     }
 
     #[test]
