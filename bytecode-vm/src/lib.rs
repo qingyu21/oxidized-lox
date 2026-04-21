@@ -71,5 +71,5 @@ fn interpret(source: &str) -> vm::InterpretResult {
 
 /// Returns the current implementation status of the bytecode VM crate.
 pub fn status() -> &'static str {
-    "bytecode-vm scaffold: compilation pipeline opened; scanner in progress"
+    "bytecode-vm scaffold: scanner complete; compiler still dumps tokens before bytecode emission"
 }

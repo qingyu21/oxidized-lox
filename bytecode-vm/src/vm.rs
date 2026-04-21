@@ -24,6 +24,7 @@ impl Vm {
         Self::default()
     }
 
+    /// Resets transient VM state so a single instance can execute multiple chunks.
     pub(crate) fn interpret(&mut self, chunk: &Chunk) -> InterpretResult {
         // Reused VMs always start each interpretation with a clean stack and
         // the instruction pointer reset to the first byte.

@@ -147,6 +147,12 @@ impl Chunk {
         self.write_byte(opcode.into(), line)
     }
 
+    /// Adds a value to the constant table and returns its index.
+    pub(crate) fn add_constant(&mut self, value: Value) -> usize {
+        self.constants.push(value);
+        self.constants.len() - 1
+    }
+
     /// Adds a constant and emits the matching load instruction for its index width.
     pub(crate) fn write_constant(
         &mut self,
@@ -156,6 +162,7 @@ impl Chunk {
         let index = self.constants.len();
         let encoding = encode_constant_index(index)?;
 
+        // Delay mutating the constant table until we know the index can be encoded.
         self.constants.push(value);
         match encoding {
             ConstantEncoding::Short(index) => {
@@ -193,12 +200,6 @@ impl Chunk {
 
     pub(crate) fn constants(&self) -> &[Value] {
         &self.constants
-    }
-
-    /// Adds a value to the constant table and returns its index.
-    pub(crate) fn add_constant(&mut self, value: Value) -> usize {
-        self.constants.push(value);
-        self.constants.len() - 1
     }
 }
 

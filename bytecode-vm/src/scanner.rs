@@ -92,19 +92,6 @@ impl<'source> Scanner<'source> {
         }
     }
 
-    fn make_token(&self, token_type: TokenType) -> Token<'source> {
-        Token {
-            token_type,
-            start: &self.source[self.start..],
-            length: self.current - self.start,
-            line: self.line,
-        }
-    }
-
-    fn error_token(&self, message: &'source str) -> Token<'source> {
-        Token::error(self.line, message)
-    }
-
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
@@ -123,14 +110,6 @@ impl<'source> Scanner<'source> {
         next
     }
 
-    fn is_alpha(c: char) -> bool {
-        c.is_ascii_alphabetic() || c == '_'
-    }
-
-    fn is_digit(c: char) -> bool {
-        c.is_ascii_digit()
-    }
-
     fn match_char(&mut self, expected: char) -> bool {
         if self.is_at_end() || !self.source[self.current..].starts_with(expected) {
             return false;
@@ -138,6 +117,19 @@ impl<'source> Scanner<'source> {
 
         self.current += expected.len_utf8();
         true
+    }
+
+    fn make_token(&self, token_type: TokenType) -> Token<'source> {
+        Token {
+            token_type,
+            start: &self.source[self.start..],
+            length: self.current - self.start,
+            line: self.line,
+        }
+    }
+
+    fn error_token(&self, message: &'source str) -> Token<'source> {
+        Token::error(self.line, message)
     }
 
     fn make_conditional_token(
@@ -154,6 +146,16 @@ impl<'source> Scanner<'source> {
         self.make_token(token_type)
     }
 
+    fn is_alpha(c: char) -> bool {
+        c.is_ascii_alphabetic() || c == '_'
+    }
+
+    fn is_digit(c: char) -> bool {
+        c.is_ascii_digit()
+    }
+
+    /// After the first byte narrows the candidate set, compare only the
+    /// remaining suffix to separate keywords from plain identifiers.
     fn check_keyword(&self, start: usize, rest: &str, token_type: TokenType) -> TokenType {
         let length = rest.len();
         let lexeme_length = self.current - self.start;
@@ -167,6 +169,7 @@ impl<'source> Scanner<'source> {
         TokenType::Identifier
     }
 
+    /// Mirrors the book's trie-like dispatch without allocating a temporary string.
     fn identifier_type(&self) -> TokenType {
         let lexeme = &self.source.as_bytes()[self.start..self.current];
 
@@ -217,6 +220,7 @@ impl<'source> Scanner<'source> {
         self.make_token(self.identifier_type())
     }
 
+    /// Consumes a full string literal and keeps embedded newlines in sync with diagnostics.
     fn string(&mut self) -> Token<'source> {
         while !matches!(self.peek(), Some('"') | None) {
             if self.peek() == Some('\n') {
@@ -249,6 +253,7 @@ impl<'source> Scanner<'source> {
         self.make_token(TokenType::Number)
     }
 
+    /// Skips insignificant trivia, including `//` comments, before scanning the next token.
     fn skip_whitespace(&mut self) {
         loop {
             match self.peek() {

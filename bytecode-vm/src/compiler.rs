@@ -5,19 +5,18 @@ use crate::{
 
 /// Temporarily drives the scanner and prints tokens until real compilation arrives.
 pub(crate) fn compile(source: &str) -> InterpretResult {
+    dump_tokens(source)
+}
+
+/// Placeholder front-end used until chapter 17 wires scanned tokens into bytecode emission.
+fn dump_tokens(source: &str) -> InterpretResult {
     let mut scanner = scanner::init_scanner(source);
     let mut last_line = None;
 
     loop {
         let token = scanner.scan_token();
-        if last_line != Some(token.line) {
-            print!("{:4} ", token.line);
-            last_line = Some(token.line);
-        } else {
-            print!("   | ");
-        }
-
-        println!("{:2} '{}'", token.token_type as u8, token.lexeme());
+        print_token_line_prefix(token.line, &mut last_line);
+        print_scanned_token(token.token_type, token.lexeme());
 
         match token.token_type {
             TokenType::Eof => return InterpretResult::InterpretOk,
@@ -27,9 +26,22 @@ pub(crate) fn compile(source: &str) -> InterpretResult {
     }
 }
 
+fn print_token_line_prefix(line: usize, last_line: &mut Option<usize>) {
+    if *last_line != Some(line) {
+        print!("{line:4} ");
+        *last_line = Some(line);
+    } else {
+        print!("   | ");
+    }
+}
+
+fn print_scanned_token(token_type: TokenType, lexeme: &str) {
+    println!("{token_type:?} '{lexeme}'");
+}
+
 #[cfg(test)]
 mod tests {
-    use super::compile;
+    use super::{compile, print_token_line_prefix};
     use crate::vm::InterpretResult;
 
     #[test]
@@ -64,5 +76,19 @@ mod tests {
     #[test]
     fn compile_reports_compile_error_for_placeholder_scanner_errors() {
         assert_eq!(compile("@"), InterpretResult::InterpretCompileError);
+    }
+
+    #[test]
+    fn line_prefix_tracks_the_most_recent_line() {
+        let mut last_line = None;
+
+        print_token_line_prefix(7, &mut last_line);
+        assert_eq!(last_line, Some(7));
+
+        print_token_line_prefix(7, &mut last_line);
+        assert_eq!(last_line, Some(7));
+
+        print_token_line_prefix(8, &mut last_line);
+        assert_eq!(last_line, Some(8));
     }
 }
