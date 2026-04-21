@@ -1,94 +1,124 @@
 use crate::{
-    scanner::{self, TokenType},
-    vm::InterpretResult,
+    chunk::Chunk,
+    scanner::{self, Token, TokenType},
 };
 
-/// Temporarily drives the scanner and prints tokens until real compilation arrives.
-pub(crate) fn compile(source: &str) -> InterpretResult {
-    dump_tokens(source)
+#[derive(Debug)]
+struct Parser<'source> {
+    scanner: scanner::Scanner<'source>,
+    current: Option<Token<'source>>,
+    previous: Option<Token<'source>>,
+    had_error: bool,
 }
 
-/// Placeholder front-end used until chapter 17 wires scanned tokens into bytecode emission.
-fn dump_tokens(source: &str) -> InterpretResult {
-    let mut scanner = scanner::init_scanner(source);
-    let mut last_line = None;
-
-    loop {
-        let token = scanner.scan_token();
-        print_token_line_prefix(token.line, &mut last_line);
-        print_scanned_token(token.token_type, token.lexeme());
-
-        match token.token_type {
-            TokenType::Eof => return InterpretResult::InterpretOk,
-            TokenType::Error => return InterpretResult::InterpretCompileError,
-            _ => {}
+impl<'source> Parser<'source> {
+    fn new(source: &'source str) -> Self {
+        Self {
+            scanner: scanner::init_scanner(source),
+            current: None,
+            previous: None,
+            had_error: false,
         }
     }
-}
 
-fn print_token_line_prefix(line: usize, last_line: &mut Option<usize>) {
-    if *last_line != Some(line) {
-        print!("{line:4} ");
-        *last_line = Some(line);
-    } else {
-        print!("   | ");
+    /// Primes the scanner and skips over scanner-produced error tokens.
+    fn advance(&mut self) {
+        self.previous = self.current;
+
+        loop {
+            let token = self.scanner.scan_token();
+            self.current = Some(token);
+
+            if token.token_type != TokenType::Error {
+                break;
+            }
+
+            self.error_at_current(token.lexeme());
+        }
+    }
+
+    fn consume(&mut self, token_type: TokenType, message: &str) {
+        if self.check(token_type) {
+            self.advance();
+            return;
+        }
+
+        self.error_at_current(message);
+    }
+
+    fn check(&self, token_type: TokenType) -> bool {
+        self.current
+            .is_some_and(|token| token.token_type == token_type)
+    }
+
+    fn error_at_current(&mut self, message: &str) {
+        if let Some(token) = self.current {
+            self.error_at(token, message);
+        } else {
+            self.had_error = true;
+            eprintln!("Error: {message}");
+        }
+    }
+
+    fn error_at(&mut self, token: Token<'source>, message: &str) {
+        eprint!("[line {}] Error", token.line);
+        match token.token_type {
+            TokenType::Eof => eprint!(" at end"),
+            TokenType::Error => {}
+            _ => eprint!(" at '{}'", token.lexeme()),
+        }
+        eprintln!(": {message}");
+
+        self.had_error = true;
     }
 }
 
-fn print_scanned_token(token_type: TokenType, lexeme: &str) {
-    println!("{token_type:?} '{lexeme}'");
+/// Compiles source into `chunk`, returning whether compilation succeeded.
+pub(crate) fn compile(source: &str, chunk: &mut Chunk) -> bool {
+    let mut parser = Parser::new(source);
+
+    parser.advance();
+    if !parser.had_error {
+        expression(&mut parser, chunk);
+    }
+    if !parser.had_error {
+        parser.consume(TokenType::Eof, "Expect end of expression.");
+    }
+
+    !parser.had_error
+}
+
+/// Chapter 17 fills this in with Pratt parsing and bytecode emission.
+fn expression(parser: &mut Parser<'_>, _chunk: &mut Chunk) {
+    parser.error_at_current("Expression compiler is not implemented yet.");
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{compile, print_token_line_prefix};
-    use crate::vm::InterpretResult;
+    use super::compile;
+    use crate::chunk::Chunk;
 
     #[test]
-    fn compile_reports_ok_for_empty_source() {
-        assert_eq!(compile(""), InterpretResult::InterpretOk);
+    fn compile_reports_failure_for_empty_source_until_expression_exists() {
+        let mut chunk = Chunk::new();
+
+        assert!(!compile("", &mut chunk));
+        assert!(chunk.code().is_empty());
     }
 
     #[test]
-    fn compile_reports_ok_for_supported_punctuation() {
-        assert_eq!(
-            compile(" // comment\n(){},.-+;/*!===<=>=\n"),
-            InterpretResult::InterpretOk
-        );
+    fn compile_reports_failure_for_non_empty_source_until_expression_exists() {
+        let mut chunk = Chunk::new();
+
+        assert!(!compile("123", &mut chunk));
+        assert!(chunk.code().is_empty());
     }
 
     #[test]
-    fn compile_reports_ok_for_supported_literals() {
-        assert_eq!(
-            compile("123 45.67 \"lox\" \"multi\nline\""),
-            InterpretResult::InterpretOk
-        );
-    }
+    fn compile_reports_failure_for_scanner_errors() {
+        let mut chunk = Chunk::new();
 
-    #[test]
-    fn compile_reports_ok_for_identifiers() {
-        assert_eq!(
-            compile("print foo _tmp var123"),
-            InterpretResult::InterpretOk
-        );
-    }
-
-    #[test]
-    fn compile_reports_compile_error_for_placeholder_scanner_errors() {
-        assert_eq!(compile("@"), InterpretResult::InterpretCompileError);
-    }
-
-    #[test]
-    fn line_prefix_tracks_the_most_recent_line() {
-        let mut last_line = None;
-
-        print_token_line_prefix(7, &mut last_line);
-        assert_eq!(last_line, Some(7));
-
-        print_token_line_prefix(7, &mut last_line);
-        assert_eq!(last_line, Some(7));
-
-        print_token_line_prefix(8, &mut last_line);
-        assert_eq!(last_line, Some(8));
+        assert!(!compile("@", &mut chunk));
+        assert!(chunk.code().is_empty());
     }
 }

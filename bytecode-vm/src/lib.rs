@@ -5,19 +5,17 @@ use std::{
     process::ExitCode,
 };
 
+use crate::{chunk::Chunk, vm::Vm};
+
 // These modules are still being wired into the executable path, so we suppress
 // dead-code noise while the VM scaffold is taking shape.
 #[allow(dead_code)]
 pub(crate) mod chunk;
-#[allow(dead_code)]
 pub(crate) mod compiler;
 #[allow(dead_code)]
 pub(crate) mod debug;
-#[allow(dead_code)]
 pub(crate) mod scanner;
-#[allow(dead_code)]
 pub(crate) mod value;
-#[allow(dead_code)]
 pub(crate) mod vm;
 
 /// Runs a minimal line-at-a-time REPL.
@@ -64,12 +62,18 @@ pub fn run_file(path: impl AsRef<Path>) -> ExitCode {
     }
 }
 
-/// Opens the front-end pipeline by compiling source text before execution exists.
+/// Compiles source into a fresh chunk and executes it when compilation succeeds.
 fn interpret(source: &str) -> vm::InterpretResult {
-    compiler::compile(source)
+    let mut chunk = Chunk::new();
+    if !compiler::compile(source, &mut chunk) {
+        return vm::InterpretResult::InterpretCompileError;
+    }
+
+    let mut vm = Vm::new();
+    vm.interpret(&chunk)
 }
 
 /// Returns the current implementation status of the bytecode VM crate.
 pub fn status() -> &'static str {
-    "bytecode-vm scaffold: scanner complete; compiler still dumps tokens before bytecode emission"
+    "bytecode-vm scaffold: execution pipeline wired; compiler parser skeleton in progress"
 }
