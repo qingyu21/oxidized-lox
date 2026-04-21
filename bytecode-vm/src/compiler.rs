@@ -9,6 +9,7 @@ struct Parser<'source> {
     current: Option<Token<'source>>,
     previous: Option<Token<'source>>,
     had_error: bool,
+    panic_mode: bool,
 }
 
 impl<'source> Parser<'source> {
@@ -18,6 +19,7 @@ impl<'source> Parser<'source> {
             current: None,
             previous: None,
             had_error: false,
+            panic_mode: false,
         }
     }
 
@@ -37,6 +39,7 @@ impl<'source> Parser<'source> {
         }
     }
 
+    /// Consumes the current token only if it matches `token_type`.
     fn consume(&mut self, token_type: TokenType, message: &str) {
         if self.check(token_type) {
             self.advance();
@@ -46,11 +49,13 @@ impl<'source> Parser<'source> {
         self.error_at_current(message);
     }
 
+    /// Checks the current lookahead token without consuming it.
     fn check(&self, token_type: TokenType) -> bool {
         self.current
             .is_some_and(|token| token.token_type == token_type)
     }
 
+    /// Reports an error anchored to the current lookahead token.
     fn error_at_current(&mut self, message: &str) {
         if let Some(token) = self.current {
             self.error_at(token, message);
@@ -60,7 +65,22 @@ impl<'source> Parser<'source> {
         }
     }
 
+    /// Reports an error anchored to the most recently consumed token.
+    fn error(&mut self, message: &str) {
+        if let Some(token) = self.previous {
+            self.error_at(token, message);
+        } else {
+            self.error_at_current(message);
+        }
+    }
+
+    /// Formats a compiler error at `token` and suppresses cascaded errors in panic mode.
     fn error_at(&mut self, token: Token<'source>, message: &str) {
+        if self.panic_mode {
+            return;
+        }
+
+        self.panic_mode = true;
         eprint!("[line {}] Error", token.line);
         match token.token_type {
             TokenType::Eof => eprint!(" at end"),
@@ -88,9 +108,9 @@ pub(crate) fn compile(source: &str, chunk: &mut Chunk) -> bool {
     !parser.had_error
 }
 
-/// Chapter 17 fills this in with Pratt parsing and bytecode emission.
+/// Entry point for Pratt parsing and bytecode emission for a single expression.
 fn expression(parser: &mut Parser<'_>, _chunk: &mut Chunk) {
-    parser.error_at_current("Expression compiler is not implemented yet.");
+    parser.error("Expression compiler is not implemented yet.");
 }
 
 #[cfg(test)]
