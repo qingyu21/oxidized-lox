@@ -77,3 +77,46 @@ fn interpret(source: &str) -> vm::InterpretResult {
 pub fn status() -> &'static str {
     "bytecode-vm scaffold: execution pipeline wired; compiler parser skeleton in progress"
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{interpret, run_file};
+    use crate::vm::InterpretResult;
+    use std::{
+        env, fs,
+        path::PathBuf,
+        process::ExitCode,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn unique_temp_path(file_name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        env::temp_dir().join(format!("oxidized-lox-{file_name}-{unique}.lox"))
+    }
+
+    #[test]
+    fn interpret_returns_compile_error_while_expression_compiler_is_stubbed() {
+        assert_eq!(interpret("123"), InterpretResult::CompileError);
+    }
+
+    #[test]
+    fn run_file_returns_io_error_code_for_missing_files() {
+        let missing = unique_temp_path("missing");
+
+        assert_eq!(run_file(&missing), ExitCode::from(74));
+    }
+
+    #[test]
+    fn run_file_returns_compile_error_exit_code_for_invalid_or_unimplemented_source() {
+        let path = unique_temp_path("compile-error");
+        fs::write(&path, "123").expect("should be able to write test source");
+
+        let exit_code = run_file(&path);
+        let _ = fs::remove_file(&path);
+
+        assert_eq!(exit_code, ExitCode::from(65));
+    }
+}

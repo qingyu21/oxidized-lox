@@ -115,8 +115,96 @@ fn expression(parser: &mut Parser<'_>, _chunk: &mut Chunk) {
 
 #[cfg(test)]
 mod tests {
-    use super::compile;
+    use super::{Parser, compile};
     use crate::chunk::Chunk;
+    use crate::scanner::TokenType;
+
+    #[test]
+    fn advance_skips_error_tokens_and_sets_error_state() {
+        let mut parser = Parser::new("@123");
+
+        parser.advance();
+
+        assert_eq!(
+            parser.current.map(|token| token.token_type),
+            Some(TokenType::Number)
+        );
+        assert_eq!(parser.current.map(|token| token.lexeme()), Some("123"));
+        assert_eq!(parser.previous, None);
+        assert!(parser.had_error);
+        assert!(parser.panic_mode);
+    }
+
+    #[test]
+    fn advance_moves_old_current_token_into_previous() {
+        let mut parser = Parser::new("123 +");
+
+        parser.advance();
+        parser.advance();
+
+        assert_eq!(
+            parser.previous.map(|token| token.token_type),
+            Some(TokenType::Number)
+        );
+        assert_eq!(parser.previous.map(|token| token.lexeme()), Some("123"));
+        assert_eq!(
+            parser.current.map(|token| token.token_type),
+            Some(TokenType::Plus)
+        );
+        assert_eq!(parser.current.map(|token| token.lexeme()), Some("+"));
+    }
+
+    #[test]
+    fn consume_advances_when_current_token_matches() {
+        let mut parser = Parser::new("123");
+        parser.advance();
+
+        parser.consume(TokenType::Number, "Expect number.");
+
+        assert_eq!(
+            parser.previous.map(|token| token.token_type),
+            Some(TokenType::Number)
+        );
+        assert_eq!(
+            parser.current.map(|token| token.token_type),
+            Some(TokenType::Eof)
+        );
+        assert!(!parser.had_error);
+        assert!(!parser.panic_mode);
+    }
+
+    #[test]
+    fn consume_reports_an_error_without_advanced_state_when_token_mismatches() {
+        let mut parser = Parser::new("123");
+        parser.advance();
+
+        parser.consume(TokenType::LeftParen, "Expect '('.");
+
+        assert_eq!(
+            parser.current.map(|token| token.token_type),
+            Some(TokenType::Number)
+        );
+        assert_eq!(parser.previous, None);
+        assert!(parser.had_error);
+        assert!(parser.panic_mode);
+    }
+
+    #[test]
+    fn panic_mode_suppresses_follow_up_errors() {
+        let mut parser = Parser::new("123");
+        parser.advance();
+
+        parser.error_at_current("first");
+        let current = parser.current;
+        parser.error_at(current.unwrap(), "second");
+
+        assert!(parser.had_error);
+        assert!(parser.panic_mode);
+        assert_eq!(
+            parser.current.map(|token| token.token_type),
+            Some(TokenType::Number)
+        );
+    }
 
     #[test]
     fn compile_reports_failure_for_empty_source_until_expression_exists() {
