@@ -56,9 +56,9 @@ pub fn run_file(path: impl AsRef<Path>) -> ExitCode {
     };
 
     match interpret(&source) {
-        vm::InterpretResult::InterpretOk => ExitCode::SUCCESS,
-        vm::InterpretResult::InterpretCompileError => ExitCode::from(65),
-        vm::InterpretResult::InterpretRuntimeError => ExitCode::from(70),
+        vm::InterpretResult::Ok => ExitCode::SUCCESS,
+        vm::InterpretResult::CompileError => ExitCode::from(65),
+        vm::InterpretResult::RuntimeError => ExitCode::from(70),
     }
 }
 
@@ -66,7 +66,7 @@ pub fn run_file(path: impl AsRef<Path>) -> ExitCode {
 fn interpret(source: &str) -> vm::InterpretResult {
     let mut chunk = Chunk::new();
     if !compiler::compile(source, &mut chunk) {
-        return vm::InterpretResult::InterpretCompileError;
+        return vm::InterpretResult::CompileError;
     }
 
     let mut vm = Vm::new();

@@ -14,9 +14,9 @@ pub(crate) struct Vm {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InterpretResult {
-    InterpretOk,
-    InterpretCompileError,
-    InterpretRuntimeError,
+    Ok,
+    CompileError,
+    RuntimeError,
 }
 
 impl Vm {
@@ -63,18 +63,18 @@ impl Vm {
             }
 
             let Some(instruction) = self.read_byte(chunk) else {
-                return InterpretResult::InterpretRuntimeError;
+                return InterpretResult::RuntimeError;
             };
             match OpCode::try_from(instruction) {
                 Ok(OpCode::Constant) => {
                     let Some(constant) = self.read_constant(chunk) else {
-                        return InterpretResult::InterpretRuntimeError;
+                        return InterpretResult::RuntimeError;
                     };
                     self.push(constant);
                 }
                 Ok(OpCode::ConstantLong) => {
                     let Some(constant) = self.read_constant_long(chunk) else {
-                        return InterpretResult::InterpretRuntimeError;
+                        return InterpretResult::RuntimeError;
                     };
                     self.push(constant);
                 }
@@ -87,10 +87,10 @@ impl Vm {
                     let value = self.pop();
                     print_value(value);
                     println!();
-                    return InterpretResult::InterpretOk;
+                    return InterpretResult::Ok;
                 }
                 Err(_) => {
-                    return InterpretResult::InterpretRuntimeError;
+                    return InterpretResult::RuntimeError;
                 }
             }
         }
@@ -137,7 +137,7 @@ mod tests {
     use crate::chunk::{Chunk, OpCode};
 
     fn assert_interpret_ok_and_empties_stack(vm: &mut Vm, chunk: &Chunk) {
-        assert_eq!(vm.interpret(chunk), InterpretResult::InterpretOk);
+        assert_eq!(vm.interpret(chunk), InterpretResult::Ok);
         assert!(vm.stack.is_empty());
     }
 
@@ -163,7 +163,7 @@ mod tests {
         let mut chunk = Chunk::new();
         chunk.write_byte(255, 1);
 
-        assert_eq!(vm.interpret(&chunk), InterpretResult::InterpretRuntimeError);
+        assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
     }
 
     #[test]
@@ -241,7 +241,7 @@ mod tests {
             vm.ip = 0;
             vm.stack.clear();
 
-            assert_eq!(vm.run(&chunk), InterpretResult::InterpretRuntimeError);
+            assert_eq!(vm.run(&chunk), InterpretResult::RuntimeError);
             assert_eq!(vm.stack, vec![expected]);
         }
     }
