@@ -1,21 +1,23 @@
 use crate::{
-    chunk::Chunk,
+    chunk::{Chunk, OpCode},
     scanner::{self, Token, TokenType},
 };
 
 #[derive(Debug)]
-struct Parser<'source> {
+struct Parser<'source, 'chunk> {
     scanner: scanner::Scanner<'source>,
+    compiling_chunk: &'chunk mut Chunk,
     current: Option<Token<'source>>,
     previous: Option<Token<'source>>,
     had_error: bool,
     panic_mode: bool,
 }
 
-impl<'source> Parser<'source> {
-    fn new(source: &'source str) -> Self {
+impl<'source, 'chunk> Parser<'source, 'chunk> {
+    fn new(source: &'source str, chunk: &'chunk mut Chunk) -> Self {
         Self {
             scanner: scanner::init_scanner(source),
+            compiling_chunk: chunk,
             current: None,
             previous: None,
             had_error: false,
@@ -53,6 +55,31 @@ impl<'source> Parser<'source> {
     fn check(&self, token_type: TokenType) -> bool {
         self.current
             .is_some_and(|token| token.token_type == token_type)
+    }
+
+    /// Returns the chunk currently being filled with bytecode.
+    fn current_chunk(&mut self) -> &mut Chunk {
+        &mut *self.compiling_chunk
+    }
+
+    /// Emits one byte tagged with the most relevant source line we have consumed.
+    fn emit_byte(&mut self, byte: u8) {
+        let line = self
+            .previous
+            .or(self.current)
+            .map(|token| token.line)
+            .unwrap_or(1);
+        self.current_chunk().write_byte(byte, line);
+    }
+
+    /// Ends the current chunk with the temporary return instruction used this chapter.
+    fn emit_return(&mut self) {
+        self.emit_byte(OpCode::Return.into());
+    }
+
+    /// Finalizes compiler output for the current top-level chunk.
+    fn end_compiler(&mut self) {
+        self.emit_return();
     }
 
     /// Reports an error anchored to the current lookahead token.
@@ -95,33 +122,35 @@ impl<'source> Parser<'source> {
 
 /// Compiles source into `chunk`, returning whether compilation succeeded.
 pub(crate) fn compile(source: &str, chunk: &mut Chunk) -> bool {
-    let mut parser = Parser::new(source);
+    let mut parser = Parser::new(source, chunk);
 
     parser.advance();
     if !parser.had_error {
-        expression(&mut parser, chunk);
+        expression(&mut parser);
     }
     if !parser.had_error {
         parser.consume(TokenType::Eof, "Expect end of expression.");
     }
+    parser.end_compiler();
 
     !parser.had_error
 }
 
 /// Entry point for Pratt parsing and bytecode emission for a single expression.
-fn expression(parser: &mut Parser<'_>, _chunk: &mut Chunk) {
+fn expression(parser: &mut Parser<'_, '_>) {
     parser.error("Expression compiler is not implemented yet.");
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Parser, compile};
-    use crate::chunk::Chunk;
+    use crate::chunk::{Chunk, OpCode};
     use crate::scanner::TokenType;
 
     #[test]
     fn advance_skips_error_tokens_and_sets_error_state() {
-        let mut parser = Parser::new("@123");
+        let mut chunk = Chunk::new();
+        let mut parser = Parser::new("@123", &mut chunk);
 
         parser.advance();
 
@@ -137,7 +166,8 @@ mod tests {
 
     #[test]
     fn advance_moves_old_current_token_into_previous() {
-        let mut parser = Parser::new("123 +");
+        let mut chunk = Chunk::new();
+        let mut parser = Parser::new("123 +", &mut chunk);
 
         parser.advance();
         parser.advance();
@@ -156,7 +186,8 @@ mod tests {
 
     #[test]
     fn consume_advances_when_current_token_matches() {
-        let mut parser = Parser::new("123");
+        let mut chunk = Chunk::new();
+        let mut parser = Parser::new("123", &mut chunk);
         parser.advance();
 
         parser.consume(TokenType::Number, "Expect number.");
@@ -175,7 +206,8 @@ mod tests {
 
     #[test]
     fn consume_reports_an_error_without_advanced_state_when_token_mismatches() {
-        let mut parser = Parser::new("123");
+        let mut chunk = Chunk::new();
+        let mut parser = Parser::new("123", &mut chunk);
         parser.advance();
 
         parser.consume(TokenType::LeftParen, "Expect '('.");
@@ -191,7 +223,8 @@ mod tests {
 
     #[test]
     fn panic_mode_suppresses_follow_up_errors() {
-        let mut parser = Parser::new("123");
+        let mut chunk = Chunk::new();
+        let mut parser = Parser::new("123", &mut chunk);
         parser.advance();
 
         parser.error_at_current("first");
@@ -211,7 +244,8 @@ mod tests {
         let mut chunk = Chunk::new();
 
         assert!(!compile("", &mut chunk));
-        assert!(chunk.code().is_empty());
+        assert_eq!(chunk.code(), &[u8::from(OpCode::Return)]);
+        assert_eq!(chunk.line_at(0), Some(1));
     }
 
     #[test]
@@ -219,7 +253,8 @@ mod tests {
         let mut chunk = Chunk::new();
 
         assert!(!compile("123", &mut chunk));
-        assert!(chunk.code().is_empty());
+        assert_eq!(chunk.code(), &[u8::from(OpCode::Return)]);
+        assert_eq!(chunk.line_at(0), Some(1));
     }
 
     #[test]
@@ -227,6 +262,7 @@ mod tests {
         let mut chunk = Chunk::new();
 
         assert!(!compile("@", &mut chunk));
-        assert!(chunk.code().is_empty());
+        assert_eq!(chunk.code(), &[u8::from(OpCode::Return)]);
+        assert_eq!(chunk.line_at(0), Some(1));
     }
 }
