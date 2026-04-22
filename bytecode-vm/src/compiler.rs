@@ -5,11 +5,52 @@ use crate::{
 
 /// Function pointer type for prefix parsers that can operate on any compiler state lifetimes.
 type PrefixParseFn = for<'source, 'chunk> fn(&mut Parser<'source, 'chunk>);
+/// Function pointer type for infix parsers that extend an already-compiled left operand.
+type InfixParseFn = for<'source, 'chunk> fn(&mut Parser<'source, 'chunk>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// Pratt precedence levels ordered from lowest to highest binding strength.
 enum Precedence {
+    None,
     Assignment,
+    Term,
+    Factor,
     Unary,
+}
+
+impl Precedence {
+    /// Returns the next tighter precedence level for left-associative right operands.
+    fn next(self) -> Self {
+        match self {
+            Self::None => Self::Assignment,
+            Self::Assignment => Self::Term,
+            Self::Term => Self::Factor,
+            Self::Factor => Self::Unary,
+            Self::Unary => Self::Unary,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+/// Bundles the Pratt parsing behavior associated with a single token type.
+struct ParseRule {
+    prefix: Option<PrefixParseFn>,
+    infix: Option<InfixParseFn>,
+    precedence: Precedence,
+}
+
+impl ParseRule {
+    const fn new(
+        prefix: Option<PrefixParseFn>,
+        infix: Option<InfixParseFn>,
+        precedence: Precedence,
+    ) -> Self {
+        Self {
+            prefix,
+            infix,
+            precedence,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -159,13 +200,16 @@ pub(crate) fn compile(source: &str, chunk: &mut Chunk) -> bool {
     !parser.had_error
 }
 
-/// Returns the prefix parser associated with the consumed token type, if any.
-fn get_prefix_parser(token_type: TokenType) -> Option<PrefixParseFn> {
+/// Returns the Pratt parse rule associated with `token_type`.
+fn get_rule(token_type: TokenType) -> ParseRule {
     match token_type {
-        TokenType::LeftParen => Some(grouping),
-        TokenType::Minus => Some(unary),
-        TokenType::Number => Some(number),
-        _ => None,
+        TokenType::LeftParen => ParseRule::new(Some(grouping), None, Precedence::None),
+        TokenType::Minus => ParseRule::new(Some(unary), Some(binary), Precedence::Term),
+        TokenType::Plus => ParseRule::new(None, Some(binary), Precedence::Term),
+        TokenType::Slash => ParseRule::new(None, Some(binary), Precedence::Factor),
+        TokenType::Star => ParseRule::new(None, Some(binary), Precedence::Factor),
+        TokenType::Number => ParseRule::new(Some(number), None, Precedence::None),
+        _ => ParseRule::new(None, None, Precedence::None),
     }
 }
 
@@ -174,20 +218,37 @@ fn expression(parser: &mut Parser<'_, '_>) {
     parse_precedence(parser, Precedence::Assignment);
 }
 
-/// Parses any prefix expression at `precedence` or higher.
-fn parse_precedence(parser: &mut Parser<'_, '_>, _precedence: Precedence) {
+/// Parses a prefix expression, then keeps consuming infix operators at `precedence` or higher.
+fn parse_precedence(parser: &mut Parser<'_, '_>, precedence: Precedence) {
     parser.advance();
 
     let Some(token_type) = parser.previous.map(|token| token.token_type) else {
         parser.error("Expect expression.");
         return;
     };
-    let Some(prefix_parser) = get_prefix_parser(token_type) else {
+    let Some(prefix_parser) = get_rule(token_type).prefix else {
         parser.error("Expect expression.");
         return;
     };
 
     prefix_parser(parser);
+
+    while parser
+        .current
+        .map(|token| precedence <= get_rule(token.token_type).precedence)
+        .unwrap_or(false)
+    {
+        parser.advance();
+
+        let Some(operator_type) = parser.previous.map(|token| token.token_type) else {
+            break;
+        };
+        let Some(infix_parser) = get_rule(operator_type).infix else {
+            break;
+        };
+
+        infix_parser(parser);
+    }
 }
 
 /// Compiles a parenthesized grouping by recursively compiling the inner expression.
@@ -208,6 +269,25 @@ fn unary(parser: &mut Parser<'_, '_>) {
     match operator_type {
         TokenType::Minus => parser.emit_byte(OpCode::Negate.into()),
         _ => unreachable!("unary parser is only registered for unary operators"),
+    }
+}
+
+/// Compiles a binary arithmetic operator after recursively compiling its right operand.
+fn binary(parser: &mut Parser<'_, '_>) {
+    let Some(operator_type) = parser.previous.map(|token| token.token_type) else {
+        parser.error("Expect binary operator.");
+        return;
+    };
+    let rule = get_rule(operator_type);
+
+    parse_precedence(parser, rule.precedence.next());
+
+    match operator_type {
+        TokenType::Plus => parser.emit_byte(OpCode::Add.into()),
+        TokenType::Minus => parser.emit_byte(OpCode::Subtract.into()),
+        TokenType::Star => parser.emit_byte(OpCode::Multiply.into()),
+        TokenType::Slash => parser.emit_byte(OpCode::Divide.into()),
+        _ => unreachable!("binary parser is only registered for binary operators"),
     }
 }
 
@@ -390,6 +470,69 @@ mod tests {
             ]
         );
         assert_eq!(chunk.constants(), &[123.0]);
+    }
+
+    #[test]
+    fn compile_emits_add_after_both_operands() {
+        let mut chunk = Chunk::new();
+
+        assert!(compile("1+2", &mut chunk));
+        assert_eq!(
+            chunk.code(),
+            &[
+                u8::from(OpCode::Constant),
+                0,
+                u8::from(OpCode::Constant),
+                1,
+                u8::from(OpCode::Add),
+                u8::from(OpCode::Return),
+            ]
+        );
+        assert_eq!(chunk.constants(), &[1.0, 2.0]);
+    }
+
+    #[test]
+    fn compile_respects_factor_precedence_over_term() {
+        let mut chunk = Chunk::new();
+
+        assert!(compile("1+2*3", &mut chunk));
+        assert_eq!(
+            chunk.code(),
+            &[
+                u8::from(OpCode::Constant),
+                0,
+                u8::from(OpCode::Constant),
+                1,
+                u8::from(OpCode::Constant),
+                2,
+                u8::from(OpCode::Multiply),
+                u8::from(OpCode::Add),
+                u8::from(OpCode::Return),
+            ]
+        );
+        assert_eq!(chunk.constants(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn compile_stops_star_rhs_before_lower_precedence_plus() {
+        let mut chunk = Chunk::new();
+
+        assert!(compile("8/2-1", &mut chunk));
+        assert_eq!(
+            chunk.code(),
+            &[
+                u8::from(OpCode::Constant),
+                0,
+                u8::from(OpCode::Constant),
+                1,
+                u8::from(OpCode::Divide),
+                u8::from(OpCode::Constant),
+                2,
+                u8::from(OpCode::Subtract),
+                u8::from(OpCode::Return),
+            ]
+        );
+        assert_eq!(chunk.constants(), &[8.0, 2.0, 1.0]);
     }
 
     #[test]
