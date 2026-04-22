@@ -98,8 +98,8 @@ mod tests {
     }
 
     #[test]
-    fn interpret_returns_compile_error_while_expression_compiler_is_stubbed() {
-        assert_eq!(interpret("123"), InterpretResult::CompileError);
+    fn interpret_returns_ok_for_number_literal() {
+        assert_eq!(interpret("123"), InterpretResult::Ok);
     }
 
     #[test]
@@ -110,9 +110,9 @@ mod tests {
     }
 
     #[test]
-    fn run_file_returns_compile_error_exit_code_for_invalid_or_unimplemented_source() {
+    fn run_file_returns_compile_error_exit_code_for_invalid_source() {
         let path = unique_temp_path("compile-error");
-        fs::write(&path, "123").expect("should be able to write test source");
+        fs::write(&path, "+").expect("should be able to write test source");
 
         let exit_code = run_file(&path);
         let _ = fs::remove_file(&path);
