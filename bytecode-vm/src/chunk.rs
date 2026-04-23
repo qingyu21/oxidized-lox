@@ -207,6 +207,11 @@ impl Chunk {
 #[cfg(test)]
 mod tests {
     use super::{Chunk, ConstantEncoding, ConstantIndexTooLarge, OpCode, encode_constant_index};
+    use crate::value::Value;
+
+    fn number(value: f64) -> Value {
+        Value::number(value)
+    }
 
     #[test]
     fn new_chunk_starts_with_no_code() {
@@ -251,22 +256,22 @@ mod tests {
     fn add_constant_returns_the_inserted_index_and_stores_the_value() {
         let mut chunk = Chunk::new();
 
-        let first = chunk.add_constant(1.2);
-        let second = chunk.add_constant(3.4);
+        let first = chunk.add_constant(number(1.2));
+        let second = chunk.add_constant(number(3.4));
 
         assert_eq!(first, 0);
         assert_eq!(second, 1);
-        assert_eq!(chunk.constants(), &[1.2, 3.4]);
+        assert_eq!(chunk.constants(), &[number(1.2), number(3.4)]);
     }
 
     #[test]
     fn write_constant_uses_short_instruction_with_one_byte_index() {
         let mut chunk = Chunk::new();
 
-        chunk.write_constant(1.2, 7).unwrap();
+        chunk.write_constant(number(1.2), 7).unwrap();
 
         assert_eq!(chunk.code(), &[u8::from(OpCode::Constant), 0]);
-        assert_eq!(chunk.constants(), &[1.2]);
+        assert_eq!(chunk.constants(), &[number(1.2)]);
         assert_eq!(chunk.line_at(0), Some(7));
         assert_eq!(chunk.line_at(1), Some(7));
     }
@@ -275,13 +280,13 @@ mod tests {
     fn write_constant_uses_long_instruction_after_short_index_range() {
         let mut chunk = Chunk::new();
         for index in 0..=u8::MAX {
-            chunk.add_constant(index as f64);
+            chunk.add_constant(number(index as f64));
         }
 
-        chunk.write_constant(256.0, 9).unwrap();
+        chunk.write_constant(number(256.0), 9).unwrap();
 
         assert_eq!(chunk.code(), &[u8::from(OpCode::ConstantLong), 0, 1, 0]);
-        assert_eq!(chunk.constants()[256], 256.0);
+        assert_eq!(chunk.constants()[256], number(256.0));
         assert_eq!(chunk.line_at(0), Some(9));
         assert_eq!(chunk.line_at(1), Some(9));
         assert_eq!(chunk.line_at(2), Some(9));

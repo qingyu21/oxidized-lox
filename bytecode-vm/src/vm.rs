@@ -42,16 +42,24 @@ impl Vm {
     }
 
     /// Negates the current top-of-stack value in place without changing stack height.
-    fn negate_top(&mut self) {
+    fn negate_top(&mut self) -> bool {
         let value = self.stack.last_mut().expect("vm stack underflow");
-        *value = -*value;
+        let Value::Number(number) = value else {
+            return false;
+        };
+        *number = -*number;
+        true
     }
 
     /// Pops the right operand first, then the left, matching stack-based evaluation order.
-    fn binary_op(&mut self, op: impl FnOnce(Value, Value) -> Value) {
+    fn binary_op(&mut self, op: impl FnOnce(f64, f64) -> f64) -> bool {
         let b = self.pop();
         let a = self.pop();
-        self.push(op(a, b));
+        let (Some(a), Some(b)) = (a.as_number(), b.as_number()) else {
+            return false;
+        };
+        self.push(Value::number(op(a, b)));
+        true
     }
 
     /// Dispatches bytecode instructions until execution finishes or errors out.
@@ -78,11 +86,31 @@ impl Vm {
                     };
                     self.push(constant);
                 }
-                Ok(OpCode::Add) => self.binary_op(|a, b| a + b),
-                Ok(OpCode::Subtract) => self.binary_op(|a, b| a - b),
-                Ok(OpCode::Multiply) => self.binary_op(|a, b| a * b),
-                Ok(OpCode::Divide) => self.binary_op(|a, b| a / b),
-                Ok(OpCode::Negate) => self.negate_top(),
+                Ok(OpCode::Add) => {
+                    if !self.binary_op(|a, b| a + b) {
+                        return InterpretResult::RuntimeError;
+                    }
+                }
+                Ok(OpCode::Subtract) => {
+                    if !self.binary_op(|a, b| a - b) {
+                        return InterpretResult::RuntimeError;
+                    }
+                }
+                Ok(OpCode::Multiply) => {
+                    if !self.binary_op(|a, b| a * b) {
+                        return InterpretResult::RuntimeError;
+                    }
+                }
+                Ok(OpCode::Divide) => {
+                    if !self.binary_op(|a, b| a / b) {
+                        return InterpretResult::RuntimeError;
+                    }
+                }
+                Ok(OpCode::Negate) => {
+                    if !self.negate_top() {
+                        return InterpretResult::RuntimeError;
+                    }
+                }
                 Ok(OpCode::Return) => {
                     let value = self.pop();
                     print_value(value);
@@ -135,6 +163,11 @@ impl Vm {
 mod tests {
     use super::{InterpretResult, Vm};
     use crate::chunk::{Chunk, OpCode};
+    use crate::value::Value;
+
+    fn number(value: f64) -> Value {
+        Value::number(value)
+    }
 
     fn assert_interpret_ok_and_empties_stack(vm: &mut Vm, chunk: &Chunk) {
         assert_eq!(vm.interpret(chunk), InterpretResult::Ok);
@@ -143,7 +176,7 @@ mod tests {
 
     fn returning_constant_chunk(value: f64) -> Chunk {
         let mut chunk = Chunk::new();
-        chunk.write_constant(value, 1).unwrap();
+        chunk.write_constant(number(value), 1).unwrap();
         chunk.write_opcode(OpCode::Return, 1);
         chunk
     }
@@ -179,9 +212,9 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new();
         for index in 0..=u8::MAX {
-            chunk.add_constant(index as f64);
+            chunk.add_constant(number(index as f64));
         }
-        chunk.write_constant(256.0, 1).unwrap();
+        chunk.write_constant(number(256.0), 1).unwrap();
         chunk.write_opcode(OpCode::Return, 1);
 
         assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
@@ -191,7 +224,7 @@ mod tests {
     fn negate_opcode_negates_the_top_stack_value_before_return() {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new();
-        chunk.write_constant(1.2, 1).unwrap();
+        chunk.write_constant(number(1.2), 1).unwrap();
         chunk.write_opcode(OpCode::Negate, 1);
         chunk.write_opcode(OpCode::Return, 1);
 
@@ -201,23 +234,23 @@ mod tests {
     #[test]
     fn binary_op_uses_left_then_right_operand_order() {
         let mut vm = Vm::new();
-        vm.push(3.0);
-        vm.push(1.0);
+        vm.push(number(3.0));
+        vm.push(number(1.0));
 
-        vm.binary_op(|a, b| a - b);
+        assert!(vm.binary_op(|a, b| a - b));
 
-        assert_eq!(vm.pop(), 2.0);
+        assert_eq!(vm.pop(), number(2.0));
         assert!(vm.stack.is_empty());
     }
 
     #[test]
     fn negate_top_keeps_stack_height_the_same() {
         let mut vm = Vm::new();
-        vm.push(1.2);
+        vm.push(number(1.2));
 
-        vm.negate_top();
+        assert!(vm.negate_top());
 
-        assert_eq!(vm.stack, vec![-1.2]);
+        assert_eq!(vm.stack, vec![number(-1.2)]);
     }
 
     #[test]
@@ -232,8 +265,8 @@ mod tests {
         for (opcode, left, right, expected) in cases {
             let mut vm = Vm::new();
             let mut chunk = Chunk::new();
-            chunk.write_constant(left, 1).unwrap();
-            chunk.write_constant(right, 1).unwrap();
+            chunk.write_constant(number(left), 1).unwrap();
+            chunk.write_constant(number(right), 1).unwrap();
             chunk.write_opcode(opcode, 1);
 
             // Leave off OP_RETURN on purpose so we can inspect the intermediate
@@ -242,7 +275,7 @@ mod tests {
             vm.stack.clear();
 
             assert_eq!(vm.run(&chunk), InterpretResult::RuntimeError);
-            assert_eq!(vm.stack, vec![expected]);
+            assert_eq!(vm.stack, vec![number(expected)]);
         }
     }
 

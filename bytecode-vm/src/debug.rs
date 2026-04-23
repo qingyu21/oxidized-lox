@@ -109,6 +109,11 @@ fn simple_instruction(opcode: OpCode, offset: usize) -> usize {
 mod tests {
     use super::{OpCode, disassemble_instruction};
     use crate::chunk::Chunk;
+    use crate::value::Value;
+
+    fn number(value: f64) -> Value {
+        Value::number(value)
+    }
 
     fn assert_single_byte_instruction_advances(opcode: OpCode) {
         let mut chunk = Chunk::new();
@@ -150,7 +155,7 @@ mod tests {
     #[test]
     fn constant_instruction_advances_by_opcode_and_operand() {
         let mut chunk = Chunk::new();
-        let index = chunk.add_constant(1.2);
+        let index = chunk.add_constant(number(1.2));
 
         chunk.write_opcode(OpCode::Constant, 7);
         chunk.write_byte(index as u8, 7);
@@ -162,10 +167,10 @@ mod tests {
     fn constant_long_instruction_advances_by_opcode_and_three_byte_operand() {
         let mut chunk = Chunk::new();
         for index in 0..=u8::MAX {
-            chunk.add_constant(index as f64);
+            chunk.add_constant(number(index as f64));
         }
 
-        chunk.write_constant(256.0, 7).unwrap();
+        chunk.write_constant(number(256.0), 7).unwrap();
 
         assert_eq!(disassemble_instruction(&chunk, 0), 4);
     }

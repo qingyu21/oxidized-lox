@@ -1,6 +1,7 @@
 use crate::{
     chunk::{Chunk, OpCode},
     scanner::{self, Token, TokenType},
+    value::Value,
 };
 
 /// Function pointer type for prefix parsers that can operate on any compiler state lifetimes.
@@ -179,7 +180,9 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
             .or(self.current)
             .map(|token| token.line)
             .unwrap_or(1);
-        let result = self.current_chunk().write_constant(value, line);
+        let result = self
+            .current_chunk()
+            .write_constant(Value::number(value), line);
 
         if result.is_err() {
             self.error("Too many constants in one chunk.");
@@ -387,6 +390,11 @@ mod tests {
     use super::{Parser, compile};
     use crate::chunk::{Chunk, OpCode};
     use crate::scanner::TokenType;
+    use crate::value::Value;
+
+    fn number(value: f64) -> Value {
+        Value::number(value)
+    }
 
     #[test]
     fn advance_skips_error_tokens_and_sets_error_state() {
@@ -489,7 +497,7 @@ mod tests {
             chunk.code(),
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
         );
-        assert_eq!(chunk.constants(), &[123.45]);
+        assert_eq!(chunk.constants(), &[number(123.45)]);
         assert_eq!(chunk.line_at(0), Some(1));
         assert_eq!(chunk.line_at(1), Some(1));
         assert_eq!(chunk.line_at(2), Some(1));
@@ -504,7 +512,7 @@ mod tests {
             chunk.code(),
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
         );
-        assert_eq!(chunk.constants(), &[123.0]);
+        assert_eq!(chunk.constants(), &[number(123.0)]);
         assert_eq!(chunk.line_at(0), Some(1));
         assert_eq!(chunk.line_at(1), Some(1));
         assert_eq!(chunk.line_at(2), Some(1));
@@ -524,7 +532,7 @@ mod tests {
                 u8::from(OpCode::Return),
             ]
         );
-        assert_eq!(chunk.constants(), &[123.0]);
+        assert_eq!(chunk.constants(), &[number(123.0)]);
         assert_eq!(chunk.line_at(0), Some(1));
         assert_eq!(chunk.line_at(1), Some(1));
         assert_eq!(chunk.line_at(2), Some(1));
@@ -546,7 +554,7 @@ mod tests {
                 u8::from(OpCode::Return),
             ]
         );
-        assert_eq!(chunk.constants(), &[123.0]);
+        assert_eq!(chunk.constants(), &[number(123.0)]);
     }
 
     #[test]
@@ -565,7 +573,7 @@ mod tests {
                 u8::from(OpCode::Return),
             ]
         );
-        assert_eq!(chunk.constants(), &[1.0, 2.0]);
+        assert_eq!(chunk.constants(), &[number(1.0), number(2.0)]);
     }
 
     #[test]
@@ -587,7 +595,7 @@ mod tests {
                 u8::from(OpCode::Return),
             ]
         );
-        assert_eq!(chunk.constants(), &[1.0, 2.0, 3.0]);
+        assert_eq!(chunk.constants(), &[number(1.0), number(2.0), number(3.0)]);
     }
 
     #[test]
@@ -609,7 +617,7 @@ mod tests {
                 u8::from(OpCode::Return),
             ]
         );
-        assert_eq!(chunk.constants(), &[8.0, 2.0, 1.0]);
+        assert_eq!(chunk.constants(), &[number(8.0), number(2.0), number(1.0)]);
     }
 
     #[test]
@@ -617,7 +625,7 @@ mod tests {
         let mut chunk = Chunk::new();
 
         assert!(!compile("1?2:3", &mut chunk));
-        assert_eq!(chunk.constants(), &[1.0, 2.0, 3.0]);
+        assert_eq!(chunk.constants(), &[number(1.0), number(2.0), number(3.0)]);
         assert_eq!(
             chunk.code(),
             &[
@@ -648,7 +656,7 @@ mod tests {
             chunk.code(),
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
         );
-        assert_eq!(chunk.constants(), &[123.0]);
+        assert_eq!(chunk.constants(), &[number(123.0)]);
     }
 
     #[test]
