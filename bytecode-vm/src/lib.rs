@@ -75,7 +75,7 @@ fn interpret(source: &str) -> vm::InterpretResult {
 
 /// Returns the current implementation status of the bytecode VM crate.
 pub fn status() -> &'static str {
-    "bytecode-vm scaffold: execution pipeline wired; compiler parser skeleton in progress"
+    "bytecode-vm scaffold: scanning, bytecode compilation, and arithmetic execution wired"
 }
 
 #[cfg(test)]

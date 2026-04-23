@@ -143,6 +143,7 @@ impl Chunk {
         }
     }
 
+    /// Appends a single opcode byte tagged with its source line.
     pub(crate) fn write_opcode(&mut self, opcode: OpCode, line: usize) {
         self.write_byte(opcode.into(), line)
     }

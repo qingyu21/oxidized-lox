@@ -1,5 +1,6 @@
 use crate::chunk::{Chunk, OpCode};
 
+/// Prints a full disassembly of `chunk` from the first instruction to the last.
 pub(crate) fn disassemble_chunk(chunk: &Chunk, name: &str) {
     println!("== {name} ==");
 
@@ -9,6 +10,7 @@ pub(crate) fn disassemble_chunk(chunk: &Chunk, name: &str) {
     }
 }
 
+/// Prints one instruction and returns the offset of the next instruction.
 pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
     let Some(&instruction) = chunk.code().get(offset) else {
         print_line_prefix(chunk, offset);

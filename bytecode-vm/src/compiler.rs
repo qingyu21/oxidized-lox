@@ -8,8 +8,8 @@ type PrefixParseFn = for<'source, 'chunk> fn(&mut Parser<'source, 'chunk>);
 /// Function pointer type for infix parsers that extend an already-compiled left operand.
 type InfixParseFn = for<'source, 'chunk> fn(&mut Parser<'source, 'chunk>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 /// Pratt precedence levels ordered from lowest to highest binding strength.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Precedence {
     None,
     Assignment,
@@ -31,8 +31,8 @@ impl Precedence {
     }
 }
 
-#[derive(Clone, Copy)]
 /// Bundles the Pratt parsing behavior associated with a single token type.
+#[derive(Clone, Copy)]
 struct ParseRule {
     prefix: Option<PrefixParseFn>,
     infix: Option<InfixParseFn>,
@@ -55,6 +55,7 @@ impl ParseRule {
 
 const RULE_COUNT: usize = TokenType::Eof as usize + 1;
 
+/// Pratt dispatch table indexed directly by `TokenType`.
 const RULES: [ParseRule; RULE_COUNT] = [
     ParseRule::new(Some(grouping), None, Precedence::None), // LeftParen
     ParseRule::new(None, None, Precedence::None),           // RightParen
@@ -275,6 +276,8 @@ fn parse_precedence(parser: &mut Parser<'_, '_>, precedence: Precedence) {
 
     prefix_parser(parser);
 
+    // Keep extending the already-compiled left expression while the next
+    // operator binds tightly enough for this precedence level.
     while parser
         .current
         .map(|token| precedence <= get_rule(token.token_type).precedence)
