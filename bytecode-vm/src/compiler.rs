@@ -53,6 +53,51 @@ impl ParseRule {
     }
 }
 
+const RULE_COUNT: usize = TokenType::Eof as usize + 1;
+
+const RULES: [ParseRule; RULE_COUNT] = [
+    ParseRule::new(Some(grouping), None, Precedence::None), // LeftParen
+    ParseRule::new(None, None, Precedence::None),           // RightParen
+    ParseRule::new(None, None, Precedence::None),           // LeftBrace
+    ParseRule::new(None, None, Precedence::None),           // RightBrace
+    ParseRule::new(None, None, Precedence::None),           // Comma
+    ParseRule::new(None, None, Precedence::None),           // Dot
+    ParseRule::new(Some(unary), Some(binary), Precedence::Term), // Minus
+    ParseRule::new(None, Some(binary), Precedence::Term),   // Plus
+    ParseRule::new(None, None, Precedence::None),           // Semicolon
+    ParseRule::new(None, Some(binary), Precedence::Factor), // Slash
+    ParseRule::new(None, Some(binary), Precedence::Factor), // Star
+    ParseRule::new(None, None, Precedence::None),           // Bang
+    ParseRule::new(None, None, Precedence::None),           // BangEqual
+    ParseRule::new(None, None, Precedence::None),           // Equal
+    ParseRule::new(None, None, Precedence::None),           // EqualEqual
+    ParseRule::new(None, None, Precedence::None),           // Greater
+    ParseRule::new(None, None, Precedence::None),           // GreaterEqual
+    ParseRule::new(None, None, Precedence::None),           // Less
+    ParseRule::new(None, None, Precedence::None),           // LessEqual
+    ParseRule::new(None, None, Precedence::None),           // Identifier
+    ParseRule::new(None, None, Precedence::None),           // String
+    ParseRule::new(Some(number), None, Precedence::None),   // Number
+    ParseRule::new(None, None, Precedence::None),           // And
+    ParseRule::new(None, None, Precedence::None),           // Class
+    ParseRule::new(None, None, Precedence::None),           // Else
+    ParseRule::new(None, None, Precedence::None),           // False
+    ParseRule::new(None, None, Precedence::None),           // For
+    ParseRule::new(None, None, Precedence::None),           // Fun
+    ParseRule::new(None, None, Precedence::None),           // If
+    ParseRule::new(None, None, Precedence::None),           // Nil
+    ParseRule::new(None, None, Precedence::None),           // Or
+    ParseRule::new(None, None, Precedence::None),           // Print
+    ParseRule::new(None, None, Precedence::None),           // Return
+    ParseRule::new(None, None, Precedence::None),           // Super
+    ParseRule::new(None, None, Precedence::None),           // This
+    ParseRule::new(None, None, Precedence::None),           // True
+    ParseRule::new(None, None, Precedence::None),           // Var
+    ParseRule::new(None, None, Precedence::None),           // While
+    ParseRule::new(None, None, Precedence::None),           // Error
+    ParseRule::new(None, None, Precedence::None),           // Eof
+];
+
 #[derive(Debug)]
 struct Parser<'source, 'chunk> {
     scanner: scanner::Scanner<'source>,
@@ -202,15 +247,7 @@ pub(crate) fn compile(source: &str, chunk: &mut Chunk) -> bool {
 
 /// Returns the Pratt parse rule associated with `token_type`.
 fn get_rule(token_type: TokenType) -> ParseRule {
-    match token_type {
-        TokenType::LeftParen => ParseRule::new(Some(grouping), None, Precedence::None),
-        TokenType::Minus => ParseRule::new(Some(unary), Some(binary), Precedence::Term),
-        TokenType::Plus => ParseRule::new(None, Some(binary), Precedence::Term),
-        TokenType::Slash => ParseRule::new(None, Some(binary), Precedence::Factor),
-        TokenType::Star => ParseRule::new(None, Some(binary), Precedence::Factor),
-        TokenType::Number => ParseRule::new(Some(number), None, Precedence::None),
-        _ => ParseRule::new(None, None, Precedence::None),
-    }
+    RULES[token_type as usize]
 }
 
 /// Entry point for Pratt parsing and bytecode emission for a single expression.
