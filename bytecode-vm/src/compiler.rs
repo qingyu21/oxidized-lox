@@ -13,6 +13,7 @@ type InfixParseFn = for<'source, 'chunk> fn(&mut Parser<'source, 'chunk>);
 enum Precedence {
     None,
     Assignment,
+    Conditional,
     Term,
     Factor,
     Unary,
@@ -23,7 +24,8 @@ impl Precedence {
     fn next(self) -> Self {
         match self {
             Self::None => Self::Assignment,
-            Self::Assignment => Self::Term,
+            Self::Assignment => Self::Conditional,
+            Self::Conditional => Self::Term,
             Self::Term => Self::Factor,
             Self::Factor => Self::Unary,
             Self::Unary => Self::Unary,
@@ -66,6 +68,8 @@ const RULES: [ParseRule; RULE_COUNT] = [
     ParseRule::new(Some(unary), Some(binary), Precedence::Term), // Minus
     ParseRule::new(None, Some(binary), Precedence::Term),   // Plus
     ParseRule::new(None, None, Precedence::None),           // Semicolon
+    ParseRule::new(None, Some(conditional), Precedence::Conditional), // Question
+    ParseRule::new(None, None, Precedence::None),           // Colon
     ParseRule::new(None, Some(binary), Precedence::Factor), // Slash
     ParseRule::new(None, Some(binary), Precedence::Factor), // Star
     ParseRule::new(None, None, Precedence::None),           // Bang
@@ -336,6 +340,34 @@ fn binary(parser: &mut Parser<'_, '_>) {
     }
 }
 
+/// Parses both operands of `?:` but deliberately leaves bytecode generation for later.
+fn conditional(parser: &mut Parser<'_, '_>) {
+    // Keep the `?` token so the temporary error points at the operator itself.
+    let question = parser.previous;
+
+    // Parse the then-branch after `?`.
+    parse_precedence(parser, Precedence::Assignment);
+
+    // The two branches must be separated by `:`.
+    parser.consume(
+        TokenType::Colon,
+        "Expect ':' after then branch of conditional operator.",
+    );
+
+    // Parse the else-branch with the same precedence to keep `?:` right-associative.
+    parse_precedence(parser, Precedence::Conditional);
+
+    // This challenge only wires the parser; bytecode emission comes later.
+    if let Some(token) = question {
+        parser.error_at(
+            token,
+            "Conditional operator bytecode is not implemented yet.",
+        );
+    } else {
+        parser.error("Conditional operator bytecode is not implemented yet.");
+    }
+}
+
 /// Compiles a consumed number literal token into a constant-loading instruction.
 fn number(parser: &mut Parser<'_, '_>) {
     let Some(token) = parser.previous else {
@@ -578,6 +610,33 @@ mod tests {
             ]
         );
         assert_eq!(chunk.constants(), &[8.0, 2.0, 1.0]);
+    }
+
+    #[test]
+    fn compile_parses_conditional_operands_before_reporting_unimplemented_bytecode() {
+        let mut chunk = Chunk::new();
+
+        assert!(!compile("1?2:3", &mut chunk));
+        assert_eq!(chunk.constants(), &[1.0, 2.0, 3.0]);
+        assert_eq!(
+            chunk.code(),
+            &[
+                u8::from(OpCode::Constant),
+                0,
+                u8::from(OpCode::Constant),
+                1,
+                u8::from(OpCode::Constant),
+                2,
+                u8::from(OpCode::Return),
+            ]
+        );
+    }
+
+    #[test]
+    fn compile_reports_failure_for_missing_colon_in_conditional_operator() {
+        let mut chunk = Chunk::new();
+
+        assert!(!compile("1?2", &mut chunk));
     }
 
     #[test]
