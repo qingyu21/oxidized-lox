@@ -189,6 +189,11 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
     /// Finalizes compiler output for the current top-level chunk.
     fn end_compiler(&mut self) {
         self.emit_return();
+
+        #[cfg(feature = "debug-print-code")]
+        if !self.had_error {
+            crate::debug::disassemble_chunk(&*self.compiling_chunk, "code");
+        }
     }
 
     /// Reports an error anchored to the current lookahead token.
