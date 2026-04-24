@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::object::ObjRef;
+
 /// Runtime value representation for the current VM chapter stage.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) enum Value {
@@ -7,6 +9,9 @@ pub(crate) enum Value {
     #[default]
     Nil,
     Number(f64),
+    // Wired before concrete heap object constructors exist.
+    #[allow(dead_code)]
+    Obj(ObjRef),
 }
 
 impl Value {
@@ -17,7 +22,7 @@ impl Value {
     pub(crate) fn as_number(self) -> Option<f64> {
         match self {
             Self::Number(value) => Some(value),
-            Self::Bool(_) | Self::Nil => None,
+            Self::Bool(_) | Self::Nil | Self::Obj(_) => None,
         }
     }
 
@@ -25,7 +30,7 @@ impl Value {
         match self {
             Self::Bool(value) => !value,
             Self::Nil => true,
-            Self::Number(_) => false,
+            Self::Number(_) | Self::Obj(_) => false,
         }
     }
 
@@ -34,7 +39,8 @@ impl Value {
             (Self::Bool(left), Self::Bool(right)) => left == right,
             (Self::Nil, Self::Nil) => true,
             (Self::Number(left), Self::Number(right)) => left == right,
-            (Self::Bool(_) | Self::Nil | Self::Number(_), _) => false,
+            (Self::Obj(left), Self::Obj(right)) => left == right,
+            (Self::Bool(_) | Self::Nil | Self::Number(_) | Self::Obj(_), _) => false,
         }
     }
 }
@@ -57,6 +63,7 @@ impl fmt::Display for Value {
             Self::Bool(value) => write!(f, "{value}"),
             Self::Nil => write!(f, "nil"),
             Self::Number(value) => write!(f, "{value}"),
+            Self::Obj(_) => write!(f, "<obj>"),
         }
     }
 }
@@ -68,12 +75,18 @@ pub(crate) fn print_value(value: Value) {
 #[cfg(test)]
 mod tests {
     use super::Value;
+    use crate::object::ObjRef;
+
+    fn object() -> Value {
+        Value::Obj(ObjRef::dangling_for_tests())
+    }
 
     #[test]
     fn number_values_round_trip_through_as_number() {
         assert_eq!(Value::number(3.5).as_number(), Some(3.5));
         assert_eq!(Value::Bool(true).as_number(), None);
         assert_eq!(Value::Nil.as_number(), None);
+        assert_eq!(object().as_number(), None);
     }
 
     #[test]
@@ -82,6 +95,7 @@ mod tests {
         assert!(Value::Nil.is_falsey());
         assert!(!Value::Bool(true).is_falsey());
         assert!(!Value::number(0.0).is_falsey());
+        assert!(!object().is_falsey());
     }
 
     #[test]
@@ -92,6 +106,9 @@ mod tests {
         assert!(!Value::Bool(true).equals(Value::Bool(false)));
         assert!(!Value::Nil.equals(Value::Bool(false)));
         assert!(!Value::number(f64::NAN).equals(Value::number(f64::NAN)));
+        let object = object();
+        assert!(object.equals(object));
+        assert!(!object.equals(Value::Nil));
     }
 
     #[test]
@@ -99,5 +116,6 @@ mod tests {
         assert_eq!(Value::Bool(true).to_string(), "true");
         assert_eq!(Value::Nil.to_string(), "nil");
         assert_eq!(Value::number(12.5).to_string(), "12.5");
+        assert_eq!(object().to_string(), "<obj>");
     }
 }

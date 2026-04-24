@@ -14,6 +14,7 @@ pub(crate) mod chunk;
 pub(crate) mod compiler;
 #[allow(dead_code)]
 pub(crate) mod debug;
+pub(crate) mod object;
 pub(crate) mod scanner;
 pub(crate) mod value;
 pub(crate) mod vm;
