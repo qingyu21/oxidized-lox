@@ -15,6 +15,8 @@ enum Precedence {
     None,
     Assignment,
     Conditional,
+    Equality,
+    Comparison,
     Term,
     Factor,
     Unary,
@@ -26,7 +28,9 @@ impl Precedence {
         match self {
             Self::None => Self::Assignment,
             Self::Assignment => Self::Conditional,
-            Self::Conditional => Self::Term,
+            Self::Conditional => Self::Equality,
+            Self::Equality => Self::Comparison,
+            Self::Comparison => Self::Term,
             Self::Term => Self::Factor,
             Self::Factor => Self::Unary,
             Self::Unary => Self::Unary,
@@ -74,13 +78,13 @@ const RULES: [ParseRule; RULE_COUNT] = [
     ParseRule::new(None, Some(binary), Precedence::Factor), // Slash
     ParseRule::new(None, Some(binary), Precedence::Factor), // Star
     ParseRule::new(Some(unary), None, Precedence::None),    // Bang
-    ParseRule::new(None, None, Precedence::None),           // BangEqual
+    ParseRule::new(None, Some(binary), Precedence::Equality), // BangEqual
     ParseRule::new(None, None, Precedence::None),           // Equal
-    ParseRule::new(None, None, Precedence::None),           // EqualEqual
-    ParseRule::new(None, None, Precedence::None),           // Greater
-    ParseRule::new(None, None, Precedence::None),           // GreaterEqual
-    ParseRule::new(None, None, Precedence::None),           // Less
-    ParseRule::new(None, None, Precedence::None),           // LessEqual
+    ParseRule::new(None, Some(binary), Precedence::Equality), // EqualEqual
+    ParseRule::new(None, Some(binary), Precedence::Comparison), // Greater
+    ParseRule::new(None, Some(binary), Precedence::Comparison), // GreaterEqual
+    ParseRule::new(None, Some(binary), Precedence::Comparison), // Less
+    ParseRule::new(None, Some(binary), Precedence::Comparison), // LessEqual
     ParseRule::new(None, None, Precedence::None),           // Identifier
     ParseRule::new(None, None, Precedence::None),           // String
     ParseRule::new(Some(number), None, Precedence::None),   // Number
@@ -171,6 +175,12 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
             .map(|token| token.line)
             .unwrap_or(1);
         self.current_chunk().write_byte(byte, line);
+    }
+
+    /// Emits two bytes with the current source line.
+    fn emit_bytes(&mut self, first: u8, second: u8) {
+        self.emit_byte(first);
+        self.emit_byte(second);
     }
 
     /// Emits a constant-loading instruction for `value`.
@@ -340,7 +350,7 @@ fn unary(parser: &mut Parser<'_, '_>) {
     }
 }
 
-/// Compiles a binary arithmetic operator after recursively compiling its right operand.
+/// Compiles a binary operator after recursively compiling its right operand.
 fn binary(parser: &mut Parser<'_, '_>) {
     let Some(operator_type) = parser.previous.map(|token| token.token_type) else {
         parser.error("Expect binary operator.");
@@ -351,6 +361,12 @@ fn binary(parser: &mut Parser<'_, '_>) {
     parse_precedence(parser, rule.precedence.next());
 
     match operator_type {
+        TokenType::BangEqual => parser.emit_bytes(OpCode::Equal.into(), OpCode::Not.into()),
+        TokenType::EqualEqual => parser.emit_byte(OpCode::Equal.into()),
+        TokenType::Greater => parser.emit_byte(OpCode::Greater.into()),
+        TokenType::GreaterEqual => parser.emit_bytes(OpCode::Less.into(), OpCode::Not.into()),
+        TokenType::Less => parser.emit_byte(OpCode::Less.into()),
+        TokenType::LessEqual => parser.emit_bytes(OpCode::Greater.into(), OpCode::Not.into()),
         TokenType::Plus => parser.emit_byte(OpCode::Add.into()),
         TokenType::Minus => parser.emit_byte(OpCode::Subtract.into()),
         TokenType::Star => parser.emit_byte(OpCode::Multiply.into()),
@@ -669,6 +685,78 @@ mod tests {
             ]
         );
         assert_eq!(chunk.constants(), &[number(8.0), number(2.0), number(1.0)]);
+    }
+
+    #[test]
+    fn compile_emits_equality_and_comparison_operator_sequences() {
+        let cases: [(&str, &[OpCode]); 6] = [
+            ("1==2", &[OpCode::Equal]),
+            ("1!=2", &[OpCode::Equal, OpCode::Not]),
+            ("1>2", &[OpCode::Greater]),
+            ("1>=2", &[OpCode::Less, OpCode::Not]),
+            ("1<2", &[OpCode::Less]),
+            ("1<=2", &[OpCode::Greater, OpCode::Not]),
+        ];
+
+        for (source, opcodes) in cases {
+            let mut chunk = Chunk::new();
+            let mut expected = vec![u8::from(OpCode::Constant), 0, u8::from(OpCode::Constant), 1];
+            expected.extend(opcodes.iter().copied().map(u8::from));
+            expected.push(u8::from(OpCode::Return));
+
+            assert!(compile(source, &mut chunk));
+            assert_eq!(chunk.code(), expected);
+            assert_eq!(chunk.constants(), &[number(1.0), number(2.0)]);
+        }
+    }
+
+    #[test]
+    fn compile_gives_comparison_lower_precedence_than_arithmetic() {
+        let mut chunk = Chunk::new();
+
+        assert!(compile("1+2>3*4", &mut chunk));
+        assert_eq!(
+            chunk.code(),
+            &[
+                u8::from(OpCode::Constant),
+                0,
+                u8::from(OpCode::Constant),
+                1,
+                u8::from(OpCode::Add),
+                u8::from(OpCode::Constant),
+                2,
+                u8::from(OpCode::Constant),
+                3,
+                u8::from(OpCode::Multiply),
+                u8::from(OpCode::Greater),
+                u8::from(OpCode::Return),
+            ]
+        );
+        assert_eq!(
+            chunk.constants(),
+            &[number(1.0), number(2.0), number(3.0), number(4.0)]
+        );
+    }
+
+    #[test]
+    fn compile_gives_equality_lower_precedence_than_comparison() {
+        let mut chunk = Chunk::new();
+
+        assert!(compile("1<2==true", &mut chunk));
+        assert_eq!(
+            chunk.code(),
+            &[
+                u8::from(OpCode::Constant),
+                0,
+                u8::from(OpCode::Constant),
+                1,
+                u8::from(OpCode::Less),
+                u8::from(OpCode::True),
+                u8::from(OpCode::Equal),
+                u8::from(OpCode::Return),
+            ]
+        );
+        assert_eq!(chunk.constants(), &[number(1.0), number(2.0)]);
     }
 
     #[test]

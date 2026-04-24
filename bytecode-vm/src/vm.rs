@@ -122,6 +122,23 @@ impl Vm {
                 Ok(OpCode::Nil) => self.push(Value::Nil),
                 Ok(OpCode::True) => self.push(Value::Bool(true)),
                 Ok(OpCode::False) => self.push(Value::Bool(false)),
+                Ok(OpCode::Equal) => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    self.push(Value::Bool(a.equals(b)));
+                }
+                Ok(OpCode::Greater) => {
+                    if !self.binary_op(Value::Bool, |a, b| a > b) {
+                        self.runtime_error(chunk, "Operands must be numbers.");
+                        return InterpretResult::RuntimeError;
+                    }
+                }
+                Ok(OpCode::Less) => {
+                    if !self.binary_op(Value::Bool, |a, b| a < b) {
+                        self.runtime_error(chunk, "Operands must be numbers.");
+                        return InterpretResult::RuntimeError;
+                    }
+                }
                 Ok(OpCode::Add) => {
                     if !self.binary_op(Value::number, |a, b| a + b) {
                         self.runtime_error(chunk, "Operands must be numbers.");
@@ -323,6 +340,71 @@ mod tests {
             assert_eq!(vm.run(&chunk), InterpretResult::RuntimeError);
             assert_eq!(vm.stack, vec![expected]);
         }
+    }
+
+    #[test]
+    fn equal_opcode_compares_current_value_types() {
+        let cases = [
+            (Value::Bool(true), Value::Bool(true), Value::Bool(true)),
+            (Value::Nil, Value::Nil, Value::Bool(true)),
+            (number(1.2), number(1.2), Value::Bool(true)),
+            (Value::Bool(true), Value::Bool(false), Value::Bool(false)),
+            (Value::Nil, Value::Bool(false), Value::Bool(false)),
+        ];
+
+        for (left, right, expected) in cases {
+            let mut vm = Vm::new();
+            let mut chunk = Chunk::new();
+            chunk.add_constant(left);
+            chunk.add_constant(right);
+            chunk.write_opcode(OpCode::Constant, 1);
+            chunk.write_byte(0, 1);
+            chunk.write_opcode(OpCode::Constant, 1);
+            chunk.write_byte(1, 1);
+            chunk.write_opcode(OpCode::Equal, 1);
+
+            vm.ip = 0;
+            vm.stack.clear();
+
+            assert_eq!(vm.run(&chunk), InterpretResult::RuntimeError);
+            assert_eq!(vm.stack, vec![expected]);
+        }
+    }
+
+    #[test]
+    fn numeric_comparison_opcodes_leave_expected_result_on_stack() {
+        let cases = [
+            (OpCode::Greater, 3.0, 2.0, true),
+            (OpCode::Greater, 2.0, 3.0, false),
+            (OpCode::Less, 2.0, 3.0, true),
+            (OpCode::Less, 3.0, 2.0, false),
+        ];
+
+        for (opcode, left, right, expected) in cases {
+            let mut vm = Vm::new();
+            let mut chunk = Chunk::new();
+            chunk.write_constant(number(left), 1).unwrap();
+            chunk.write_constant(number(right), 1).unwrap();
+            chunk.write_opcode(opcode, 1);
+
+            vm.ip = 0;
+            vm.stack.clear();
+
+            assert_eq!(vm.run(&chunk), InterpretResult::RuntimeError);
+            assert_eq!(vm.stack, vec![Value::Bool(expected)]);
+        }
+    }
+
+    #[test]
+    fn numeric_comparison_reports_runtime_error_for_non_number_operands() {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new();
+        chunk.write_constant(number(1.0), 123).unwrap();
+        chunk.write_constant(Value::Bool(false), 123).unwrap();
+        chunk.write_opcode(OpCode::Greater, 123);
+
+        assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
+        assert!(vm.stack.is_empty());
     }
 
     #[test]

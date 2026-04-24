@@ -26,6 +26,9 @@ pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
         Ok(opcode @ OpCode::Nil) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::True) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::False) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::Equal) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::Greater) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::Less) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Add) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Subtract) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Multiply) => simple_instruction(opcode, offset),
@@ -139,6 +142,13 @@ mod tests {
     #[test]
     fn not_instruction_advances_by_one_byte() {
         assert_single_byte_instruction_advances(OpCode::Not);
+    }
+
+    #[test]
+    fn comparison_instructions_advance_by_one_byte() {
+        for opcode in [OpCode::Equal, OpCode::Greater, OpCode::Less] {
+            assert_single_byte_instruction_advances(opcode);
+        }
     }
 
     #[test]

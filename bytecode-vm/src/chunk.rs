@@ -31,6 +31,21 @@ pub(crate) enum OpCode {
     /// Meaning: load the false literal without using the constant table.
     False,
 
+    /// Encoding: [OP_EQUAL]
+    /// Stack: pops two values, then pushes whether they are equal.
+    /// Meaning: implement equality for all current value types.
+    Equal,
+
+    /// Encoding: [OP_GREATER]
+    /// Stack: pops two values, then pushes whether left > right.
+    /// Meaning: implement numeric greater-than comparison.
+    Greater,
+
+    /// Encoding: [OP_LESS]
+    /// Stack: pops two values, then pushes whether left < right.
+    /// Meaning: implement numeric less-than comparison.
+    Less,
+
     /// Encoding: [OP_ADD]
     /// Stack: pops two values, then pushes their sum.
     /// Meaning: implement binary `+` for numeric values.
@@ -76,6 +91,9 @@ impl OpCode {
             Self::Nil => "OP_NIL",
             Self::True => "OP_TRUE",
             Self::False => "OP_FALSE",
+            Self::Equal => "OP_EQUAL",
+            Self::Greater => "OP_GREATER",
+            Self::Less => "OP_LESS",
             Self::Add => "OP_ADD",
             Self::Subtract => "OP_SUBTRACT",
             Self::Multiply => "OP_MULTIPLY",
@@ -103,6 +121,9 @@ impl TryFrom<u8> for OpCode {
             value if value == u8::from(Self::Nil) => Ok(Self::Nil),
             value if value == u8::from(Self::True) => Ok(Self::True),
             value if value == u8::from(Self::False) => Ok(Self::False),
+            value if value == u8::from(Self::Equal) => Ok(Self::Equal),
+            value if value == u8::from(Self::Greater) => Ok(Self::Greater),
+            value if value == u8::from(Self::Less) => Ok(Self::Less),
             value if value == u8::from(Self::Add) => Ok(Self::Add),
             value if value == u8::from(Self::Subtract) => Ok(Self::Subtract),
             value if value == u8::from(Self::Multiply) => Ok(Self::Multiply),
@@ -358,6 +379,12 @@ mod tests {
         assert_eq!(OpCode::try_from(u8::from(OpCode::Nil)), Ok(OpCode::Nil));
         assert_eq!(OpCode::try_from(u8::from(OpCode::True)), Ok(OpCode::True));
         assert_eq!(OpCode::try_from(u8::from(OpCode::False)), Ok(OpCode::False));
+        assert_eq!(OpCode::try_from(u8::from(OpCode::Equal)), Ok(OpCode::Equal));
+        assert_eq!(
+            OpCode::try_from(u8::from(OpCode::Greater)),
+            Ok(OpCode::Greater)
+        );
+        assert_eq!(OpCode::try_from(u8::from(OpCode::Less)), Ok(OpCode::Less));
         assert_eq!(OpCode::try_from(u8::from(OpCode::Add)), Ok(OpCode::Add));
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::Subtract)),

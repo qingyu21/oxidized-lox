@@ -117,6 +117,15 @@ mod tests {
     }
 
     #[test]
+    fn interpret_returns_ok_for_equality_and_comparison() {
+        assert_eq!(interpret("1 == 1"), InterpretResult::Ok);
+        assert_eq!(interpret("1 != 2"), InterpretResult::Ok);
+        assert_eq!(interpret("1 < 2"), InterpretResult::Ok);
+        assert_eq!(interpret("2 >= 1"), InterpretResult::Ok);
+        assert_eq!(interpret("!(5 - 4 > 3 * 2 == !nil)"), InterpretResult::Ok);
+    }
+
+    #[test]
     fn run_file_returns_io_error_code_for_missing_files() {
         let missing = unique_temp_path("missing");
 

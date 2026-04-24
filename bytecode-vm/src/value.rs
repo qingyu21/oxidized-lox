@@ -28,6 +28,15 @@ impl Value {
             Self::Number(_) => false,
         }
     }
+
+    pub(crate) fn equals(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Bool(left), Self::Bool(right)) => left == right,
+            (Self::Nil, Self::Nil) => true,
+            (Self::Number(left), Self::Number(right)) => left == right,
+            (Self::Bool(_) | Self::Nil | Self::Number(_), _) => false,
+        }
+    }
 }
 
 impl From<bool> for Value {
@@ -73,6 +82,16 @@ mod tests {
         assert!(Value::Nil.is_falsey());
         assert!(!Value::Bool(true).is_falsey());
         assert!(!Value::number(0.0).is_falsey());
+    }
+
+    #[test]
+    fn values_equal_only_when_types_and_inner_values_match() {
+        assert!(Value::Bool(true).equals(Value::Bool(true)));
+        assert!(Value::Nil.equals(Value::Nil));
+        assert!(Value::number(1.2).equals(Value::number(1.2)));
+        assert!(!Value::Bool(true).equals(Value::Bool(false)));
+        assert!(!Value::Nil.equals(Value::Bool(false)));
+        assert!(!Value::number(f64::NAN).equals(Value::number(f64::NAN)));
     }
 
     #[test]
