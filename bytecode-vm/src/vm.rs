@@ -41,6 +41,31 @@ impl Vm {
         self.stack.pop().expect("vm stack underflow")
     }
 
+    /// Returns a value from the stack without popping it.
+    fn peek(&self, distance: usize) -> Option<Value> {
+        self.stack
+            .len()
+            .checked_sub(1 + distance)
+            .and_then(|index| self.stack.get(index).copied())
+    }
+
+    /// Clears transient stack state after a runtime error.
+    fn reset_stack(&mut self) {
+        self.stack.clear();
+    }
+
+    /// Reports a runtime error and points at the source line of the failed instruction.
+    fn runtime_error(&mut self, chunk: &Chunk, message: &str) {
+        eprintln!("{message}");
+
+        let instruction = self.ip.saturating_sub(1);
+        if let Some(line) = chunk.line_at(instruction) {
+            eprintln!("[line {line}] in script");
+        }
+
+        self.reset_stack();
+    }
+
     /// Negates the current top-of-stack value in place without changing stack height.
     fn negate_top(&mut self) -> bool {
         let value = self.stack.last_mut().expect("vm stack underflow");
@@ -107,6 +132,10 @@ impl Vm {
                     }
                 }
                 Ok(OpCode::Negate) => {
+                    if !matches!(self.peek(0), Some(Value::Number(_))) {
+                        self.runtime_error(chunk, "Operand must be a number.");
+                        return InterpretResult::RuntimeError;
+                    }
                     if !self.negate_top() {
                         return InterpretResult::RuntimeError;
                     }
@@ -251,6 +280,28 @@ mod tests {
         assert!(vm.negate_top());
 
         assert_eq!(vm.stack, vec![number(-1.2)]);
+    }
+
+    #[test]
+    fn peek_reads_values_without_popping_them() {
+        let mut vm = Vm::new();
+        vm.push(number(1.0));
+        vm.push(number(2.0));
+
+        assert_eq!(vm.peek(0), Some(number(2.0)));
+        assert_eq!(vm.peek(1), Some(number(1.0)));
+        assert_eq!(vm.stack, vec![number(1.0), number(2.0)]);
+    }
+
+    #[test]
+    fn negate_reports_runtime_error_for_non_number_operand() {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new();
+        chunk.write_constant(Value::Bool(false), 123).unwrap();
+        chunk.write_opcode(OpCode::Negate, 123);
+
+        assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
+        assert!(vm.stack.is_empty());
     }
 
     #[test]
