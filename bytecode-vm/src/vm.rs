@@ -76,14 +76,22 @@ impl Vm {
         true
     }
 
-    /// Pops the right operand first, then the left, matching stack-based evaluation order.
-    fn binary_op(&mut self, op: impl FnOnce(f64, f64) -> f64) -> bool {
-        let b = self.pop();
-        let a = self.pop();
-        let (Some(a), Some(b)) = (a.as_number(), b.as_number()) else {
+    /// Validates both operands before popping them, then pushes the wrapped result.
+    fn binary_op<T>(
+        &mut self,
+        wrap: impl FnOnce(T) -> Value,
+        op: impl FnOnce(f64, f64) -> T,
+    ) -> bool {
+        let (Some(a), Some(b)) = (
+            self.peek(1).and_then(Value::as_number),
+            self.peek(0).and_then(Value::as_number),
+        ) else {
             return false;
         };
-        self.push(Value::number(op(a, b)));
+
+        let _ = self.pop();
+        let _ = self.pop();
+        self.push(wrap(op(a, b)));
         true
     }
 
@@ -112,22 +120,26 @@ impl Vm {
                     self.push(constant);
                 }
                 Ok(OpCode::Add) => {
-                    if !self.binary_op(|a, b| a + b) {
+                    if !self.binary_op(Value::number, |a, b| a + b) {
+                        self.runtime_error(chunk, "Operands must be numbers.");
                         return InterpretResult::RuntimeError;
                     }
                 }
                 Ok(OpCode::Subtract) => {
-                    if !self.binary_op(|a, b| a - b) {
+                    if !self.binary_op(Value::number, |a, b| a - b) {
+                        self.runtime_error(chunk, "Operands must be numbers.");
                         return InterpretResult::RuntimeError;
                     }
                 }
                 Ok(OpCode::Multiply) => {
-                    if !self.binary_op(|a, b| a * b) {
+                    if !self.binary_op(Value::number, |a, b| a * b) {
+                        self.runtime_error(chunk, "Operands must be numbers.");
                         return InterpretResult::RuntimeError;
                     }
                 }
                 Ok(OpCode::Divide) => {
-                    if !self.binary_op(|a, b| a / b) {
+                    if !self.binary_op(Value::number, |a, b| a / b) {
+                        self.runtime_error(chunk, "Operands must be numbers.");
                         return InterpretResult::RuntimeError;
                     }
                 }
@@ -266,10 +278,21 @@ mod tests {
         vm.push(number(3.0));
         vm.push(number(1.0));
 
-        assert!(vm.binary_op(|a, b| a - b));
+        assert!(vm.binary_op(Value::number, |a, b| a - b));
 
         assert_eq!(vm.pop(), number(2.0));
         assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn binary_op_rejects_non_numbers_without_popping_operands() {
+        let mut vm = Vm::new();
+        vm.push(number(1.0));
+        vm.push(Value::Bool(false));
+
+        assert!(!vm.binary_op(Value::number, |a, b| a + b));
+
+        assert_eq!(vm.stack, vec![number(1.0), Value::Bool(false)]);
     }
 
     #[test]
@@ -299,6 +322,18 @@ mod tests {
         let mut chunk = Chunk::new();
         chunk.write_constant(Value::Bool(false), 123).unwrap();
         chunk.write_opcode(OpCode::Negate, 123);
+
+        assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
+        assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn binary_arithmetic_reports_runtime_error_for_non_number_operands() {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new();
+        chunk.write_constant(number(1.0), 123).unwrap();
+        chunk.write_constant(Value::Bool(false), 123).unwrap();
+        chunk.write_opcode(OpCode::Add, 123);
 
         assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
         assert!(vm.stack.is_empty());
