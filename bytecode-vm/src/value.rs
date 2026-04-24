@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::object::ObjRef;
+use crate::object::{ObjRef, ObjString, ObjType};
 
 /// Runtime value representation for the current VM chapter stage.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -43,6 +43,36 @@ impl Value {
             (Self::Bool(_) | Self::Nil | Self::Number(_) | Self::Obj(_), _) => false,
         }
     }
+
+    #[allow(dead_code)]
+    pub(crate) fn obj_type(self) -> Option<ObjType> {
+        match self {
+            Self::Obj(object) => Some(object.obj_type()),
+            Self::Bool(_) | Self::Nil | Self::Number(_) => None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn is_string(self) -> bool {
+        self.is_obj_type(ObjType::String)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn as_string(&self) -> Option<&ObjString> {
+        match self {
+            Self::Obj(object) => object.as_string(),
+            Self::Bool(_) | Self::Nil | Self::Number(_) => None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn as_str(&self) -> Option<&str> {
+        self.as_string().map(ObjString::as_str)
+    }
+
+    fn is_obj_type(self, obj_type: ObjType) -> bool {
+        matches!(self, Self::Obj(object) if object.is_type(obj_type))
+    }
 }
 
 impl From<bool> for Value {
@@ -75,10 +105,10 @@ pub(crate) fn print_value(value: Value) {
 #[cfg(test)]
 mod tests {
     use super::Value;
-    use crate::object::ObjRef;
+    use crate::object::{ObjRef, ObjType};
 
     fn object() -> Value {
-        Value::Obj(ObjRef::dangling_for_tests())
+        Value::Obj(ObjRef::string_for_tests("hello"))
     }
 
     #[test]
@@ -109,6 +139,18 @@ mod tests {
         let object = object();
         assert!(object.equals(object));
         assert!(!object.equals(Value::Nil));
+    }
+
+    #[test]
+    fn string_object_values_report_their_object_type() {
+        let object = object();
+
+        assert_eq!(object.obj_type(), Some(ObjType::String));
+        assert!(object.is_string());
+        assert_eq!(object.as_str(), Some("hello"));
+        assert_eq!(Value::Nil.obj_type(), None);
+        assert!(!Value::Nil.is_string());
+        assert_eq!(Value::Nil.as_str(), None);
     }
 
     #[test]
