@@ -146,6 +146,10 @@ impl Vm {
                         return InterpretResult::RuntimeError;
                     }
                 }
+                Ok(OpCode::Not) => {
+                    let value = self.pop();
+                    self.push(Value::Bool(value.is_falsey()));
+                }
                 Ok(OpCode::Negate) => {
                     if !matches!(self.peek(0), Some(Value::Number(_))) {
                         self.runtime_error(chunk, "Operand must be a number.");
@@ -294,6 +298,31 @@ mod tests {
         chunk.write_opcode(OpCode::Return, 1);
 
         assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
+    }
+
+    #[test]
+    fn not_opcode_pushes_whether_value_is_falsey() {
+        let cases = [
+            (Value::Bool(false), Value::Bool(true)),
+            (Value::Nil, Value::Bool(true)),
+            (Value::Bool(true), Value::Bool(false)),
+            (number(0.0), Value::Bool(false)),
+        ];
+
+        for (input, expected) in cases {
+            let mut vm = Vm::new();
+            let mut chunk = Chunk::new();
+            chunk.add_constant(input);
+            chunk.write_opcode(OpCode::Constant, 1);
+            chunk.write_byte(0, 1);
+            chunk.write_opcode(OpCode::Not, 1);
+
+            vm.ip = 0;
+            vm.stack.clear();
+
+            assert_eq!(vm.run(&chunk), InterpretResult::RuntimeError);
+            assert_eq!(vm.stack, vec![expected]);
+        }
     }
 
     #[test]

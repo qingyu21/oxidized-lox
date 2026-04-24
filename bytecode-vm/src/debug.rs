@@ -30,6 +30,7 @@ pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
         Ok(opcode @ OpCode::Subtract) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Multiply) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Divide) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::Not) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Negate) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Return) => simple_instruction(opcode, offset),
         Err(unknown) => {
@@ -133,6 +134,11 @@ mod tests {
     #[test]
     fn negate_instruction_advances_by_one_byte() {
         assert_single_byte_instruction_advances(OpCode::Negate);
+    }
+
+    #[test]
+    fn not_instruction_advances_by_one_byte() {
+        assert_single_byte_instruction_advances(OpCode::Not);
     }
 
     #[test]

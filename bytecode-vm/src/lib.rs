@@ -110,6 +110,13 @@ mod tests {
     }
 
     #[test]
+    fn interpret_returns_ok_for_logical_not() {
+        assert_eq!(interpret("!true"), InterpretResult::Ok);
+        assert_eq!(interpret("!nil"), InterpretResult::Ok);
+        assert_eq!(interpret("!0"), InterpretResult::Ok);
+    }
+
+    #[test]
     fn run_file_returns_io_error_code_for_missing_files() {
         let missing = unique_temp_path("missing");
 

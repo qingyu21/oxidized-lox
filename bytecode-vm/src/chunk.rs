@@ -51,6 +51,11 @@ pub(crate) enum OpCode {
     /// Meaning: implement binary `/` for numeric values.
     Divide,
 
+    /// Encoding: [OP_NOT]
+    /// Stack: pops one value, then pushes whether it is falsey.
+    /// Meaning: implement unary logical not.
+    Not,
+
     /// Encoding: [OP_NEGATE]
     /// Stack: pops one value, then pushes its arithmetic negation.
     /// Meaning: implement unary minus for numeric values.
@@ -75,6 +80,7 @@ impl OpCode {
             Self::Subtract => "OP_SUBTRACT",
             Self::Multiply => "OP_MULTIPLY",
             Self::Divide => "OP_DIVIDE",
+            Self::Not => "OP_NOT",
             Self::Negate => "OP_NEGATE",
             Self::Return => "OP_RETURN",
         }
@@ -101,6 +107,7 @@ impl TryFrom<u8> for OpCode {
             value if value == u8::from(Self::Subtract) => Ok(Self::Subtract),
             value if value == u8::from(Self::Multiply) => Ok(Self::Multiply),
             value if value == u8::from(Self::Divide) => Ok(Self::Divide),
+            value if value == u8::from(Self::Not) => Ok(Self::Not),
             value if value == u8::from(Self::Negate) => Ok(Self::Negate),
             value if value == u8::from(Self::Return) => Ok(Self::Return),
             _ => Err(byte),
@@ -364,6 +371,7 @@ mod tests {
             OpCode::try_from(u8::from(OpCode::Divide)),
             Ok(OpCode::Divide)
         );
+        assert_eq!(OpCode::try_from(u8::from(OpCode::Not)), Ok(OpCode::Not));
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::Negate)),
             Ok(OpCode::Negate)

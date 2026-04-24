@@ -20,6 +20,14 @@ impl Value {
             Self::Bool(_) | Self::Nil => None,
         }
     }
+
+    pub(crate) const fn is_falsey(self) -> bool {
+        match self {
+            Self::Bool(value) => !value,
+            Self::Nil => true,
+            Self::Number(_) => false,
+        }
+    }
 }
 
 impl From<bool> for Value {
@@ -57,6 +65,14 @@ mod tests {
         assert_eq!(Value::number(3.5).as_number(), Some(3.5));
         assert_eq!(Value::Bool(true).as_number(), None);
         assert_eq!(Value::Nil.as_number(), None);
+    }
+
+    #[test]
+    fn only_false_and_nil_are_falsey() {
+        assert!(Value::Bool(false).is_falsey());
+        assert!(Value::Nil.is_falsey());
+        assert!(!Value::Bool(true).is_falsey());
+        assert!(!Value::number(0.0).is_falsey());
     }
 
     #[test]

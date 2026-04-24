@@ -73,7 +73,7 @@ const RULES: [ParseRule; RULE_COUNT] = [
     ParseRule::new(None, None, Precedence::None),           // Colon
     ParseRule::new(None, Some(binary), Precedence::Factor), // Slash
     ParseRule::new(None, Some(binary), Precedence::Factor), // Star
-    ParseRule::new(None, None, Precedence::None),           // Bang
+    ParseRule::new(Some(unary), None, Precedence::None),    // Bang
     ParseRule::new(None, None, Precedence::None),           // BangEqual
     ParseRule::new(None, None, Precedence::None),           // Equal
     ParseRule::new(None, None, Precedence::None),           // EqualEqual
@@ -334,6 +334,7 @@ fn unary(parser: &mut Parser<'_, '_>) {
     parse_precedence(parser, Precedence::Unary);
 
     match operator_type {
+        TokenType::Bang => parser.emit_byte(OpCode::Not.into()),
         TokenType::Minus => parser.emit_byte(OpCode::Negate.into()),
         _ => unreachable!("unary parser is only registered for unary operators"),
     }
@@ -570,6 +571,22 @@ mod tests {
             ]
         );
         assert_eq!(chunk.constants(), &[number(123.0)]);
+    }
+
+    #[test]
+    fn compile_emits_not_after_operand_for_unary_bang() {
+        let mut chunk = Chunk::new();
+
+        assert!(compile("!true", &mut chunk));
+        assert_eq!(
+            chunk.code(),
+            &[
+                u8::from(OpCode::True),
+                u8::from(OpCode::Not),
+                u8::from(OpCode::Return),
+            ]
+        );
+        assert!(chunk.constants().is_empty());
     }
 
     #[test]
