@@ -16,6 +16,21 @@ pub(crate) enum OpCode {
     /// Meaning: load a literal value when the constant table index needs 24 bits.
     ConstantLong,
 
+    /// Encoding: [OP_NIL]
+    /// Stack: pushes nil.
+    /// Meaning: load the nil literal without using the constant table.
+    Nil,
+
+    /// Encoding: [OP_TRUE]
+    /// Stack: pushes true.
+    /// Meaning: load the true literal without using the constant table.
+    True,
+
+    /// Encoding: [OP_FALSE]
+    /// Stack: pushes false.
+    /// Meaning: load the false literal without using the constant table.
+    False,
+
     /// Encoding: [OP_ADD]
     /// Stack: pops two values, then pushes their sum.
     /// Meaning: implement binary `+` for numeric values.
@@ -53,6 +68,9 @@ impl OpCode {
         match self {
             Self::Constant => "OP_CONSTANT",
             Self::ConstantLong => "OP_CONSTANT_LONG",
+            Self::Nil => "OP_NIL",
+            Self::True => "OP_TRUE",
+            Self::False => "OP_FALSE",
             Self::Add => "OP_ADD",
             Self::Subtract => "OP_SUBTRACT",
             Self::Multiply => "OP_MULTIPLY",
@@ -76,6 +94,9 @@ impl TryFrom<u8> for OpCode {
         match byte {
             value if value == u8::from(Self::Constant) => Ok(Self::Constant),
             value if value == u8::from(Self::ConstantLong) => Ok(Self::ConstantLong),
+            value if value == u8::from(Self::Nil) => Ok(Self::Nil),
+            value if value == u8::from(Self::True) => Ok(Self::True),
+            value if value == u8::from(Self::False) => Ok(Self::False),
             value if value == u8::from(Self::Add) => Ok(Self::Add),
             value if value == u8::from(Self::Subtract) => Ok(Self::Subtract),
             value if value == u8::from(Self::Multiply) => Ok(Self::Multiply),
@@ -327,6 +348,9 @@ mod tests {
             OpCode::try_from(u8::from(OpCode::ConstantLong)),
             Ok(OpCode::ConstantLong)
         );
+        assert_eq!(OpCode::try_from(u8::from(OpCode::Nil)), Ok(OpCode::Nil));
+        assert_eq!(OpCode::try_from(u8::from(OpCode::True)), Ok(OpCode::True));
+        assert_eq!(OpCode::try_from(u8::from(OpCode::False)), Ok(OpCode::False));
         assert_eq!(OpCode::try_from(u8::from(OpCode::Add)), Ok(OpCode::Add));
         assert_eq!(
             OpCode::try_from(u8::from(OpCode::Subtract)),

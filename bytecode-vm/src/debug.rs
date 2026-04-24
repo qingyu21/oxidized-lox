@@ -23,6 +23,9 @@ pub(crate) fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
     match OpCode::try_from(instruction) {
         Ok(opcode @ OpCode::Constant) => constant_instruction(opcode, chunk, offset),
         Ok(opcode @ OpCode::ConstantLong) => constant_long_instruction(opcode, chunk, offset),
+        Ok(opcode @ OpCode::Nil) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::True) => simple_instruction(opcode, offset),
+        Ok(opcode @ OpCode::False) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Add) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Subtract) => simple_instruction(opcode, offset),
         Ok(opcode @ OpCode::Multiply) => simple_instruction(opcode, offset),
@@ -140,6 +143,13 @@ mod tests {
             OpCode::Multiply,
             OpCode::Divide,
         ] {
+            assert_single_byte_instruction_advances(opcode);
+        }
+    }
+
+    #[test]
+    fn literal_instructions_advance_by_one_byte() {
+        for opcode in [OpCode::Nil, OpCode::True, OpCode::False] {
             assert_single_byte_instruction_advances(opcode);
         }
     }

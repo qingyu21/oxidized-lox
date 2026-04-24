@@ -119,6 +119,9 @@ impl Vm {
                     };
                     self.push(constant);
                 }
+                Ok(OpCode::Nil) => self.push(Value::Nil),
+                Ok(OpCode::True) => self.push(Value::Bool(true)),
+                Ok(OpCode::False) => self.push(Value::Bool(false)),
                 Ok(OpCode::Add) => {
                     if !self.binary_op(Value::number, |a, b| a + b) {
                         self.runtime_error(chunk, "Operands must be numbers.");
@@ -259,6 +262,27 @@ mod tests {
         chunk.write_opcode(OpCode::Return, 1);
 
         assert_interpret_ok_and_empties_stack(&mut vm, &chunk);
+    }
+
+    #[test]
+    fn literal_opcodes_leave_expected_value_on_stack() {
+        let cases = [
+            (OpCode::Nil, Value::Nil),
+            (OpCode::True, Value::Bool(true)),
+            (OpCode::False, Value::Bool(false)),
+        ];
+
+        for (opcode, expected) in cases {
+            let mut vm = Vm::new();
+            let mut chunk = Chunk::new();
+            chunk.write_opcode(opcode, 1);
+
+            vm.ip = 0;
+            vm.stack.clear();
+
+            assert_eq!(vm.run(&chunk), InterpretResult::RuntimeError);
+            assert_eq!(vm.stack, vec![expected]);
+        }
     }
 
     #[test]

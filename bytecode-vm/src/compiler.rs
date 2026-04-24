@@ -87,17 +87,17 @@ const RULES: [ParseRule; RULE_COUNT] = [
     ParseRule::new(None, None, Precedence::None),           // And
     ParseRule::new(None, None, Precedence::None),           // Class
     ParseRule::new(None, None, Precedence::None),           // Else
-    ParseRule::new(None, None, Precedence::None),           // False
+    ParseRule::new(Some(literal), None, Precedence::None),  // False
     ParseRule::new(None, None, Precedence::None),           // For
     ParseRule::new(None, None, Precedence::None),           // Fun
     ParseRule::new(None, None, Precedence::None),           // If
-    ParseRule::new(None, None, Precedence::None),           // Nil
+    ParseRule::new(Some(literal), None, Precedence::None),  // Nil
     ParseRule::new(None, None, Precedence::None),           // Or
     ParseRule::new(None, None, Precedence::None),           // Print
     ParseRule::new(None, None, Precedence::None),           // Return
     ParseRule::new(None, None, Precedence::None),           // Super
     ParseRule::new(None, None, Precedence::None),           // This
-    ParseRule::new(None, None, Precedence::None),           // True
+    ParseRule::new(Some(literal), None, Precedence::None),  // True
     ParseRule::new(None, None, Precedence::None),           // Var
     ParseRule::new(None, None, Precedence::None),           // While
     ParseRule::new(None, None, Precedence::None),           // Error
@@ -307,6 +307,21 @@ fn parse_precedence(parser: &mut Parser<'_, '_>, precedence: Precedence) {
 fn grouping(parser: &mut Parser<'_, '_>) {
     expression(parser);
     parser.consume(TokenType::RightParen, "Expect ')' after expression.");
+}
+
+/// Compiles true, false, and nil literals into dedicated single-byte opcodes.
+fn literal(parser: &mut Parser<'_, '_>) {
+    let Some(token_type) = parser.previous.map(|token| token.token_type) else {
+        parser.error("Expect literal.");
+        return;
+    };
+
+    match token_type {
+        TokenType::False => parser.emit_byte(OpCode::False.into()),
+        TokenType::Nil => parser.emit_byte(OpCode::Nil.into()),
+        TokenType::True => parser.emit_byte(OpCode::True.into()),
+        _ => unreachable!("literal parser is only registered for literal tokens"),
+    }
 }
 
 /// Compiles a prefix unary operator after recursively compiling its operand.
@@ -555,6 +570,25 @@ mod tests {
             ]
         );
         assert_eq!(chunk.constants(), &[number(123.0)]);
+    }
+
+    #[test]
+    fn compile_emits_dedicated_opcodes_for_literals() {
+        let cases = [
+            ("false", OpCode::False),
+            ("nil", OpCode::Nil),
+            ("true", OpCode::True),
+        ];
+
+        for (source, opcode) in cases {
+            let mut chunk = Chunk::new();
+
+            assert!(compile(source, &mut chunk));
+            assert_eq!(chunk.code(), &[u8::from(opcode), u8::from(OpCode::Return)]);
+            assert!(chunk.constants().is_empty());
+            assert_eq!(chunk.line_at(0), Some(1));
+            assert_eq!(chunk.line_at(1), Some(1));
+        }
     }
 
     #[test]
