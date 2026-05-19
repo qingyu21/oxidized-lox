@@ -113,6 +113,8 @@ impl Objects {
     }
 
     pub(crate) fn copy_string(&mut self, chars: &str) -> ObjRef {
+        // TODO(ch19 challenge 2): support constant strings that borrow source
+        // text instead of copying every string literal onto the heap.
         self.take_string(chars.into())
     }
 
