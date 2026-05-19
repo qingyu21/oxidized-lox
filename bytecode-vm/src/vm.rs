@@ -1,6 +1,7 @@
 use crate::{
     chunk::{Chunk, OpCode},
     debug::disassemble_instruction,
+    object::ObjRef,
     value::{Value, print_value},
 };
 
@@ -95,6 +96,24 @@ impl Vm {
         true
     }
 
+    /// Concatenates the two topmost string operands and pushes the new string.
+    fn concatenate(&mut self) -> bool {
+        let (Some(Value::Obj(a)), Some(Value::Obj(b))) = (self.peek(1), self.peek(0)) else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (a.as_string(), b.as_string()) else {
+            return false;
+        };
+
+        let mut chars = String::with_capacity(a.len() + b.len());
+        chars.push_str(a.as_str());
+        chars.push_str(b.as_str());
+        let _ = self.pop();
+        let _ = self.pop();
+        self.push(Value::Obj(ObjRef::take_string(chars.into_boxed_str())));
+        true
+    }
+
     /// Dispatches bytecode instructions until execution finishes or errors out.
     fn run(&mut self, chunk: &Chunk) -> InterpretResult {
         loop {
@@ -140,8 +159,15 @@ impl Vm {
                     }
                 }
                 Ok(OpCode::Add) => {
-                    if !self.binary_op(Value::number, |a, b| a + b) {
-                        self.runtime_error(chunk, "Operands must be numbers.");
+                    if matches!(
+                        (self.peek(1), self.peek(0)),
+                        (Some(left), Some(right)) if left.is_string() && right.is_string()
+                    ) {
+                        if !self.concatenate() {
+                            return InterpretResult::RuntimeError;
+                        }
+                    } else if !self.binary_op(Value::number, |a, b| a + b) {
+                        self.runtime_error(chunk, "Operands must be two numbers or two strings.");
                         return InterpretResult::RuntimeError;
                     }
                 }
@@ -228,10 +254,15 @@ impl Vm {
 mod tests {
     use super::{InterpretResult, Vm};
     use crate::chunk::{Chunk, OpCode};
+    use crate::object::ObjRef;
     use crate::value::Value;
 
     fn number(value: f64) -> Value {
         Value::number(value)
+    }
+
+    fn string(value: &str) -> Value {
+        Value::Obj(ObjRef::copy_string(value))
     }
 
     fn assert_interpret_ok_and_empties_stack(vm: &mut Vm, chunk: &Chunk) {
@@ -471,6 +502,30 @@ mod tests {
         chunk.write_opcode(OpCode::Add, 123);
 
         assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
+        assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn add_reports_runtime_error_for_mixed_operands() {
+        let mut vm = Vm::new();
+        let mut chunk = Chunk::new();
+        chunk.write_constant(number(1.0), 123).unwrap();
+        chunk.write_constant(string("lox"), 123).unwrap();
+        chunk.write_opcode(OpCode::Add, 123);
+
+        assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
+        assert!(vm.stack.is_empty());
+    }
+
+    #[test]
+    fn concatenate_combines_two_string_operands() {
+        let mut vm = Vm::new();
+        vm.push(string("lox"));
+        vm.push(string("lang"));
+
+        assert!(vm.concatenate());
+
+        assert_eq!(vm.pop().as_str(), Some("loxlang"));
         assert!(vm.stack.is_empty());
     }
 

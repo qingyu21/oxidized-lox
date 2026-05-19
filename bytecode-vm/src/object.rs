@@ -51,16 +51,21 @@ impl ObjString {
 pub(crate) struct ObjRef(NonNull<Obj>);
 
 impl ObjRef {
-    pub(crate) fn copy_string(chars: &str) -> Self {
+    pub(crate) fn take_string(chars: Box<str>) -> Self {
+        let length = chars.len();
         let string = Box::leak(Box::new(ObjString {
             obj: Obj {
                 obj_type: ObjType::String,
             },
-            length: chars.len(),
-            chars: chars.into(),
+            length,
+            chars,
         }));
 
         Self(NonNull::from(string).cast())
+    }
+
+    pub(crate) fn copy_string(chars: &str) -> Self {
+        Self::take_string(chars.into())
     }
 
     pub(crate) fn obj_type(self) -> ObjType {
@@ -97,5 +102,13 @@ mod tests {
         let string = object.as_string().expect("object should be a string");
         assert_eq!(string.len(), 5);
         assert_eq!(string.as_str(), "hello");
+    }
+
+    #[test]
+    fn take_string_claims_an_existing_boxed_string() {
+        let object = ObjRef::take_string(String::from("owned").into_boxed_str());
+        let string = object.as_string().expect("object should be a string");
+
+        assert_eq!(string.as_str(), "owned");
     }
 }

@@ -37,7 +37,11 @@ impl Value {
             (Self::Bool(left), Self::Bool(right)) => left == right,
             (Self::Nil, Self::Nil) => true,
             (Self::Number(left), Self::Number(right)) => left == right,
-            (Self::Obj(left), Self::Obj(right)) => left == right,
+            (Self::Obj(left), Self::Obj(right)) => match (left.as_string(), right.as_string()) {
+                (Some(left), Some(right)) => left.as_str() == right.as_str(),
+                (None, None) => left == right,
+                (Some(_), None) | (None, Some(_)) => false,
+            },
             (Self::Bool(_) | Self::Nil | Self::Number(_) | Self::Obj(_), _) => false,
         }
     }
@@ -140,6 +144,8 @@ mod tests {
         let object = object();
         assert!(object.equals(object));
         assert!(!object.equals(Value::Nil));
+        assert!(object.equals(Value::Obj(ObjRef::copy_string("hello"))));
+        assert!(!object.equals(Value::Obj(ObjRef::copy_string("world"))));
     }
 
     #[test]

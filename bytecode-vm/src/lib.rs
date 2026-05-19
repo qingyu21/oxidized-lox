@@ -109,6 +109,11 @@ mod tests {
     }
 
     #[test]
+    fn interpret_returns_ok_for_string_concatenation() {
+        assert_eq!(interpret("\"lox\" + \"lang\""), InterpretResult::Ok);
+    }
+
+    #[test]
     fn interpret_returns_ok_for_bool_and_nil_literals() {
         assert_eq!(interpret("true"), InterpretResult::Ok);
         assert_eq!(interpret("false"), InterpretResult::Ok);
@@ -126,6 +131,7 @@ mod tests {
     fn interpret_returns_ok_for_equality_and_comparison() {
         assert_eq!(interpret("1 == 1"), InterpretResult::Ok);
         assert_eq!(interpret("1 != 2"), InterpretResult::Ok);
+        assert_eq!(interpret("\"lox\" == \"lox\""), InterpretResult::Ok);
         assert_eq!(interpret("1 < 2"), InterpretResult::Ok);
         assert_eq!(interpret("2 >= 1"), InterpretResult::Ok);
         assert_eq!(interpret("!(5 - 4 > 3 * 2 == !nil)"), InterpretResult::Ok);
