@@ -51,6 +51,18 @@ impl ObjString {
 pub(crate) struct ObjRef(NonNull<Obj>);
 
 impl ObjRef {
+    pub(crate) fn copy_string(chars: &str) -> Self {
+        let string = Box::leak(Box::new(ObjString {
+            obj: Obj {
+                obj_type: ObjType::String,
+            },
+            length: chars.len(),
+            chars: chars.into(),
+        }));
+
+        Self(NonNull::from(string).cast())
+    }
+
     pub(crate) fn obj_type(self) -> ObjType {
         // ObjRef's invariant is that the pointer targets a live Obj header.
         unsafe { self.0.as_ref().obj_type() }
@@ -72,27 +84,12 @@ impl ObjRef {
 }
 
 #[cfg(test)]
-impl ObjRef {
-    pub(crate) fn string_for_tests(chars: &str) -> Self {
-        let string = Box::leak(Box::new(ObjString {
-            obj: Obj {
-                obj_type: ObjType::String,
-            },
-            length: chars.len(),
-            chars: chars.into(),
-        }));
-
-        Self(NonNull::from(string).cast())
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::{ObjRef, ObjType};
 
     #[test]
     fn string_objects_carry_their_base_type_tag() {
-        let object = ObjRef::string_for_tests("hello");
+        let object = ObjRef::copy_string("hello");
 
         assert_eq!(object.obj_type(), ObjType::String);
         assert!(object.is_type(ObjType::String));

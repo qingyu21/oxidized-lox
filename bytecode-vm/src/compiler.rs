@@ -1,5 +1,6 @@
 use crate::{
     chunk::{Chunk, OpCode},
+    object::ObjRef,
     scanner::{self, Token, TokenType},
     value::Value,
 };
@@ -86,7 +87,7 @@ const RULES: [ParseRule; RULE_COUNT] = [
     ParseRule::new(None, Some(binary), Precedence::Comparison), // Less
     ParseRule::new(None, Some(binary), Precedence::Comparison), // LessEqual
     ParseRule::new(None, None, Precedence::None),           // Identifier
-    ParseRule::new(None, None, Precedence::None),           // String
+    ParseRule::new(Some(string), None, Precedence::None),   // String
     ParseRule::new(Some(number), None, Precedence::None),   // Number
     ParseRule::new(None, None, Precedence::None),           // And
     ParseRule::new(None, None, Precedence::None),           // Class
@@ -184,15 +185,13 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
     }
 
     /// Emits a constant-loading instruction for `value`.
-    fn emit_constant(&mut self, value: f64) {
+    fn emit_constant(&mut self, value: Value) {
         let line = self
             .previous
             .or(self.current)
             .map(|token| token.line)
             .unwrap_or(1);
-        let result = self
-            .current_chunk()
-            .write_constant(Value::number(value), line);
+        let result = self.current_chunk().write_constant(value, line);
 
         if result.is_err() {
             self.error("Too many constants in one chunk.");
@@ -414,7 +413,25 @@ fn number(parser: &mut Parser<'_, '_>) {
         return;
     };
 
-    parser.emit_constant(value);
+    parser.emit_constant(Value::number(value));
+}
+
+/// Compiles a consumed string literal token into an object constant.
+fn string(parser: &mut Parser<'_, '_>) {
+    let Some(token) = parser.previous else {
+        parser.error("Expect string.");
+        return;
+    };
+    let lexeme = token.lexeme();
+    let Some(chars) = lexeme
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+    else {
+        parser.error("Invalid string literal.");
+        return;
+    };
+
+    parser.emit_constant(Value::Obj(ObjRef::copy_string(chars)));
 }
 
 #[cfg(test)]
@@ -530,6 +547,22 @@ mod tests {
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
         );
         assert_eq!(chunk.constants(), &[number(123.45)]);
+        assert_eq!(chunk.line_at(0), Some(1));
+        assert_eq!(chunk.line_at(1), Some(1));
+        assert_eq!(chunk.line_at(2), Some(1));
+    }
+
+    #[test]
+    fn compile_emits_string_constant_without_quotes() {
+        let mut chunk = Chunk::new();
+
+        assert!(compile("\"lox\"", &mut chunk));
+        assert_eq!(
+            chunk.code(),
+            &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
+        );
+        assert_eq!(chunk.constants().len(), 1);
+        assert_eq!(chunk.constants()[0].as_str(), Some("lox"));
         assert_eq!(chunk.line_at(0), Some(1));
         assert_eq!(chunk.line_at(1), Some(1));
         assert_eq!(chunk.line_at(2), Some(1));

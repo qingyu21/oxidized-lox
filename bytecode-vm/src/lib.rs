@@ -104,6 +104,11 @@ mod tests {
     }
 
     #[test]
+    fn interpret_returns_ok_for_string_literal() {
+        assert_eq!(interpret("\"lox\""), InterpretResult::Ok);
+    }
+
+    #[test]
     fn interpret_returns_ok_for_bool_and_nil_literals() {
         assert_eq!(interpret("true"), InterpretResult::Ok);
         assert_eq!(interpret("false"), InterpretResult::Ok);

@@ -9,8 +9,6 @@ pub(crate) enum Value {
     #[default]
     Nil,
     Number(f64),
-    // Wired before concrete heap object constructors exist.
-    #[allow(dead_code)]
     Obj(ObjRef),
 }
 
@@ -93,7 +91,10 @@ impl fmt::Display for Value {
             Self::Bool(value) => write!(f, "{value}"),
             Self::Nil => write!(f, "nil"),
             Self::Number(value) => write!(f, "{value}"),
-            Self::Obj(_) => write!(f, "<obj>"),
+            Self::Obj(object) => match object.as_string() {
+                Some(string) => write!(f, "{}", string.as_str()),
+                None => write!(f, "<obj>"),
+            },
         }
     }
 }
@@ -108,7 +109,7 @@ mod tests {
     use crate::object::{ObjRef, ObjType};
 
     fn object() -> Value {
-        Value::Obj(ObjRef::string_for_tests("hello"))
+        Value::Obj(ObjRef::copy_string("hello"))
     }
 
     #[test]
@@ -158,6 +159,6 @@ mod tests {
         assert_eq!(Value::Bool(true).to_string(), "true");
         assert_eq!(Value::Nil.to_string(), "nil");
         assert_eq!(Value::number(12.5).to_string(), "12.5");
-        assert_eq!(object().to_string(), "<obj>");
+        assert_eq!(object().to_string(), "hello");
     }
 }
