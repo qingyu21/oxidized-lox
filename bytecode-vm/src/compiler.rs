@@ -1,6 +1,6 @@
 use crate::{
     chunk::{Chunk, OpCode},
-    object::ObjRef,
+    object::Objects,
     scanner::{self, Token, TokenType},
     value::Value,
 };
@@ -113,6 +113,7 @@ const RULES: [ParseRule; RULE_COUNT] = [
 struct Parser<'source, 'chunk> {
     scanner: scanner::Scanner<'source>,
     compiling_chunk: &'chunk mut Chunk,
+    objects: &'chunk mut Objects,
     current: Option<Token<'source>>,
     previous: Option<Token<'source>>,
     had_error: bool,
@@ -120,10 +121,11 @@ struct Parser<'source, 'chunk> {
 }
 
 impl<'source, 'chunk> Parser<'source, 'chunk> {
-    fn new(source: &'source str, chunk: &'chunk mut Chunk) -> Self {
+    fn new(source: &'source str, chunk: &'chunk mut Chunk, objects: &'chunk mut Objects) -> Self {
         Self {
             scanner: scanner::init_scanner(source),
             compiling_chunk: chunk,
+            objects,
             current: None,
             previous: None,
             had_error: false,
@@ -252,8 +254,8 @@ impl<'source, 'chunk> Parser<'source, 'chunk> {
 }
 
 /// Compiles source into `chunk`, returning whether compilation succeeded.
-pub(crate) fn compile(source: &str, chunk: &mut Chunk) -> bool {
-    let mut parser = Parser::new(source, chunk);
+pub(crate) fn compile(source: &str, chunk: &mut Chunk, objects: &mut Objects) -> bool {
+    let mut parser = Parser::new(source, chunk, objects);
 
     parser.advance();
     if !parser.had_error {
@@ -431,13 +433,15 @@ fn string(parser: &mut Parser<'_, '_>) {
         return;
     };
 
-    parser.emit_constant(Value::Obj(ObjRef::copy_string(chars)));
+    let string = parser.objects.copy_string(chars);
+    parser.emit_constant(Value::Obj(string));
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Parser, compile};
     use crate::chunk::{Chunk, OpCode};
+    use crate::object::Objects;
     use crate::scanner::TokenType;
     use crate::value::Value;
 
@@ -445,10 +449,16 @@ mod tests {
         Value::number(value)
     }
 
+    fn compile_source(source: &str, chunk: &mut Chunk) -> bool {
+        let mut objects = Objects::new();
+        compile(source, chunk, &mut objects)
+    }
+
     #[test]
     fn advance_skips_error_tokens_and_sets_error_state() {
         let mut chunk = Chunk::new();
-        let mut parser = Parser::new("@123", &mut chunk);
+        let mut objects = Objects::new();
+        let mut parser = Parser::new("@123", &mut chunk, &mut objects);
 
         parser.advance();
 
@@ -465,7 +475,8 @@ mod tests {
     #[test]
     fn advance_moves_old_current_token_into_previous() {
         let mut chunk = Chunk::new();
-        let mut parser = Parser::new("123 +", &mut chunk);
+        let mut objects = Objects::new();
+        let mut parser = Parser::new("123 +", &mut chunk, &mut objects);
 
         parser.advance();
         parser.advance();
@@ -485,7 +496,8 @@ mod tests {
     #[test]
     fn consume_advances_when_current_token_matches() {
         let mut chunk = Chunk::new();
-        let mut parser = Parser::new("123", &mut chunk);
+        let mut objects = Objects::new();
+        let mut parser = Parser::new("123", &mut chunk, &mut objects);
         parser.advance();
 
         parser.consume(TokenType::Number, "Expect number.");
@@ -505,7 +517,8 @@ mod tests {
     #[test]
     fn consume_reports_an_error_without_advanced_state_when_token_mismatches() {
         let mut chunk = Chunk::new();
-        let mut parser = Parser::new("123", &mut chunk);
+        let mut objects = Objects::new();
+        let mut parser = Parser::new("123", &mut chunk, &mut objects);
         parser.advance();
 
         parser.consume(TokenType::LeftParen, "Expect '('.");
@@ -522,7 +535,8 @@ mod tests {
     #[test]
     fn panic_mode_suppresses_follow_up_errors() {
         let mut chunk = Chunk::new();
-        let mut parser = Parser::new("123", &mut chunk);
+        let mut objects = Objects::new();
+        let mut parser = Parser::new("123", &mut chunk, &mut objects);
         parser.advance();
 
         parser.error_at_current("first");
@@ -541,7 +555,7 @@ mod tests {
     fn compile_emits_constant_and_return_for_number_literal() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("123.45", &mut chunk));
+        assert!(compile_source("123.45", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
@@ -554,9 +568,10 @@ mod tests {
 
     #[test]
     fn compile_emits_string_constant_without_quotes() {
+        let mut objects = Objects::new();
         let mut chunk = Chunk::new();
 
-        assert!(compile("\"lox\"", &mut chunk));
+        assert!(compile("\"lox\"", &mut chunk, &mut objects));
         assert_eq!(
             chunk.code(),
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
@@ -572,7 +587,7 @@ mod tests {
     fn compile_parenthesized_number_emits_only_inner_expression_bytecode() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("(123)", &mut chunk));
+        assert!(compile_source("(123)", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
@@ -587,7 +602,7 @@ mod tests {
     fn compile_emits_negate_after_operand_for_unary_minus() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("-123", &mut chunk));
+        assert!(compile_source("-123", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -608,7 +623,7 @@ mod tests {
     fn compile_supports_nested_unary_minus() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("--123", &mut chunk));
+        assert!(compile_source("--123", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -626,7 +641,7 @@ mod tests {
     fn compile_emits_not_after_operand_for_unary_bang() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("!true", &mut chunk));
+        assert!(compile_source("!true", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -649,7 +664,7 @@ mod tests {
         for (source, opcode) in cases {
             let mut chunk = Chunk::new();
 
-            assert!(compile(source, &mut chunk));
+            assert!(compile_source(source, &mut chunk));
             assert_eq!(chunk.code(), &[u8::from(opcode), u8::from(OpCode::Return)]);
             assert!(chunk.constants().is_empty());
             assert_eq!(chunk.line_at(0), Some(1));
@@ -661,7 +676,7 @@ mod tests {
     fn compile_emits_add_after_both_operands() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("1+2", &mut chunk));
+        assert!(compile_source("1+2", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -680,7 +695,7 @@ mod tests {
     fn compile_respects_factor_precedence_over_term() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("1+2*3", &mut chunk));
+        assert!(compile_source("1+2*3", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -702,7 +717,7 @@ mod tests {
     fn compile_stops_star_rhs_before_lower_precedence_plus() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("8/2-1", &mut chunk));
+        assert!(compile_source("8/2-1", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -737,7 +752,7 @@ mod tests {
             expected.extend(opcodes.iter().copied().map(u8::from));
             expected.push(u8::from(OpCode::Return));
 
-            assert!(compile(source, &mut chunk));
+            assert!(compile_source(source, &mut chunk));
             assert_eq!(chunk.code(), expected);
             assert_eq!(chunk.constants(), &[number(1.0), number(2.0)]);
         }
@@ -747,7 +762,7 @@ mod tests {
     fn compile_gives_comparison_lower_precedence_than_arithmetic() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("1+2>3*4", &mut chunk));
+        assert!(compile_source("1+2>3*4", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -775,7 +790,7 @@ mod tests {
     fn compile_gives_equality_lower_precedence_than_comparison() {
         let mut chunk = Chunk::new();
 
-        assert!(compile("1<2==true", &mut chunk));
+        assert!(compile_source("1<2==true", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[
@@ -796,7 +811,7 @@ mod tests {
     fn compile_parses_conditional_operands_before_reporting_unimplemented_bytecode() {
         let mut chunk = Chunk::new();
 
-        assert!(!compile("1?2:3", &mut chunk));
+        assert!(!compile_source("1?2:3", &mut chunk));
         assert_eq!(chunk.constants(), &[number(1.0), number(2.0), number(3.0)]);
         assert_eq!(
             chunk.code(),
@@ -816,14 +831,14 @@ mod tests {
     fn compile_reports_failure_for_missing_colon_in_conditional_operator() {
         let mut chunk = Chunk::new();
 
-        assert!(!compile("1?2", &mut chunk));
+        assert!(!compile_source("1?2", &mut chunk));
     }
 
     #[test]
     fn compile_reports_failure_for_missing_right_paren() {
         let mut chunk = Chunk::new();
 
-        assert!(!compile("(123", &mut chunk));
+        assert!(!compile_source("(123", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[u8::from(OpCode::Constant), 0, u8::from(OpCode::Return)]
@@ -835,7 +850,7 @@ mod tests {
     fn compile_reports_failure_for_missing_unary_operand() {
         let mut chunk = Chunk::new();
 
-        assert!(!compile("-", &mut chunk));
+        assert!(!compile_source("-", &mut chunk));
         assert_eq!(
             chunk.code(),
             &[u8::from(OpCode::Negate), u8::from(OpCode::Return)]
@@ -846,7 +861,7 @@ mod tests {
     fn compile_reports_failure_for_empty_source() {
         let mut chunk = Chunk::new();
 
-        assert!(!compile("", &mut chunk));
+        assert!(!compile_source("", &mut chunk));
         assert_eq!(chunk.code(), &[u8::from(OpCode::Return)]);
         assert_eq!(chunk.line_at(0), Some(1));
     }
@@ -855,7 +870,7 @@ mod tests {
     fn compile_reports_failure_for_token_without_prefix_parser() {
         let mut chunk = Chunk::new();
 
-        assert!(!compile("+", &mut chunk));
+        assert!(!compile_source("+", &mut chunk));
         assert_eq!(chunk.code(), &[u8::from(OpCode::Return)]);
         assert_eq!(chunk.line_at(0), Some(1));
     }
@@ -864,7 +879,7 @@ mod tests {
     fn compile_reports_failure_for_scanner_errors() {
         let mut chunk = Chunk::new();
 
-        assert!(!compile("@", &mut chunk));
+        assert!(!compile_source("@", &mut chunk));
         assert_eq!(chunk.code(), &[u8::from(OpCode::Return)]);
         assert_eq!(chunk.line_at(0), Some(1));
     }

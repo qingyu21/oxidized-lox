@@ -1,7 +1,7 @@
 use crate::{
     chunk::{Chunk, OpCode},
     debug::disassemble_instruction,
-    object::ObjRef,
+    object::Objects,
     value::{Value, print_value},
 };
 
@@ -11,6 +11,7 @@ const DEBUG_TRACE_EXECUTION: bool = false;
 pub(crate) struct Vm {
     ip: usize,
     stack: Vec<Value>,
+    objects: Objects,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,7 +23,15 @@ pub(crate) enum InterpretResult {
 
 impl Vm {
     pub(crate) fn new() -> Self {
-        Self::default()
+        Self {
+            ip: 0,
+            stack: Vec::new(),
+            objects: Objects::new(),
+        }
+    }
+
+    pub(crate) fn objects_mut(&mut self) -> &mut Objects {
+        &mut self.objects
     }
 
     /// Resets transient VM state so a single instance can execute multiple chunks.
@@ -110,7 +119,8 @@ impl Vm {
         chars.push_str(b.as_str());
         let _ = self.pop();
         let _ = self.pop();
-        self.push(Value::Obj(ObjRef::take_string(chars.into_boxed_str())));
+        let string = self.objects.take_string(chars.into_boxed_str());
+        self.push(Value::Obj(string));
         true
     }
 
@@ -254,15 +264,14 @@ impl Vm {
 mod tests {
     use super::{InterpretResult, Vm};
     use crate::chunk::{Chunk, OpCode};
-    use crate::object::ObjRef;
     use crate::value::Value;
 
     fn number(value: f64) -> Value {
         Value::number(value)
     }
 
-    fn string(value: &str) -> Value {
-        Value::Obj(ObjRef::copy_string(value))
+    fn string(vm: &mut Vm, value: &str) -> Value {
+        Value::Obj(vm.objects_mut().copy_string(value))
     }
 
     fn assert_interpret_ok_and_empties_stack(vm: &mut Vm, chunk: &Chunk) {
@@ -510,7 +519,7 @@ mod tests {
         let mut vm = Vm::new();
         let mut chunk = Chunk::new();
         chunk.write_constant(number(1.0), 123).unwrap();
-        chunk.write_constant(string("lox"), 123).unwrap();
+        chunk.write_constant(string(&mut vm, "lox"), 123).unwrap();
         chunk.write_opcode(OpCode::Add, 123);
 
         assert_eq!(vm.interpret(&chunk), InterpretResult::RuntimeError);
@@ -520,8 +529,10 @@ mod tests {
     #[test]
     fn concatenate_combines_two_string_operands() {
         let mut vm = Vm::new();
-        vm.push(string("lox"));
-        vm.push(string("lang"));
+        let left = string(&mut vm, "lox");
+        let right = string(&mut vm, "lang");
+        vm.push(left);
+        vm.push(right);
 
         assert!(vm.concatenate());
 

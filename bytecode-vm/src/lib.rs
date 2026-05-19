@@ -65,12 +65,13 @@ pub fn run_file(path: impl AsRef<Path>) -> ExitCode {
 
 /// Compiles source into a fresh chunk and executes it when compilation succeeds.
 fn interpret(source: &str) -> vm::InterpretResult {
+    let mut vm = Vm::new();
     let mut chunk = Chunk::new();
-    if !compiler::compile(source, &mut chunk) {
+
+    if !compiler::compile(source, &mut chunk, vm.objects_mut()) {
         return vm::InterpretResult::CompileError;
     }
 
-    let mut vm = Vm::new();
     vm.interpret(&chunk)
 }
 

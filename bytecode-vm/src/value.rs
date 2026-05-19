@@ -110,27 +110,31 @@ pub(crate) fn print_value(value: Value) {
 #[cfg(test)]
 mod tests {
     use super::Value;
-    use crate::object::{ObjRef, ObjType};
+    use crate::object::{ObjType, Objects};
 
-    fn object() -> Value {
-        Value::Obj(ObjRef::copy_string("hello"))
+    fn object(objects: &mut Objects) -> Value {
+        Value::Obj(objects.copy_string("hello"))
     }
 
     #[test]
     fn number_values_round_trip_through_as_number() {
+        let mut objects = Objects::new();
+
         assert_eq!(Value::number(3.5).as_number(), Some(3.5));
         assert_eq!(Value::Bool(true).as_number(), None);
         assert_eq!(Value::Nil.as_number(), None);
-        assert_eq!(object().as_number(), None);
+        assert_eq!(object(&mut objects).as_number(), None);
     }
 
     #[test]
     fn only_false_and_nil_are_falsey() {
+        let mut objects = Objects::new();
+
         assert!(Value::Bool(false).is_falsey());
         assert!(Value::Nil.is_falsey());
         assert!(!Value::Bool(true).is_falsey());
         assert!(!Value::number(0.0).is_falsey());
-        assert!(!object().is_falsey());
+        assert!(!object(&mut objects).is_falsey());
     }
 
     #[test]
@@ -141,16 +145,18 @@ mod tests {
         assert!(!Value::Bool(true).equals(Value::Bool(false)));
         assert!(!Value::Nil.equals(Value::Bool(false)));
         assert!(!Value::number(f64::NAN).equals(Value::number(f64::NAN)));
-        let object = object();
+        let mut objects = Objects::new();
+        let object = object(&mut objects);
         assert!(object.equals(object));
         assert!(!object.equals(Value::Nil));
-        assert!(object.equals(Value::Obj(ObjRef::copy_string("hello"))));
-        assert!(!object.equals(Value::Obj(ObjRef::copy_string("world"))));
+        assert!(object.equals(Value::Obj(objects.copy_string("hello"))));
+        assert!(!object.equals(Value::Obj(objects.copy_string("world"))));
     }
 
     #[test]
     fn string_object_values_report_their_object_type() {
-        let object = object();
+        let mut objects = Objects::new();
+        let object = object(&mut objects);
 
         assert_eq!(object.obj_type(), Some(ObjType::String));
         assert!(object.is_string());
@@ -162,9 +168,11 @@ mod tests {
 
     #[test]
     fn display_matches_lox_literal_spellings() {
+        let mut objects = Objects::new();
+
         assert_eq!(Value::Bool(true).to_string(), "true");
         assert_eq!(Value::Nil.to_string(), "nil");
         assert_eq!(Value::number(12.5).to_string(), "12.5");
-        assert_eq!(object().to_string(), "hello");
+        assert_eq!(object(&mut objects).to_string(), "hello");
     }
 }
